@@ -1,0 +1,10 @@
+django
+dj-database-url
+python-dotenv
+whitenoise
+celery
+redis
+resend
+requests
+anthropic
+stripe
