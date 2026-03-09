@@ -1,0 +1,19 @@
+{# templates/billing/success.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Welcome to Pro — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/billing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="status-page">
+  <span class="status-page__icon">🎉</span>
+  <h1 class="status-page__title">You're on Pro</h1>
+  <p class="status-page__text">Unlimited scans, image uploads, and unlimited categories are now unlocked. Go make the most of it.</p>
+  <div class="status-page__actions">
+    <a href="{% url 'dashboard:index' %}" class="btn-primary">Go to dashboard →</a>
+    <a href="{% url 'billing:portal' %}" class="btn-ghost btn">Manage subscription</a>
+  </div>
+</div>
+{% endblock %}

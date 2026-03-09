@@ -112,3 +112,7 @@ CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 # Ads
 ADSENSE_CLIENT_ID = os.environ.get('ADSENSE_CLIENT_ID')
 ADSENSE_SLOT = os.environ.get('ADSENSE_SLOT')
+
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')

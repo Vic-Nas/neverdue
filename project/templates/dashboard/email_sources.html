@@ -1,0 +1,105 @@
+{# templates/dashboard/email_sources.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Email Sources — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="sources-page">
+
+  <div class="sources-page__header">
+    <h1 class="sources-page__title">Email sources</h1>
+    <p class="sources-page__sub">Forward emails from any account to your NeverDue inbox. We'll scan them automatically every hour.</p>
+  </div>
+
+  {# Your NeverDue address #}
+  <div class="sources-inbox">
+    <div class="sources-inbox__label">Your NeverDue inbox</div>
+    <div class="sources-inbox__address">
+      <span id="inbox-address">{{ request.user.username }}@{{ DOMAIN }}</span>
+      <button class="btn-ghost btn btn--sm" onclick="copyAddress()">Copy</button>
+    </div>
+    <p class="sources-inbox__hint">Forward any email to this address and it will be scanned for deadlines and calendar events.</p>
+  </div>
+
+  {# Setup guides #}
+  <h2 class="sources-guides__title">How to set up forwarding</h2>
+  <div class="sources-guides">
+
+    <div class="source-guide">
+      <div class="source-guide__provider">
+        <span class="source-guide__icon">✉️</span>
+        Gmail
+      </div>
+      <ol class="source-guide__steps">
+        <li>Open <a href="https://gmail.com" target="_blank" rel="noopener">gmail.com</a> and go to <strong>Settings → See all settings</strong></li>
+        <li>Click the <strong>Filters and Blocked Addresses</strong> tab</li>
+        <li>Click <strong>Create a new filter</strong></li>
+        <li>Leave fields blank to forward all, or fill in a sender to filter</li>
+        <li>Click <strong>Create filter</strong> then check <strong>Forward it to</strong></li>
+        <li>Add <code>{{ request.user.username }}@{{ DOMAIN }}</code> as the forwarding address</li>
+        <li>Confirm the verification email Google sends to your NeverDue inbox</li>
+      </ol>
+    </div>
+
+    <div class="source-guide">
+      <div class="source-guide__provider">
+        <span class="source-guide__icon">📘</span>
+        Outlook
+      </div>
+      <ol class="source-guide__steps">
+        <li>Open <a href="https://outlook.com" target="_blank" rel="noopener">outlook.com</a> and go to <strong>Settings → Mail → Rules</strong></li>
+        <li>Click <strong>Add new rule</strong></li>
+        <li>Set condition: <strong>Apply to all messages</strong> (or pick a sender)</li>
+        <li>Set action: <strong>Forward to</strong> <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Save the rule</li>
+      </ol>
+    </div>
+
+    <div class="source-guide">
+      <div class="source-guide__provider">
+        <span class="source-guide__icon">🍎</span>
+        Apple Mail / iCloud
+      </div>
+      <ol class="source-guide__steps">
+        <li>Go to <a href="https://icloud.com/mail" target="_blank" rel="noopener">icloud.com/mail</a></li>
+        <li>Click the <strong>Settings</strong> gear → <strong>Rules</strong></li>
+        <li>Click <strong>Add a Rule</strong></li>
+        <li>Set condition and action to <strong>Forward to</strong> <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Save</li>
+      </ol>
+    </div>
+
+    <div class="source-guide">
+      <div class="source-guide__provider">
+        <span class="source-guide__icon">📧</span>
+        Yahoo Mail
+      </div>
+      <ol class="source-guide__steps">
+        <li>Go to <a href="https://mail.yahoo.com" target="_blank" rel="noopener">mail.yahoo.com</a> → <strong>Settings → More settings → Filters</strong></li>
+        <li>Click <strong>Add new filters</strong></li>
+        <li>Set the filter and choose <strong>Forward to</strong></li>
+        <li>Enter <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Save</li>
+      </ol>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyAddress() {
+  const addr = document.getElementById('inbox-address').textContent;
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+{% endblock %}
