@@ -1,0 +1,11 @@
+{# templates/500.html #}
+{% extends 'base.html' %}
+{% block title %}Server error — NeverDue{% endblock %}
+{% block content %}
+<div class="page page--narrow" style="text-align:center;padding:4rem 1rem">
+  <div style="font-size:3rem;margin-bottom:1rem">500</div>
+  <h1 class="page__title">Something went wrong</h1>
+  <p class="page__sub" style="margin-bottom:2rem">An unexpected error occurred. Please try again in a moment.</p>
+  <a href="{% url 'dashboard:index' %}" class="btn-primary">Go to dashboard</a>
+</div>
+{% endblock %}

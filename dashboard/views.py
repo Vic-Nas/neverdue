@@ -36,21 +36,37 @@ def event_edit(request, pk=None):
             end = request.POST.get('end')
             category_id = request.POST.get('category')
             category = get_object_or_404(Category, pk=category_id, user=request.user) if category_id else None
+            recurrence_freq = request.POST.get('recurrence_freq') or None
+            recurrence_until = request.POST.get('recurrence_until') or None
+
+            from django.utils.dateparse import parse_datetime
+            start_dt = parse_datetime(start)
+            end_dt = parse_datetime(end)
+
+            if not start_dt or not end_dt:
+                from django.contrib import messages
+                messages.error(request, 'Invalid date format.')
+                return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
+
             if event:
                 event.title = title
                 event.description = description
-                event.start = start
-                event.end = end
+                event.start = start_dt
+                event.end = end_dt
                 event.category = category
+                event.recurrence_freq = recurrence_freq
+                event.recurrence_until = recurrence_until or None
                 event.save()
             else:
                 event = Event.objects.create(
                     user=request.user,
                     title=title,
                     description=description,
-                    start=start,
-                    end=end,
+                    start=start_dt,
+                    end=end_dt,
                     category=category,
+                    recurrence_freq=recurrence_freq,
+                    recurrence_until=recurrence_until or None,
                 )
             return redirect('dashboard:event_detail', pk=event.pk)
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
@@ -63,6 +79,17 @@ def event_delete(request, pk):
     try:
         event = get_object_or_404(Event, pk=pk, user=request.user)
         if request.method == 'POST':
+            if event.google_event_id:
+                try:
+                    from accounts.utils import get_valid_token
+                    import requests as http
+                    token = get_valid_token(request.user)
+                    http.delete(
+                        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
+                        headers={'Authorization': f'Bearer {token}'},
+                    )
+                except Exception:
+                    pass  # Delete from DB regardless
             event.delete()
             return redirect('dashboard:index')
         return render(request, 'dashboard/event_delete.html', {'event': event})
@@ -144,6 +171,28 @@ def upload(request):
         if not request.user.is_pro:
             return redirect('billing:plans')
         categories = Category.objects.filter(user=request.user)
+
+        if request.method == 'POST':
+            file = request.FILES.get('file')
+            if not file:
+                from django.contrib import messages
+                messages.error(request, 'No file selected.')
+                return render(request, 'dashboard/upload.html', {'categories': categories})
+
+            from llm.pipeline import process_file
+            from django.contrib import messages
+            content_type = file.content_type
+            file_bytes = file.read()
+
+            created = process_file(request.user, file_bytes, content_type)
+
+            if created:
+                messages.success(request, f'{len(created)} event{"s" if len(created) != 1 else ""} added to your calendar.')
+            else:
+                messages.error(request, 'No events found in that file.')
+
+            return redirect('dashboard:index')
+
         return render(request, 'dashboard/upload.html', {'categories': categories})
     except Exception:
         return HttpResponse('Upload unavailable.', status=500)

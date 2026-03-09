@@ -6,7 +6,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}NeverDue{% endblock %}</title>
-  <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/layout.css' %}">
   <link rel="stylesheet" href="{% static 'css/house_ads.css' %}">
@@ -20,9 +19,26 @@
 
 <nav class="topnav">
   <a href="{% url 'dashboard:index' %}" class="topnav__logo">Never<span>Due</span></a>
+
+  {% if user.is_authenticated %}
+  <div class="topnav__links">
+    <a href="{% url 'dashboard:index' %}" class="topnav__link {% if request.resolver_match.url_name == 'index' %}topnav__link--active{% endif %}">Dashboard</a>
+    <a href="{% url 'dashboard:categories' %}" class="topnav__link {% if 'categor' in request.resolver_match.url_name %}topnav__link--active{% endif %}">Categories</a>
+    <a href="{% url 'dashboard:email_sources' %}" class="topnav__link {% if request.resolver_match.url_name == 'email_sources' %}topnav__link--active{% endif %}">Sources</a>
+    {% if user.is_pro %}
+    <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="topnav__actions">
     {% if user.is_authenticated %}
-      <span style="font-size:0.85rem; color:var(--text-muted)">{{ user.username }}</span>
+      {% if user.is_pro %}
+        <span class="topnav__pro">Pro</span>
+      {% else %}
+        <a href="{% url 'billing:plans' %}" class="topnav__upgrade">Upgrade</a>
+      {% endif %}
+      <span class="topnav__username">{{ user.username }}</span>
       <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
     {% endif %}
   </div>

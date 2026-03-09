@@ -57,6 +57,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.global_settings',
             ],
         },
     },
@@ -88,6 +89,15 @@ STATIC_ROOT = BASE_DIR / 'project' / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'reset-monthly-scans': {
+        'task': 'emails.tasks.reset_monthly_scans',
+        'schedule': crontab(day_of_month=1, hour=0, minute=0),
+    },
+}
 
 # Google OAuth
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
