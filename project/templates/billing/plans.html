@@ -1,0 +1,60 @@
+{# templates/billing/plans.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Plans — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/billing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="billing-page">
+  <h1 class="billing-page__heading">Simple pricing</h1>
+  <p class="billing-page__sub">Start free. Upgrade when you need more.</p>
+
+  <div class="plans-grid">
+
+    {# Free #}
+    <div class="plan-card">
+      <div class="plan-card__name">Free</div>
+      <div class="plan-card__price">$0 <span>/ month</span></div>
+      <p class="plan-card__desc">For light users who want to stay on top of deadlines.</p>
+      <ul class="plan-features">
+        <li>30 email scans / month</li>
+        <li>Up to 3 categories</li>
+        <li>Google Calendar sync</li>
+        <li>Custom reminder rules</li>
+        <li class="disabled">Image &amp; PDF upload</li>
+        <li class="disabled">Unlimited scans</li>
+        <li class="disabled">Unlimited categories</li>
+      </ul>
+      {% if not request.user.is_pro %}
+        <span class="btn-primary" style="opacity:0.5;cursor:default;justify-content:center;display:flex;">Current plan</span>
+      {% else %}
+        <a href="{% url 'billing:portal' %}" class="btn-ghost btn" style="width:100%;text-align:center;display:block;">Manage</a>
+      {% endif %}
+    </div>
+
+    {# Pro #}
+    <div class="plan-card plan-card--pro">
+      <div class="plan-card__badge">Pro</div>
+      <div class="plan-card__name">Pro</div>
+      <div class="plan-card__price">$5 <span>/ month</span></div>
+      <p class="plan-card__desc">For students and professionals who live by their deadlines.</p>
+      <ul class="plan-features">
+        <li>Unlimited email scans</li>
+        <li>Unlimited categories</li>
+        <li>Google Calendar sync</li>
+        <li>Custom reminder rules</li>
+        <li>Image &amp; PDF upload</li>
+        <li>Priority processing</li>
+      </ul>
+      {% if request.user.is_pro %}
+        <a href="{% url 'billing:portal' %}" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Manage subscription</a>
+      {% else %}
+        <a href="{% url 'billing:checkout' %}" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Upgrade to Pro →</a>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

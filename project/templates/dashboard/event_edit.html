@@ -1,0 +1,75 @@
+{# templates/dashboard/event_edit.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if event %}Edit event{% else %}New event{% endif %} — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+
+  <div class="form-page__header">
+    <h1 class="form-page__title">{% if event %}Edit event{% else %}New event{% endif %}</h1>
+  </div>
+
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" class="event-form">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input type="text" id="title" name="title" value="{{ event.title|default:'' }}" placeholder="e.g. Submit thesis draft" required autofocus>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="start">Starts</label>
+        <input type="datetime-local" id="start" name="start"
+          value="{{ event.start|date:'Y-m-d' }}T{{ event.start|time:'H:i'|default:'' }}" required>
+      </div>
+      <div class="form-group">
+        <label for="end">Ends</label>
+        <input type="datetime-local" id="end" name="end"
+          value="{{ event.end|date:'Y-m-d' }}T{{ event.end|time:'H:i'|default:'' }}" required>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="category">Category <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <select name="category" id="category">
+        <option value="">— Uncategorized —</option>
+        {% for cat in categories %}
+        <option value="{{ cat.pk }}" {% if event.category.pk == cat.pk %}selected{% endif %}>
+          {{ cat.name }}
+        </option>
+        {% endfor %}
+      </select>
+      <p class="form-hint">Reminders are inherited from the category.</p>
+    </div>
+
+    <div class="form-group">
+      <label for="description">Notes <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <textarea id="description" name="description" rows="3" placeholder="Any extra context…">{{ event.description|default:'' }}</textarea>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">{% if event %}Save changes{% else %}Create event{% endif %}</button>
+      {% if event %}
+        <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="btn-ghost btn">Cancel</a>
+      {% else %}
+        <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>
+      {% endif %}
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

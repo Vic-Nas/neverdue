@@ -106,6 +106,49 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: background 0.2s, transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-danger:hover {
+  background: #a93226;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.confirm-page {
+  max-width: 480px;
+  margin: 3rem auto;
+}
+
+.confirm-page__title {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.75rem;
+}
+
+.confirm-page__text {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.confirm-page__actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .messages {
   list-style: none;
   margin-bottom: 1rem;

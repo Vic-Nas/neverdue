@@ -1,0 +1,19 @@
+{# templates/billing/cancel.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Upgrade cancelled — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/billing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="status-page">
+  <span class="status-page__icon">↩</span>
+  <h1 class="status-page__title">No changes made</h1>
+  <p class="status-page__text">Your plan wasn't changed. You're still on the free tier — upgrade anytime when you're ready.</p>
+  <div class="status-page__actions">
+    <a href="{% url 'dashboard:index' %}" class="btn-primary">Back to dashboard</a>
+    <a href="{% url 'billing:plans' %}" class="btn-ghost btn">View plans</a>
+  </div>
+</div>
+{% endblock %}

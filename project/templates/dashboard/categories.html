@@ -1,0 +1,85 @@
+{# templates/dashboard/categories.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Categories — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page page--wide">
+
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">Categories</h1>
+      <p class="page__sub">Organise events and set reminder rules per category.</p>
+    </div>
+    <div class="page__actions">
+      {% if not request.user.is_pro and categories|length >= 3 %}
+        <a href="{% url 'billing:plans' %}" class="btn-primary">Upgrade for more →</a>
+      {% else %}
+        <a href="{% url 'dashboard:category_create' %}" class="btn-primary">+ New category</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if categories %}
+  <div class="cat-list">
+    {% for cat in categories %}
+    <div class="cat-card">
+      <div class="cat-card__header">
+        <div class="cat-card__name">
+          <span class="cat-card__dot" {% if cat.color %}style="background:{{ cat.color }}"{% endif %}></span>
+          {{ cat.name }}
+        </div>
+        <div class="cat-card__actions">
+          <a href="{% url 'dashboard:category_edit' pk=cat.pk %}" class="btn-ghost btn btn--sm">Edit</a>
+          <a href="{% url 'dashboard:category_delete' pk=cat.pk %}" class="btn-ghost btn btn--sm" style="color:var(--danger)">Delete</a>
+        </div>
+      </div>
+
+      <div class="cat-card__meta">
+        <span class="cat-card__stat">{{ cat.events.count }} event{{ cat.events.count|pluralize }}</span>
+        {% if cat.reminders %}
+          <span class="cat-card__sep">·</span>
+          <span class="cat-card__stat">{{ cat.reminders|length }} reminder{{ cat.reminders|length|pluralize }}</span>
+        {% endif %}
+        {% if cat.rules.count %}
+          <span class="cat-card__sep">·</span>
+          <span class="cat-card__stat">{{ cat.rules.count }} rule{{ cat.rules.count|pluralize }}</span>
+        {% endif %}
+      </div>
+
+      {% if cat.rules.all %}
+      <div class="cat-card__rules">
+        {% for rule in cat.rules.all %}
+        <span class="cat-rule-tag">
+          {% if rule.sender %}from: {{ rule.sender }}{% endif %}
+          {% if rule.sender and rule.keyword %} · {% endif %}
+          {% if rule.keyword %}contains: {{ rule.keyword }}{% endif %}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state__text">No categories yet.</p>
+    <a href="{% url 'dashboard:category_create' %}" class="btn-primary">Create your first category</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

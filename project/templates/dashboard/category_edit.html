@@ -1,0 +1,126 @@
+{# templates/dashboard/category_edit.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if category %}Edit category{% else %}New category{% endif %} — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+
+  <div class="form-page__header">
+    <h1 class="form-page__title">{% if category %}Edit category{% else %}New category{% endif %}</h1>
+  </div>
+
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" class="category-form">
+    {% csrf_token %}
+
+    {# ── Basic info ── #}
+    <div class="form-row">
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" value="{{ category.name|default:'' }}" placeholder="e.g. Exams" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="color">Color</label>
+        <div class="color-input-wrap">
+          <input type="color" id="color" name="color" value="{{ category.color|default:'#2D6A4F' }}">
+          <span class="color-input-label" id="color-label">{{ category.color|default:'#2D6A4F' }}</span>
+        </div>
+      </div>
+    </div>
+
+    {# ── Reminders ── #}
+    <div class="form-section">
+      <div class="form-section__header">
+        <h3 class="form-section__title">Reminders</h3>
+        <button type="button" class="btn-ghost btn btn--sm" onclick="addReminder()">+ Add reminder</button>
+      </div>
+      <p class="form-hint" style="margin-bottom:0.75rem">All events in this category will receive these reminders via Google Calendar.</p>
+      <div id="reminders-list" class="reminders-list">
+        {% if category.reminders %}
+          {% for reminder in category.reminders %}
+          <div class="reminder-row">
+            <input type="number" name="reminders" value="{{ reminder.minutes }}" min="1" placeholder="Minutes before">
+            <span class="reminder-row__label">minutes before</span>
+            <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      <p class="form-hint">Common: 60 (1hr), 1440 (1 day), 10080 (1 week)</p>
+    </div>
+
+    {# ── Rules ── #}
+    <div class="form-section">
+      <div class="form-section__header">
+        <h3 class="form-section__title">Auto-assign rules</h3>
+        <button type="button" class="btn-ghost btn btn--sm" onclick="addRule()">+ Add rule</button>
+      </div>
+      <p class="form-hint" style="margin-bottom:0.75rem">Emails matching these rules will be automatically assigned to this category.</p>
+      <div id="rules-list" class="rules-list">
+        {% if category %}
+          {% for rule in category.rules.all %}
+          <div class="rule-row">
+            <input type="text" name="rule_sender" value="{{ rule.sender|default:'' }}" placeholder="Sender (e.g. prof@uni.ca)">
+            <span class="rule-row__sep">or contains</span>
+            <input type="text" name="rule_keyword" value="{{ rule.keyword|default:'' }}" placeholder="Keyword (e.g. deadline)">
+            <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">{% if category %}Save changes{% else %}Create category{% endif %}</button>
+      <a href="{% url 'dashboard:categories' %}" class="btn-ghost btn">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('color').addEventListener('input', function() {
+  document.getElementById('color-label').textContent = this.value;
+});
+
+function addReminder() {
+  const list = document.getElementById('reminders-list');
+  const row = document.createElement('div');
+  row.className = 'reminder-row';
+  row.innerHTML = `
+    <input type="number" name="reminders" min="1" placeholder="Minutes before">
+    <span class="reminder-row__label">minutes before</span>
+    <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function addRule() {
+  const list = document.getElementById('rules-list');
+  const row = document.createElement('div');
+  row.className = 'rule-row';
+  row.innerHTML = `
+    <input type="text" name="rule_sender" placeholder="Sender (e.g. prof@uni.ca)">
+    <span class="rule-row__sep">or contains</span>
+    <input type="text" name="rule_keyword" placeholder="Keyword (e.g. deadline)">
+    <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
+  `;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+</script>
+{% endblock %}

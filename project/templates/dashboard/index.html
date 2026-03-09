@@ -1,0 +1,87 @@
+{# templates/dashboard/index.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Dashboard — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page page--wide">
+
+  {# ── Top bar ── #}
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">Upcoming</h1>
+      <p class="page__sub">{{ events|length }} event{{ events|length|pluralize }} scheduled</p>
+    </div>
+    <div class="page__actions">
+      {% if request.user.is_pro %}
+        <a href="{% url 'dashboard:upload' %}" class="btn-ghost btn">↑ Import</a>
+      {% endif %}
+      <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
+    </div>
+  </div>
+
+  {% if messages %}
+  <ul class="messages">
+    {% for message in messages %}
+    <li class="{{ message.tags }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {# ── Scan counter (free users) ── #}
+  {% if not request.user.is_pro %}
+  <div class="scan-banner">
+    <div class="scan-banner__text">
+      <strong>{{ request.user.monthly_scans }}/30</strong> scans used this month
+    </div>
+    {% if request.user.monthly_scans >= 25 %}
+    <a href="{% url 'billing:plans' %}" class="btn-primary btn--sm">Upgrade →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Event list ── #}
+  {% if events %}
+  <div class="event-list">
+    {% for event in events %}
+    <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card">
+
+      <div class="event-card__date">
+        <span class="event-card__day">{{ event.start|date:"d" }}</span>
+        <span class="event-card__month">{{ event.start|date:"M" }}</span>
+      </div>
+
+      <div class="event-card__body">
+        <div class="event-card__title">{{ event.title }}</div>
+        <div class="event-card__meta">
+          {{ event.start|time:"H:i" }} → {{ event.end|time:"H:i" }}
+          {% if event.category %}
+            <span class="event-card__sep">·</span>
+            <span class="category-badge" {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}>
+              {{ event.category.name }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="event-card__arrow">→</div>
+
+    </a>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state__text">No upcoming events. Add one manually or set up email forwarding.</p>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;justify-content:center">
+      <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
+      <a href="{% url 'dashboard:email_sources' %}" class="btn-ghost btn">Set up email sources</a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

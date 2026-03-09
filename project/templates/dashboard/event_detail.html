@@ -1,0 +1,71 @@
+{# templates/dashboard/event_detail.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ event.title }} — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+
+  <div class="detail-page__header">
+    <div class="detail-page__meta">
+      {% if event.category %}
+        <span class="category-badge" {% if event.category.color %}style="--cat-color: {{ event.category.color }}"{% endif %}>
+          {{ event.category.name }}
+        </span>
+      {% endif %}
+    </div>
+    <div class="detail-page__actions">
+      <a href="{% url 'dashboard:event_edit' pk=event.pk %}" class="btn-ghost btn">Edit</a>
+      <a href="{% url 'dashboard:event_delete' pk=event.pk %}" class="btn-danger btn">Delete</a>
+    </div>
+  </div>
+
+  <h1 class="detail-page__title">{{ event.title }}</h1>
+
+  <div class="detail-page__dates">
+    <div class="detail-date">
+      <span class="detail-date__label">Starts</span>
+      <span class="detail-date__value">{{ event.start|date:"D, d M Y" }} at {{ event.start|time:"H:i" }}</span>
+    </div>
+    <div class="detail-date__sep">→</div>
+    <div class="detail-date">
+      <span class="detail-date__label">Ends</span>
+      <span class="detail-date__value">{{ event.end|date:"D, d M Y" }} at {{ event.end|time:"H:i" }}</span>
+    </div>
+  </div>
+
+  {% if event.description %}
+  <div class="detail-page__desc">
+    <h3>Notes</h3>
+    <p>{{ event.description }}</p>
+  </div>
+  {% endif %}
+
+  {% if event.category and event.category.reminders %}
+  <div class="detail-page__reminders">
+    <h3>Reminders</h3>
+    <ul class="reminder-list">
+      {% for reminder in event.category.reminders %}
+      <li>
+        {% with m=reminder.minutes %}
+          {% if m >= 10080 %}{{ m|divisibleby:10080|yesno:""|add:""}}{{ m }} min before
+          {% elif m >= 1440 %}{{ m|floatformat:0 }} min ({{ m|divisibleby:1440 }} day{{ m|pluralize }}) before
+          {% elif m >= 60 %}{{ m }} min ({{ m|divisibleby:60 }} hr) before
+          {% else %}{{ m }} min before
+          {% endif %}
+        {% endwith %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="detail-page__footer">
+    <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">← Back to dashboard</a>
+  </div>
+
+</div>
+{% endblock %}

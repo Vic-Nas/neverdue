@@ -1,0 +1,161 @@
+/* static/css/billing.css */
+
+.billing-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.billing-page__heading {
+  font-size: 2rem;
+  letter-spacing: -0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.billing-page__sub {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 3rem;
+}
+
+/* ── Plans grid ── */
+.plans-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.plan-card {
+  border: 1.5px solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  padding: 2rem 1.75rem;
+  background: var(--surface);
+  position: relative;
+  transition: box-shadow 0.2s;
+}
+
+.plan-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.plan-card--pro {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.plan-card__badge {
+  position: absolute;
+  top: -12px;
+  left: 1.75rem;
+  background: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+}
+
+.plan-card__name {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.plan-card__price {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+
+.plan-card__price span {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+.plan-card__desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1.75rem;
+}
+
+.plan-features {
+  list-style: none;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.plan-features li {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plan-features li::before {
+  content: '✓';
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.plan-features li.disabled {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.plan-features li.disabled::before {
+  content: '✕';
+  color: var(--border);
+}
+
+/* ── Status pages ── */
+.status-page {
+  max-width: 480px;
+  margin: 4rem auto;
+  text-align: center;
+}
+
+.status-page__icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.status-page__title {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.6rem;
+}
+
+.status-page__text {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.status-page__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-page__heading {
+    font-size: 1.5rem;
+  }
+}

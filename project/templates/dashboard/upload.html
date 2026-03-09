@@ -1,0 +1,103 @@
+{# templates/dashboard/upload.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Import — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="upload-page">
+
+  <div class="upload-page__header">
+    <h1 class="upload-page__title">Import events</h1>
+    <p class="upload-page__sub">Upload an image, PDF, or text file containing a schedule or deadlines. We'll extract all events and add them to your calendar.</p>
+  </div>
+
+  <div class="upload-counter">
+    <span class="upload-counter__used">{{ request.user.monthly_scans }}</span>
+    <span class="upload-counter__sep">/</span>
+    <span class="upload-counter__total">{% if request.user.is_pro %}∞{% else %}30{% endif %}</span>
+    <span class="upload-counter__label">scans used this month</span>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="upload-form" id="upload-form">
+    {% csrf_token %}
+
+    <div class="upload-dropzone" id="dropzone">
+      <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" hidden>
+      <div class="upload-dropzone__icon">↑</div>
+      <p class="upload-dropzone__text">Drag and drop your file here, or <button type="button" class="upload-dropzone__browse" onclick="document.getElementById('file-input').click()">browse</button></p>
+      <p class="upload-dropzone__hint">Supports JPG, PNG, PDF, TXT — max 10MB</p>
+      <div class="upload-dropzone__preview" id="file-preview" hidden>
+        <span id="file-name"></span>
+        <button type="button" class="upload-dropzone__clear" onclick="clearFile()">✕</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="category">Category <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <select name="category" id="category">
+        <option value="">— Let NeverDue decide —</option>
+        {% for cat in categories %}
+        <option value="{{ cat.pk }}">{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="upload-form__actions">
+      <button type="submit" class="btn-primary" id="submit-btn" disabled>
+        Import events
+      </button>
+      <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const input = document.getElementById('file-input');
+const dropzone = document.getElementById('dropzone');
+const preview = document.getElementById('file-preview');
+const fileName = document.getElementById('file-name');
+const submitBtn = document.getElementById('submit-btn');
+
+input.addEventListener('change', () => {
+  if (input.files.length) showFile(input.files[0]);
+});
+
+dropzone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropzone.classList.add('upload-dropzone--active');
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.classList.remove('upload-dropzone--active');
+});
+
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('upload-dropzone--active');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    input.files = e.dataTransfer.files;
+    showFile(file);
+  }
+});
+
+function showFile(file) {
+  fileName.textContent = file.name;
+  preview.hidden = false;
+  submitBtn.disabled = false;
+}
+
+function clearFile() {
+  input.value = '';
+  preview.hidden = true;
+  submitBtn.disabled = true;
+}
+</script>
+{% endblock %}
