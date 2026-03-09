@@ -7,9 +7,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="detail-page">
+<div class="page">
 
-  <div class="detail-page__header">
+  <div class="page__header--row">
     <div class="detail-page__meta">
       {% if event.category %}
         <span class="category-badge" {% if event.category.color %}style="--cat-color: {{ event.category.color }}"{% endif %}>
@@ -17,15 +17,15 @@
         </span>
       {% endif %}
     </div>
-    <div class="detail-page__actions">
+    <div class="page__actions">
       <a href="{% url 'dashboard:event_edit' pk=event.pk %}" class="btn-ghost btn">Edit</a>
       <a href="{% url 'dashboard:event_delete' pk=event.pk %}" class="btn-danger btn">Delete</a>
     </div>
   </div>
 
-  <h1 class="detail-page__title">{{ event.title }}</h1>
+  <h1 class="page__title">{{ event.title }}</h1>
 
-  <div class="detail-page__dates">
+  <div class="detail-dates">
     <div class="detail-date">
       <span class="detail-date__label">Starts</span>
       <span class="detail-date__value">{{ event.start|date:"D, d M Y" }} at {{ event.start|time:"H:i" }}</span>
@@ -38,14 +38,23 @@
   </div>
 
   {% if event.description %}
-  <div class="detail-page__desc">
+  <div class="section-block">
     <h3>Notes</h3>
     <p>{{ event.description }}</p>
   </div>
   {% endif %}
 
+  {% if event.recurrence_freq %}
+  <div class="section-block">
+    <h3>Repeats</h3>
+    <p>{{ event.get_recurrence_freq_display }}
+      {% if event.recurrence_until %}until {{ event.recurrence_until|date:"d M Y" }}{% else %}indefinitely{% endif %}
+    </p>
+  </div>
+  {% endif %}
+
   {% if event.category and event.category.reminders %}
-  <div class="detail-page__reminders">
+  <div class="section-block">
     <h3>Reminders</h3>
     <ul class="reminder-list">
       {% for reminder in event.category.reminders %}
@@ -63,7 +72,7 @@
   </div>
   {% endif %}
 
-  <div class="detail-page__footer">
+  <div class="page__footer">
     <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">← Back to dashboard</a>
   </div>
 

@@ -7,10 +7,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="form-page">
+<div class="page">
 
-  <div class="form-page__header">
-    <h1 class="form-page__title">{% if event %}Edit event{% else %}New event{% endif %}</h1>
+  <div class="page__header">
+    <h1 class="page__title">{% if event %}Edit event{% else %}New event{% endif %}</h1>
   </div>
 
   {% if messages %}
@@ -60,6 +60,23 @@
       <textarea id="description" name="description" rows="3" placeholder="Any extra context…">{{ event.description|default:'' }}</textarea>
     </div>
 
+    <div class="form-row">
+      <div class="form-group">
+        <label for="recurrence_freq">Repeats <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <select name="recurrence_freq" id="recurrence_freq">
+          <option value="">— Does not repeat —</option>
+          <option value="DAILY" {% if event.recurrence_freq == 'DAILY' %}selected{% endif %}>Daily</option>
+          <option value="WEEKLY" {% if event.recurrence_freq == 'WEEKLY' %}selected{% endif %}>Weekly</option>
+          <option value="MONTHLY" {% if event.recurrence_freq == 'MONTHLY' %}selected{% endif %}>Monthly</option>
+          <option value="YEARLY" {% if event.recurrence_freq == 'YEARLY' %}selected{% endif %}>Yearly</option>
+        </select>
+      </div>
+      <div class="form-group" id="recurrence-until-group" {% if not event.recurrence_freq %}style="opacity:0.4;pointer-events:none"{% endif %}>
+        <label for="recurrence_until">Repeat until <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <input type="date" id="recurrence_until" name="recurrence_until" value="{{ event.recurrence_until|date:'Y-m-d'|default:'' }}">
+      </div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn-primary">{% if event %}Save changes{% else %}Create event{% endif %}</button>
       {% if event %}
@@ -72,4 +89,20 @@
   </form>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('recurrence_freq').addEventListener('change', function() {
+  const group = document.getElementById('recurrence-until-group');
+  if (this.value) {
+    group.style.opacity = '1';
+    group.style.pointerEvents = 'auto';
+  } else {
+    group.style.opacity = '0.4';
+    group.style.pointerEvents = 'none';
+    document.getElementById('recurrence_until').value = '';
+  }
+});
+</script>
 {% endblock %}
