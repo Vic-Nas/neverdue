@@ -1,0 +1,97 @@
+{# templates/base.html #}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}NeverDue{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'css/house_ads.css' %}">
+  {% block extra_css %}{% endblock %}
+
+  {% if ADSENSE_CLIENT_ID %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ADSENSE_CLIENT_ID }}" crossorigin="anonymous"></script>
+  {% endif %}
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="{% url 'dashboard:index' %}" class="topnav__logo">Never<span>Due</span></a>
+  <div class="topnav__actions">
+    {% if user.is_authenticated %}
+      <span style="font-size:0.85rem; color:var(--text-muted)">{{ user.username }}</span>
+      <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="layout">
+
+  {# ── Ad sidebar ── #}
+  {# Slot logic:
+     - 0 AdSense → slots 1+2 Railway, slot 3 Railway, slot 4 Koho
+     - 1 AdSense → slot 1 AdSense, slot 2 Railway, slot 3 Railway, slot 4 Koho
+     - 2 AdSense → slots 1+2 AdSense, slot 3 Railway, slot 4 Koho
+     - 3 AdSense → slots 1+2+3 AdSense, slot 4 Koho
+     - 4 AdSense → all AdSense
+  #}
+  <aside class="ad-sidebar">
+
+    {# Slot 1 #}
+    <div class="ad-slot">
+      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOT %}
+        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
+             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
+             data-ad-slot="{{ ADSENSE_SLOT }}"
+             data-ad-format="auto"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      {% else %}
+        {% include 'partials/ad_railway.html' %}
+      {% endif %}
+    </div>
+
+    {# Slot 2 #}
+    <div class="ad-slot">
+      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOT %}
+        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
+             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
+             data-ad-slot="{{ ADSENSE_SLOT }}"
+             data-ad-format="auto"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      {% else %}
+        {% include 'partials/ad_railway.html' %}
+      {% endif %}
+    </div>
+
+    {# Slot 3 — AdSense if 3+ slots paid, else Railway #}
+    <div class="ad-slot">
+      {% include 'partials/ad_railway.html' %}
+    </div>
+
+    {# Slot 4 — always Koho #}
+    <div class="ad-slot">
+      {% include 'partials/ad_koho.html' %}
+    </div>
+
+  </aside>
+
+  {# ── Main content ── #}
+  <main class="main-content">
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

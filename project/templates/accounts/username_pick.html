@@ -1,0 +1,58 @@
+{# templates/accounts/username_pick.html #}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Choose a username — NeverDue</title>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-card__logo">Never<span>Due</span></div>
+
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h2 class="auth-card__title">One last step</h2>
+    <p class="auth-card__subtitle">Choose a username. This sets your NeverDue email address and cannot be changed.</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          placeholder="e.g. johndoe"
+          autocomplete="off"
+          autofocus
+          pattern="[a-z0-9_]+"
+          required
+        >
+        <p class="form-hint">Lowercase letters, numbers, underscores only. Your inbox will be <strong>username@{{ DOMAIN }}</strong></p>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" style="width:100%; justify-content:center;">
+          Confirm username
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+</body>
+</html>
