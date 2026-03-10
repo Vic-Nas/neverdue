@@ -10,7 +10,17 @@ from .models import Category, Event, Rule
 def index(request):
     try:
         events = Event.objects.filter(user=request.user).order_by('start')
-        return render(request, 'dashboard/index.html', {'events': events})
+        last_event = events.order_by('-created_at').first()
+        ctx = {
+            'events': events,
+            'last_event': last_event,
+        }
+        if not request.user.is_pro:
+            scans_used = request.user.monthly_scans
+            ctx['scans_used'] = scans_used
+            ctx['scans_total'] = 30
+            ctx['scans_pct'] = min(int((scans_used / 30) * 100), 100)
+        return render(request, 'dashboard/index.html', ctx)
     except Exception:
         return HttpResponse('Dashboard unavailable.', status=500)
 
