@@ -6,6 +6,15 @@ import time
 
 from django.conf import settings
 
+SUPPORTED_ATTACHMENT_TYPES = {
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'text/plain',
+}
+
 
 def verify_resend_signature(payload_bytes, headers):
     """
@@ -23,28 +32,23 @@ def verify_resend_signature(payload_bytes, headers):
     if not all([msg_id, msg_timestamp, msg_signature]):
         return False
 
-    # Reject webhooks older than 5 minutes
     try:
         if abs(int(time.time()) - int(msg_timestamp)) > 300:
             return False
     except ValueError:
         return False
 
-    # Strip 'whsec_' prefix and decode secret
     try:
         secret_bytes = base64.b64decode(secret.replace('whsec_', ''))
     except Exception:
         return False
 
-    # Build signed content: id.timestamp.body
     signed_content = f'{msg_id}.{msg_timestamp}.{payload_bytes.decode()}'
 
-    # Compute expected signature
     expected = base64.b64encode(
         hmac.new(secret_bytes, signed_content.encode(), hashlib.sha256).digest()
     ).decode()
 
-    # Check against all provided signatures (space-separated, prefixed with 'v1,')
     for sig in msg_signature.split(' '):
         if sig.startswith('v1,') and hmac.compare_digest(sig[3:], expected):
             return True
@@ -77,10 +81,34 @@ def extract_email_text(payload):
     if text:
         return text
 
-    # Fallback: strip tags from HTML body
     html = data.get('html', '')
     if html:
         import re
         return re.sub(r'<[^>]+>', ' ', html).strip()
 
     return ''
+
+
+def extract_attachments(payload):
+    """
+    Extract supported attachments from Resend inbound webhook payload.
+    Returns list of (bytes, media_type) tuples.
+    """
+    data = payload.get('data', {})
+    attachments = data.get('attachments', [])
+    result = []
+
+    for attachment in attachments:
+        content_type = attachment.get('contentType', '').split(';')[0].strip().lower()
+        if content_type not in SUPPORTED_ATTACHMENT_TYPES:
+            continue
+        content = attachment.get('content', '')
+        if not content:
+            continue
+        try:
+            file_bytes = base64.b64decode(content)
+            result.append((file_bytes, content_type))
+        except Exception:
+            continue
+
+    return result

@@ -1,5 +1,7 @@
 # dashboard/writer.py
 import requests
+from django.utils.dateparse import parse_datetime
+
 from accounts.utils import get_valid_token
 from dashboard.models import Event, Category
 
@@ -7,8 +9,15 @@ from dashboard.models import Event, Category
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
     """
     Write a single event to Google Calendar and save to DB.
-    Returns the saved Event or None on failure.
+    Returns the saved Event or None on failure or duplicate.
     """
+    # Hard dedup: same user + start + end already exists → skip
+    start = event_data.get('start')
+    end = event_data.get('end')
+    if start and end:
+        if Event.objects.filter(user=user, start=start, end=end).exists():
+            return None
+
     try:
         token = get_valid_token(user)
     except ValueError:
@@ -73,10 +82,6 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
 
 
 def _hex_to_google_color(hex_color: str) -> str:
-    """
-    Maps a hex color to the closest Google Calendar colorId (1-11).
-    Falls back to '1' (lavender) if no match.
-    """
     mapping = {
         '#7986cb': '1',  # lavender
         '#33b679': '2',  # sage
