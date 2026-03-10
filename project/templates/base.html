@@ -109,6 +109,15 @@
 
 </div>
 
+<footer class="site-footer">
+  <span>© {% now "Y" %} NeverDue</span>
+  <div class="site-footer__links">
+    <a href="{% url 'legal:privacy' %}">Privacy Policy</a>
+    <a href="{% url 'legal:terms' %}">Terms of Service</a>
+    <a href="mailto:support@neverdue.ca">Support</a>
+  </div>
+</footer>
+
 {% block extra_js %}{% endblock %}
 </body>
 </html>

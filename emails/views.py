@@ -1,65 +1,61 @@
 # emails/views.py
-import resend
-from django.conf import settings
+import json
+
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from llm.pipeline import process_text
-from .webhook import verify_mailgun_signature, get_user_from_recipient
-
-resend.api_key = settings.RESEND_API_KEY
+from .webhook import extract_email_text, get_user_from_recipient, verify_resend_signature
 
 
 @csrf_exempt
 @require_POST
 def inbound(request):
-    """
-    Mailgun inbound webhook — receives forwarded emails and runs the pipeline.
-    """
-    token = request.POST.get('token', '')
-    timestamp = request.POST.get('timestamp', '')
-    signature = request.POST.get('signature', '')
+    payload_bytes = request.body
 
-    if not verify_mailgun_signature(token, timestamp, signature):
-        return HttpResponse(status=403)
+    if not verify_resend_signature(payload_bytes, request.META):
+        return HttpResponse('Invalid signature', status=400)
 
-    recipient = request.POST.get('recipient', '')
-    sender = request.POST.get('from', '')
-    message_id = request.POST.get('Message-Id', '')
-    body = request.POST.get('stripped-text', '') or request.POST.get('body-plain', '')
+    try:
+        payload = json.loads(payload_bytes)
+    except json.JSONDecodeError:
+        return HttpResponse('Invalid JSON', status=400)
 
-    if not recipient or not body:
-        return HttpResponse(status=200)
+    # Only handle inbound email events
+    if payload.get('type') != 'email.received':
+        return HttpResponse('OK', status=200)
+
+    data = payload.get('data', {})
+    recipient = data.get('to', [''])[0] if isinstance(data.get('to'), list) else data.get('to', '')
+    sender = data.get('from', '')
+    source_email_id = data.get('email_id') or payload.get('id', '')
 
     user = get_user_from_recipient(recipient)
     if not user:
-        return HttpResponse(status=200)
+        return HttpResponse('OK', status=200)
 
-    # Run async via Celery so webhook returns fast
+    text = extract_email_text(payload)
+    if not text:
+        return HttpResponse('OK', status=200)
+
     from .tasks import process_inbound_email
-    process_inbound_email.delay(
-        user_id=user.pk,
-        body=body,
-        sender=sender,
-        message_id=message_id,
-    )
+    process_inbound_email.delay(user.id, text, sender, source_email_id)
 
-    return HttpResponse(status=200)
+    return HttpResponse('OK', status=200)
 
 
-def send_email(to: str, subject: str, html: str) -> bool:
-    """
-    Send a transactional email via Resend.
-    Returns True on success.
-    """
+def send_email(to, subject, html):
+    """Send a transactional email via Resend."""
+    import resend
+    from django.conf import settings
+
+    resend.api_key = settings.RESEND_API_KEY
     try:
         resend.Emails.send({
             'from': settings.RESEND_FROM_EMAIL,
-            'to': to,
+            'to': [to],
             'subject': subject,
             'html': html,
         })
-        return True
     except Exception:
-        return False
+        pass
