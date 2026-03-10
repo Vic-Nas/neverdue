@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .webhook import extract_email_text, get_user_from_recipient, verify_resend_signature
+from .webhook import extract_attachments, extract_email_text, get_user_from_recipient, verify_resend_signature
 
 
 @csrf_exempt
@@ -21,7 +21,6 @@ def inbound(request):
     except json.JSONDecodeError:
         return HttpResponse('Invalid JSON', status=400)
 
-    # Only handle inbound email events
     if payload.get('type') != 'email.received':
         return HttpResponse('OK', status=200)
 
@@ -34,12 +33,18 @@ def inbound(request):
     if not user:
         return HttpResponse('OK', status=200)
 
-    text = extract_email_text(payload)
-    if not text:
-        return HttpResponse('OK', status=200)
+    body = extract_email_text(payload)
+
+    # Extract attachments as [base64_string, media_type] — JSON-serializable for Celery
+    raw_attachments = extract_attachments(payload)
+    import base64
+    attachments = [
+        [base64.b64encode(file_bytes).decode(), media_type]
+        for file_bytes, media_type in raw_attachments
+    ]
 
     from .tasks import process_inbound_email
-    process_inbound_email.delay(user.id, text, sender, source_email_id)
+    process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
 
     return HttpResponse('OK', status=200)
 
