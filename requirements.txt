@@ -8,3 +8,4 @@ resend
 requests
 anthropic
 stripe
+gunicorn
