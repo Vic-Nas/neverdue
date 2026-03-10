@@ -31,16 +31,25 @@
   </ul>
   {% endif %}
 
-  {# ── Scan counter (free users) ── #}
-  {% if not request.user.is_pro %}
+  {# ── Scan usage bar (free users only) ── #}
+  {% if scans_used is not None %}
   <div class="scan-banner">
-    <div class="scan-banner__text">
-      <strong>{{ request.user.monthly_scans }}/30</strong> scans used this month
+    <div class="scan-banner__top">
+      <span>{{ scans_used }}/{{ scans_total }} scans used this month</span>
+      {% if last_event %}
+      <span class="scan-banner__last">Last event added {{ last_event.created_at|timesince }} ago</span>
+      {% endif %}
+      {% if scans_used >= 25 %}
+      <a href="{% url 'billing:plans' %}" class="btn-primary btn--sm">Upgrade →</a>
+      {% endif %}
     </div>
-    {% if request.user.monthly_scans >= 25 %}
-    <a href="{% url 'billing:plans' %}" class="btn-primary btn--sm">Upgrade →</a>
-    {% endif %}
+    <div class="scan-bar">
+      <div class="scan-bar__fill {% if scans_pct >= 90 %}scan-bar__fill--danger{% elif scans_pct >= 70 %}scan-bar__fill--warn{% endif %}"
+           style="width:{{ scans_pct }}%"></div>
+    </div>
   </div>
+  {% elif last_event %}
+  <p class="scan-last">Last event added {{ last_event.created_at|timesince }} ago</p>
   {% endif %}
 
   {# ── Event list ── #}
