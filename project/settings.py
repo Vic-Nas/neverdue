@@ -103,13 +103,10 @@ CELERY_BEAT_SCHEDULE = {
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 
-# Mailgun
-MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
-
 # Resend
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', f'noreply@{DOMAIN}')
+RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
 
 # LLM
 LLM_API_KEY = os.environ.get('LLM_API_KEY')

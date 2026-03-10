@@ -1,0 +1,76 @@
+{# templates/legal/privacy.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Privacy Policy — NeverDue{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page__header">
+    <h1 class="page__title">Privacy Policy</h1>
+    <p class="page__sub">Last updated: {% now "F j, Y" %}</p>
+  </div>
+
+  <div class="legal-body">
+
+    <h2>1. Who we are</h2>
+    <p>NeverDue ("we", "our", "us") is operated from Quebec, Canada. We can be reached at <a href="mailto:privacy@neverdue.ca">privacy@neverdue.ca</a>.</p>
+
+    <h2>2. Information we collect</h2>
+    <p>When you use NeverDue, we collect the following:</p>
+    <ul>
+      <li><strong>Account information</strong> — your name, email address, and Google account identifier, obtained when you sign in with Google.</li>
+      <li><strong>Email content</strong> — emails forwarded to your NeverDue address are processed to extract calendar events. We do not store the raw email content after processing.</li>
+      <li><strong>Uploaded files</strong> — images, PDFs, and text files you upload for event extraction are processed and immediately discarded. We do not store them.</li>
+      <li><strong>Calendar data</strong> — event titles, dates, and descriptions extracted from your emails or uploads, stored to sync with your Google Calendar.</li>
+      <li><strong>Usage data</strong> — scan counts and subscription status to enforce plan limits.</li>
+      <li><strong>Payment information</strong> — handled entirely by Stripe. We do not store card details.</li>
+    </ul>
+
+    <h2>3. How we use your information</h2>
+    <ul>
+      <li>To provide the NeverDue service — extracting events and writing them to your Google Calendar</li>
+      <li>To manage your account and subscription</li>
+      <li>To send transactional emails (account-related notifications only)</li>
+      <li>To display relevant advertising via Google AdSense</li>
+    </ul>
+
+    <h2>4. Google Calendar access</h2>
+    <p>With your permission, NeverDue writes events to your Google Calendar on your behalf. We request only the minimum necessary access. You can revoke this access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google account settings</a>.</p>
+
+    <h2>5. Third-party services</h2>
+    <p>We use the following third-party services, each with their own privacy policies:</p>
+    <ul>
+      <li><strong>Google</strong> — OAuth authentication and Calendar API</li>
+      <li><strong>Mailgun</strong> — inbound email processing</li>
+      <li><strong>Stripe</strong> — payment processing</li>
+      <li><strong>Anthropic</strong> — AI-powered event extraction</li>
+      <li><strong>Google AdSense</strong> — advertising (free tier)</li>
+      <li><strong>Resend</strong> — transactional email delivery</li>
+    </ul>
+
+    <h2>6. Data retention</h2>
+    <p>We retain your account data for as long as your account is active. You may request deletion of your account and associated data at any time by contacting us at <a href="mailto:privacy@neverdue.ca">privacy@neverdue.ca</a>. Extracted event data stored in our database will be deleted within 30 days of your request.</p>
+
+    <h2>7. Your rights under Quebec's Law 25 (Act 25)</h2>
+    <p>As a Quebec resident, you have the right to:</p>
+    <ul>
+      <li>Access personal information we hold about you</li>
+      <li>Correct inaccurate information</li>
+      <li>Request deletion of your personal information</li>
+      <li>Withdraw consent to the collection or use of your data</li>
+      <li>File a complaint with the <a href="https://www.cai.gouv.qc.ca" target="_blank" rel="noopener">Commission d'accès à l'information du Québec (CAI)</a></li>
+    </ul>
+    <p>To exercise any of these rights, contact us at <a href="mailto:privacy@neverdue.ca">privacy@neverdue.ca</a>.</p>
+
+    <h2>8. Cookies</h2>
+    <p>We use session cookies necessary for authentication. Google AdSense may set additional cookies for advertising purposes. You can manage cookie preferences through your browser settings.</p>
+
+    <h2>9. Changes to this policy</h2>
+    <p>We may update this policy from time to time. We will notify you of significant changes by email or by posting a notice on the site.</p>
+
+    <h2>10. Contact</h2>
+    <p>For any privacy-related questions, contact us at <a href="mailto:privacy@neverdue.ca">privacy@neverdue.ca</a>.</p>
+
+  </div>
+</div>
+{% endblock %}
