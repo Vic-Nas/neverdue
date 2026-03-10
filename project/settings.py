@@ -84,8 +84,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'project' / 'static']
-STATIC_ROOT = BASE_DIR / 'project' / 'staticfiles' 
+STATICFILES_DIRS = [BASE_DIR / 'project' / 'static' / 'manual']
+STATIC_ROOT = BASE_DIR / 'project' / 'static' / 'cache' 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

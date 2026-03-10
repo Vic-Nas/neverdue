@@ -13,8 +13,8 @@ venv/
 .venv/
 
 # Static collected files
-project/staticfiles/*
-!project/staticfiles/.gitkeep
+project/static/cache/*
+!project/static/cache/.gitkeep
 
 # Media
 project/media/
