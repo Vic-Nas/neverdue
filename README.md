@@ -1,4 +1,4 @@
-# NeverDue
+# [NeverDue](https://neverdue.ca)
 
 **Never miss a deadline again.**
 
