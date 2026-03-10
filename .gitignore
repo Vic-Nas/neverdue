@@ -25,3 +25,9 @@ project/media/
 # OS
 .DS_Store
 Thumbs.db
+
+# Temp files
+tmp/
+temp/
+*.tmp
+*.temp
