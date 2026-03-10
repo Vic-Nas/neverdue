@@ -58,10 +58,10 @@
 
     {# Slot 1 #}
     <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOT %}
+      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.0 %}
         <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
              data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ ADSENSE_SLOT }}"
+             data-ad-slot="{{ ADSENSE_SLOTS.0 }}"
              data-ad-format="auto"></ins>
         <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
       {% else %}
@@ -71,10 +71,10 @@
 
     {# Slot 2 #}
     <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOT %}
+      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.1 %}
         <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
              data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ ADSENSE_SLOT }}"
+             data-ad-slot="{{ ADSENSE_SLOTS.1 }}"
              data-ad-format="auto"></ins>
         <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
       {% else %}
@@ -82,9 +82,17 @@
       {% endif %}
     </div>
 
-    {# Slot 3 — AdSense if 3+ slots paid, else Railway #}
+    {# Slot 3 #}
     <div class="ad-slot">
-      {% include 'partials/ad_railway.html' %}
+      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.2 %}
+        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
+             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
+             data-ad-slot="{{ ADSENSE_SLOTS.2 }}"
+             data-ad-format="auto"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      {% else %}
+        {% include 'partials/ad_railway.html' %}
+      {% endif %}
     </div>
 
     {# Slot 4 — always Koho #}
