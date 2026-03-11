@@ -19,19 +19,42 @@ class Category(models.Model):
 
 
 class Rule(models.Model):
+    ACTION_CHOICES = [
+        ('categorize', 'Categorize'),
+        ('allow', 'Allow'),
+        ('block', 'Block'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rules')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rules')
-    sender = models.CharField(max_length=255, null=True, blank=True)
-    keyword = models.CharField(max_length=255, null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rules', null=True, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='categorize')
+    pattern = models.CharField(max_length=255)  # email, domain, glob, or regex
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = ['user', 'pattern']
+
     def __str__(self):
-        parts = []
-        if self.sender:
-            parts.append(f'from:{self.sender}')
-        if self.keyword:
-            parts.append(f'contains:{self.keyword}')
-        return ' | '.join(parts) or 'Empty rule'
+        return f'{self.action}:{self.pattern}'
+
+
+class FilterRule(models.Model):
+    """Allow/block rules for inbound email filtering."""
+    ACTION_CHOICES = [
+        ('allow', 'Allow'),
+        ('block', 'Block'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='filter_rules')
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    pattern = models.CharField(max_length=255)  # email, domain (e.g. @gmail.com), or glob (e.g. *@company.*)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'pattern']
+
+    def __str__(self):
+        return f'{self.action}:{self.pattern}'
 
 
 class Event(models.Model):

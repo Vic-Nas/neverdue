@@ -33,6 +33,10 @@ def inbound(request):
     if not user:
         return HttpResponse('OK', status=200)
 
+    from .webhook import sender_is_allowed
+    if not sender_is_allowed(user, sender):
+        return HttpResponse('OK', status=200)
+
     body = extract_email_text(payload)
 
     # Extract attachments as [base64_string, media_type] — JSON-serializable for Celery

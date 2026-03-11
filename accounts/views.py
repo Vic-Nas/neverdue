@@ -128,6 +128,11 @@ def username_pick(request):
             messages.error(request, 'Only letters, numbers, and underscores allowed.')
             return render(request, 'accounts/username_pick.html')
 
+        from emails.webhook import RESERVED_USERNAMES
+        if username in RESERVED_USERNAMES:
+            messages.error(request, 'That username is reserved. Please choose another.')
+            return render(request, 'accounts/username_pick.html')
+
         if User.objects.filter(username=username).exclude(pk=request.user.pk).exists():
             messages.error(request, 'That username is already taken.')
             return render(request, 'accounts/username_pick.html')

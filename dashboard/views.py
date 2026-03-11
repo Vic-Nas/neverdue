@@ -1,6 +1,6 @@
 # dashboard/views.py
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import Category, Event, Rule
@@ -170,9 +170,52 @@ def category_delete(request, pk):
 @login_required
 def email_sources(request):
     try:
-        return render(request, 'dashboard/email_sources.html')
+        from .models import FilterRule
+        filter_rules = FilterRule.objects.filter(user=request.user).order_by('action', 'pattern')
+        return render(request, 'dashboard/email_sources.html', {'filter_rules': filter_rules})
     except Exception:
         return HttpResponse('Email sources unavailable.', status=500)
+
+
+@login_required
+def filter_rule_add(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        import json
+        from .models import FilterRule
+        data = json.loads(request.body)
+        action = data.get('action')
+        pattern = data.get('pattern', '').strip().lower()
+
+        if action not in ('allow', 'block'):
+            return JsonResponse({'ok': False, 'error': 'Invalid action'})
+        if not pattern:
+            return JsonResponse({'ok': False, 'error': 'Pattern required'})
+
+        rule, created = FilterRule.objects.get_or_create(
+            user=request.user,
+            pattern=pattern,
+            defaults={'action': action},
+        )
+        if not created:
+            return JsonResponse({'ok': False, 'error': 'Pattern already exists'})
+
+        return JsonResponse({'ok': True, 'id': rule.pk})
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def filter_rule_delete(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    try:
+        from .models import FilterRule
+        FilterRule.objects.filter(pk=pk, user=request.user).delete()
+        return JsonResponse({'ok': True})
+    except Exception:
+        return JsonResponse({'ok': False}, status=500)
 
 
 @login_required
