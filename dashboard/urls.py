@@ -15,5 +15,7 @@ urlpatterns = [
     path('categories/<int:pk>/edit/', views.category_edit, name='category_edit'),
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
     path('sources/', views.email_sources, name='email_sources'),
+    path('sources/filters/add/', views.filter_rule_add, name='filter_rule_add'),
+    path('sources/filters/<int:pk>/delete/', views.filter_rule_delete, name='filter_rule_delete'),
     path('upload/', views.upload, name='upload'),
 ]

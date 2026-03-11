@@ -7,25 +7,25 @@
 {% endblock %}
 
 {% block content %}
-<div class="sources-page">
+<div class="page page--wide">
 
-  <div class="sources-page__header">
-    <h1 class="sources-page__title">Email sources</h1>
-    <p class="sources-page__sub">Forward emails from any account to your NeverDue inbox. We'll scan them automatically every hour.</p>
+  <div class="page__header">
+    <h1 class="page__title">Email sources</h1>
+    <p class="page__sub">Forward emails from any account to your NeverDue inbox. Events are extracted instantly.</p>
   </div>
 
   {# Your NeverDue address #}
   <div class="sources-inbox">
-    <div class="sources-inbox__label">Your NeverDue inbox</div>
+    <div class="label-upper">Your NeverDue inbox</div>
     <div class="sources-inbox__address">
-      <span id="inbox-address">{{ request.user.username }}@{{ DOMAIN }}</span>
+      <span id="inbox-address">{{ request.user.username }}@user.{{ DOMAIN }}</span>
       <button class="btn-ghost btn btn--sm" onclick="copyAddress()">Copy</button>
     </div>
     <p class="sources-inbox__hint">Forward any email to this address and it will be scanned for deadlines and calendar events.</p>
   </div>
 
   {# Setup guides #}
-  <h2 class="sources-guides__title">How to set up forwarding</h2>
+  <h2 class="label-upper">How to set up forwarding</h2>
   <div class="sources-guides">
 
     <div class="source-guide">
@@ -39,7 +39,7 @@
         <li>Click <strong>Create a new filter</strong></li>
         <li>Leave fields blank to forward all, or fill in a sender to filter</li>
         <li>Click <strong>Create filter</strong> then check <strong>Forward it to</strong></li>
-        <li>Add <code>{{ request.user.username }}@{{ DOMAIN }}</code> as the forwarding address</li>
+        <li>Add <code>{{ request.user.username }}@user.{{ DOMAIN }}</code> as the forwarding address</li>
         <li>Confirm the verification email Google sends to your NeverDue inbox</li>
       </ol>
     </div>
@@ -53,7 +53,7 @@
         <li>Open <a href="https://outlook.com" target="_blank" rel="noopener">outlook.com</a> and go to <strong>Settings → Mail → Rules</strong></li>
         <li>Click <strong>Add new rule</strong></li>
         <li>Set condition: <strong>Apply to all messages</strong> (or pick a sender)</li>
-        <li>Set action: <strong>Forward to</strong> <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Set action: <strong>Forward to</strong> <code>{{ request.user.username }}@user.{{ DOMAIN }}</code></li>
         <li>Save the rule</li>
       </ol>
     </div>
@@ -67,7 +67,7 @@
         <li>Go to <a href="https://icloud.com/mail" target="_blank" rel="noopener">icloud.com/mail</a></li>
         <li>Click the <strong>Settings</strong> gear → <strong>Rules</strong></li>
         <li>Click <strong>Add a Rule</strong></li>
-        <li>Set condition and action to <strong>Forward to</strong> <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Set condition and action to <strong>Forward to</strong> <code>{{ request.user.username }}@user.{{ DOMAIN }}</code></li>
         <li>Save</li>
       </ol>
     </div>
@@ -81,11 +81,49 @@
         <li>Go to <a href="https://mail.yahoo.com" target="_blank" rel="noopener">mail.yahoo.com</a> → <strong>Settings → More settings → Filters</strong></li>
         <li>Click <strong>Add new filters</strong></li>
         <li>Set the filter and choose <strong>Forward to</strong></li>
-        <li>Enter <code>{{ request.user.username }}@{{ DOMAIN }}</code></li>
+        <li>Enter <code>{{ request.user.username }}@user.{{ DOMAIN }}</code></li>
         <li>Save</li>
       </ol>
     </div>
 
+  </div>
+
+
+  {# ── Email filters ── #}
+  <div class="section-block" style="margin-top:2rem">
+    <div class="section-block__header">
+      <div>
+        <h2 class="label-upper">Email filters</h2>
+        <p class="page__sub" style="margin-top:0.25rem">By default all senders are allowed. Add allow rules to whitelist specific senders, or block rules to reject them.</p>
+      </div>
+    </div>
+
+    <div class="filter-rules" id="filter-rules-list">
+      {% for rule in filter_rules %}
+      <div class="filter-rule filter-rule--{{ rule.action }}" data-id="{{ rule.pk }}">
+        <span class="filter-rule__badge filter-rule__badge--{{ rule.action }}">{{ rule.action }}</span>
+        <span class="filter-rule__pattern">{{ rule.pattern }}</span>
+        <button class="filter-rule__remove btn-ghost btn btn--sm" onclick="removeRule({{ rule.pk }})">✕</button>
+      </div>
+      {% empty %}
+      <p class="filter-rules__empty" id="filter-empty">All senders allowed — no filters active.</p>
+      {% endfor %}
+    </div>
+
+    <div class="filter-add">
+      <select id="filter-action" class="filter-add__select">
+        <option value="allow">Allow</option>
+        <option value="block">Block</option>
+      </select>
+      <input type="text" id="filter-pattern" class="filter-add__input"
+             placeholder="user@example.com, @domain.com, or *@*.edu">
+      <button class="btn-primary btn--sm" onclick="addRule()">+ Add</button>
+    </div>
+    <p class="filter-rules__hint">
+      Supports exact emails (<code>user@example.com</code>),
+      domains (<code>@example.com</code>),
+      and wildcards (<code>*@*.edu</code>).
+    </p>
   </div>
 
 </div>
@@ -93,6 +131,59 @@
 
 {% block extra_js %}
 <script>
+
+async function addRule() {
+  const action = document.getElementById('filter-action').value;
+  const pattern = document.getElementById('filter-pattern').value.trim();
+  if (!pattern) return;
+
+  const resp = await fetch('{% url "dashboard:filter_rule_add" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+    body: JSON.stringify({action, pattern}),
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    document.getElementById('filter-empty')?.remove();
+    const list = document.getElementById('filter-rules-list');
+    const div = document.createElement('div');
+    div.className = `filter-rule filter-rule--${action}`;
+    div.dataset.id = data.id;
+    div.innerHTML = `
+      <span class="filter-rule__badge filter-rule__badge--${action}">${action}</span>
+      <span class="filter-rule__pattern">${pattern}</span>
+      <button class="filter-rule__remove btn-ghost btn btn--sm" onclick="removeRule(${data.id})">✕</button>
+    `;
+    list.appendChild(div);
+    document.getElementById('filter-pattern').value = '';
+  } else {
+    alert(data.error || 'Could not add rule.');
+  }
+}
+
+async function removeRule(id) {
+  const resp = await fetch(`{% url "dashboard:filter_rule_delete" pk=0 %}`.replace('/0/', `/${id}/`), {
+    method: 'POST',
+    headers: {'X-CSRFToken': getCookie('csrftoken')},
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    document.querySelector(`[data-id="${id}"]`).remove();
+    if (!document.querySelectorAll('.filter-rule').length) {
+      const p = document.createElement('p');
+      p.className = 'filter-rules__empty';
+      p.id = 'filter-empty';
+      p.textContent = 'All senders allowed — no filters active.';
+      document.getElementById('filter-rules-list').appendChild(p);
+    }
+  }
+}
+
+function getCookie(name) {
+  return document.cookie.split(';').map(c => c.trim())
+    .find(c => c.startsWith(name + '='))?.split('=')[1] || '';
+}
+
 function copyAddress() {
   const addr = document.getElementById('inbox-address').textContent;
   navigator.clipboard.writeText(addr).then(() => {

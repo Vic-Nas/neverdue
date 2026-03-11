@@ -56,20 +56,6 @@ def verify_resend_signature(payload_bytes, headers):
     return False
 
 
-def get_user_from_recipient(recipient):
-    """
-    Extract username from recipient address and return User or None.
-    e.g. 'john@neverdue.ca' -> User(username='john')
-    """
-    from accounts.models import User
-
-    try:
-        username = recipient.split('@')[0].lower()
-        return User.objects.get(username=username)
-    except (User.DoesNotExist, IndexError):
-        return None
-
-
 def extract_email_text(payload):
     """
     Extract plain text body from Resend inbound webhook payload.
@@ -112,3 +98,63 @@ def extract_attachments(payload):
             continue
 
     return result
+
+
+RESERVED_USERNAMES = {
+    'admin', 'status', 'support', 'help', 'billing', 'api', 'www',
+    'noreply', 'no-reply', 'mail', 'email', 'info', 'hello', 'contact',
+    'abuse', 'security', 'postmaster', 'hostmaster', 'webmaster',
+}
+
+
+def get_user_from_recipient(recipient):
+    """
+    Extract username from recipient address and return User or None.
+    Supports both:
+      username@neverdue.ca
+      username@user.neverdue.ca
+    """
+    from accounts.models import User
+
+    try:
+        local, domain = recipient.lower().split('@', 1)
+        # subdomain format: username@user.neverdue.ca → local part is username directly
+        # flat format: username@neverdue.ca → local part is username
+        username = local.split('.')[0] if '.' in local else local
+        return User.objects.get(username=username)
+    except (User.DoesNotExist, IndexError, ValueError):
+        return None
+
+
+def sender_is_allowed(user, sender):
+    """
+    Check if a sender is allowed for a given user based on their FilterRules.
+    - If user has no allow rules: all senders allowed unless blocked
+    - If user has allow rules: only matching senders allowed (unless also blocked)
+    Supports exact email, @domain.com, and glob patterns (fnmatch).
+    """
+    from dashboard.models import FilterRule
+    from fnmatch import fnmatch
+
+    rules = FilterRule.objects.filter(user=user)
+    if not rules.exists():
+        return True
+
+    sender = sender.lower()
+    allow_rules = [r.pattern.lower() for r in rules if r.action == 'allow']
+    block_rules = [r.pattern.lower() for r in rules if r.action == 'block']
+
+    def matches(pattern):
+        if pattern.startswith('@'):
+            return sender.endswith(pattern)
+        return sender == pattern or fnmatch(sender, pattern)
+
+    # Block takes priority
+    if any(matches(p) for p in block_rules):
+        return False
+
+    # If allow list exists, sender must match
+    if allow_rules:
+        return any(matches(p) for p in allow_rules)
+
+    return True
