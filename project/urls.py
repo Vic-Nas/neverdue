@@ -1,6 +1,7 @@
 # project/urls.py
 from django.contrib import admin
 from django.urls import path, include
+import project.views as views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -9,4 +10,5 @@ urlpatterns = [
     path('billing/', include('billing.urls')),
     path('emails/', include('emails.urls')),
     path('legal/', include('project.legal_urls')),
+    path('help/', views.help_page, name='help'),
 ]

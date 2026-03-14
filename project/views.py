@@ -8,3 +8,7 @@ def privacy(request):
 
 def terms(request):
     return render(request, 'legal/terms.html')
+
+
+def help_page(request):
+    return render(request, 'help/help.html')
