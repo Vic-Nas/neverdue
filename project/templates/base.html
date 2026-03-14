@@ -20,6 +20,10 @@
 <nav class="topnav">
   <a href="{% url 'dashboard:index' %}" class="topnav__logo">Never<span>Due</span></a>
 
+  <div class="topnav__links topnav__links--public">
+    <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
+  </div>
+
   {% if user.is_authenticated %}
   <div class="topnav__links">
     <a href="{% url 'dashboard:index' %}" class="topnav__link {% if request.resolver_match.url_name == 'index' %}topnav__link--active{% endif %}">Dashboard</a>
