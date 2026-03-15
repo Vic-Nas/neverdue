@@ -7,377 +7,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NeverDue — Your deadlines, handled.</title>
   <link rel="icon" href="{% static 'assets/favicon.ico' %}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --green: #2D6A4F;
-      --green-light: #52B788;
-      --cream: #FAFAF7;
-      --ink: #1A1A18;
-      --muted: #6B6B65;
-      --border: #E5E5E0;
-      --card: #FFFFFF;
-    }
-
-    html, body {
-      height: 100%;
-      font-family: 'DM Sans', sans-serif;
-      background: var(--cream);
-      color: var(--ink);
-      overflow-x: hidden;
-    }
-
-    /* ── Layout ── */
-    .page {
-      min-height: 100vh;
-      display: grid;
-      grid-template-columns: 1fr 480px;
-    }
-
-    /* ── Left panel ── */
-    .left {
-      padding: 3rem;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .left::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 60% 50% at 20% 80%, rgba(82, 183, 136, 0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 40% 40% at 80% 20%, rgba(45, 106, 79, 0.08) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
-    .logo {
-      font-family: 'Instrument Serif', serif;
-      font-size: 1.5rem;
-      color: var(--ink);
-      text-decoration: none;
-      letter-spacing: -0.02em;
-      position: relative;
-      z-index: 1;
-    }
-
-    .logo span { color: var(--green); }
-
-    .left__content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      max-width: 540px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--green);
-      margin-bottom: 1.5rem;
-    }
-
-    .eyebrow::before {
-      content: '';
-      display: block;
-      width: 24px;
-      height: 1.5px;
-      background: var(--green);
-    }
-
-    h1 {
-      font-family: 'Instrument Serif', serif;
-      font-size: clamp(2.5rem, 5vw, 4rem);
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-      color: var(--ink);
-      margin-bottom: 1.5rem;
-    }
-
-    h1 em {
-      font-style: italic;
-      color: var(--green);
-    }
-
-    .description {
-      font-size: 1.05rem;
-      color: var(--muted);
-      line-height: 1.7;
-      margin-bottom: 2.5rem;
-      max-width: 440px;
-    }
-
-    /* ── Feature list ── */
-    .features {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      margin-bottom: 2.5rem;
-    }
-
-    .feature {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.875rem;
-    }
-
-    .feature__icon {
-      width: 32px;
-      height: 32px;
-      background: rgba(45, 106, 79, 0.1);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.9rem;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-
-    .feature__text strong {
-      display: block;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--ink);
-      margin-bottom: 0.1rem;
-    }
-
-    .feature__text span {
-      font-size: 0.85rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .help-link {
-      font-size: 0.85rem;
-      color: var(--muted);
-    }
-
-    .help-link a {
-      color: var(--green);
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    .help-link a:hover { text-decoration: underline; }
-
-    /* ── Right panel ── */
-    .right {
-      background: var(--card);
-      border-left: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 3rem 2.5rem;
-      position: relative;
-    }
-
-    .right__inner {
-      width: 100%;
-      max-width: 340px;
-    }
-
-    .right__title {
-      font-family: 'Instrument Serif', serif;
-      font-size: 1.75rem;
-      letter-spacing: -0.02em;
-      color: var(--ink);
-      margin-bottom: 0.5rem;
-    }
-
-    .right__sub {
-      font-size: 0.9rem;
-      color: var(--muted);
-      margin-bottom: 2rem;
-      line-height: 1.5;
-    }
-
-    {% if messages %}
-    .messages {
-      list-style: none;
-      margin-bottom: 1.25rem;
-    }
-    .messages li {
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      font-size: 0.875rem;
-      background: #FEF2F2;
-      color: #991B1B;
-      border: 1px solid #FCA5A5;
-    }
-    {% endif %}
-
-    .btn-google {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      width: 100%;
-      padding: 0.875rem 1.5rem;
-      background: var(--ink);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.95rem;
-      font-weight: 500;
-      text-decoration: none;
-      cursor: pointer;
-      transition: opacity 0.15s, transform 0.15s;
-    }
-
-    .btn-google:hover {
-      opacity: 0.88;
-      transform: translateY(-1px);
-    }
-
-    .btn-google:active { transform: translateY(0); }
-
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin: 1.5rem 0;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
-
-    .privacy-note {
-      font-size: 0.78rem;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.6;
-      margin-top: 1.5rem;
-    }
-
-    .privacy-note a {
-      color: var(--muted);
-      text-decoration: underline;
-    }
-
-    /* ── Decorative calendar ── */
-    .cal-decoration {
-      position: absolute;
-      bottom: 2rem;
-      right: 2rem;
-      opacity: 0.06;
-      font-size: 8rem;
-      line-height: 1;
-      font-family: 'Instrument Serif', serif;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 768px) {
-      .page {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
-      }
-
-      .left {
-        padding: 2rem 1.5rem;
-      }
-
-      .left__content {
-        padding: 2rem 0;
-      }
-
-      h1 { font-size: 2.25rem; }
-
-      .right {
-        border-left: none;
-        border-top: 1px solid var(--border);
-        padding: 2rem 1.5rem;
-      }
-
-      .cal-decoration { display: none; }
-    }
-  </style>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/login.css' %}">
 </head>
 <body>
 
-<div class="page">
+<div class="login-page">
 
   {# ── Left: marketing ── #}
-  <div class="left">
-    <a href="/" class="logo">Never<span>Due</span></a>
+  <div class="login-left">
+    <a href="/" class="login-logo">Never<span>Due</span></a>
 
-    <div class="left__content">
-      <div class="eyebrow">Deadline management</div>
+    <div class="login-left__content">
+      <div class="login-eyebrow">Deadline management</div>
 
-      <h1>Your inbox knows<br>your <em>deadlines</em>.<br>We catch them.</h1>
+      <h1 class="login-headline">Your inbox knows<br>your <em>deadlines</em>.<br>We catch them.</h1>
 
-      <p class="description">
+      <p class="login-description">
         Forward emails to your personal NeverDue address. We extract every deadline, meeting, and event automatically and add them to your Google Calendar — before you miss them.
       </p>
 
-      <div class="features">
-        <div class="feature">
-          <div class="feature__icon">📬</div>
-          <div class="feature__text">
+      <div class="login-features">
+        <div class="login-feature">
+          <div class="login-feature__icon">📬</div>
+          <div class="login-feature__text">
             <strong>Forward once, done forever</strong>
             <span>Set up forwarding rules in Gmail, Outlook, or any email client. Events appear instantly.</span>
           </div>
         </div>
-        <div class="feature">
-          <div class="feature__icon">🗓️</div>
-          <div class="feature__text">
+        <div class="login-feature">
+          <div class="login-feature__icon">🗓️</div>
+          <div class="login-feature__text">
             <strong>Goes straight to Google Calendar</strong>
             <span>Events are written directly to your calendar with reminders. Nothing to copy-paste.</span>
           </div>
         </div>
-        <div class="feature">
-          <div class="feature__icon">🧠</div>
-          <div class="feature__text">
+        <div class="login-feature">
+          <div class="login-feature__icon">🧠</div>
+          <div class="login-feature__text">
             <strong>AI that actually understands context</strong>
             <span>Handles vague language, attachments, and recurring events — not just obvious date formats.</span>
           </div>
         </div>
       </div>
 
-      <p class="help-link">New here? <a href="{% url 'help' %}">Read how it works →</a></p>
+      <p class="login-help-link">New here? <a href="{% url 'help' %}">Read how it works →</a></p>
     </div>
   </div>
 
   {# ── Right: sign in ── #}
-  <div class="right">
-    <div class="right__inner">
+  <div class="login-right">
+    <div class="login-right__inner">
 
-      <h2 class="right__title">Get started</h2>
-      <p class="right__sub">Sign in with Google to connect your calendar. Free to start, no credit card required.</p>
+      <h2 class="login-right__title">Get started</h2>
+      <p class="login-right__sub">Sign in with Google to connect your calendar. Free to start, no credit card required.</p>
 
       {% if messages %}
-      <ul class="messages">
+      <ul class="login-messages">
         {% for message in messages %}
         <li>{{ message }}</li>
         {% endfor %}
       </ul>
       {% endif %}
 
-      <a href="{% url 'accounts:google_login' %}" class="btn-google">
+      <a href="{% url 'accounts:google_login' %}" class="login-btn-google">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
           <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
@@ -387,9 +80,9 @@
         Continue with Google
       </a>
 
-      <div class="divider">Free tier available</div>
+      <div class="login-divider">Free tier available</div>
 
-      <p class="privacy-note">
+      <p class="login-privacy">
         By signing in you agree to our
         <a href="{% url 'legal:terms' %}">Terms of Service</a> and
         <a href="{% url 'legal:privacy' %}">Privacy Policy</a>.
@@ -398,7 +91,7 @@
 
     </div>
 
-    <div class="cal-decoration">31</div>
+    <div class="login-decoration">31</div>
   </div>
 
 </div>

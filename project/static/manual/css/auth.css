@@ -1,4 +1,5 @@
-/* static/css/auth.css */
+/* static/manual/css/auth.css */
+
 .auth-page {
   min-height: 100vh;
   display: flex;
@@ -90,28 +91,6 @@
 
 .btn-google svg {
   flex-shrink: 0;
-}
-
-.form-group {
-  margin-bottom: 1.1rem;
-}
-
-.form-group label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-bottom: 0.4rem;
-  color: var(--text);
-}
-
-.form-hint {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-top: 0.3rem;
-}
-
-.form-actions {
-  margin-top: 1.5rem;
 }
 
 @media (max-width: 480px) {

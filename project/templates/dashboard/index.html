@@ -4,6 +4,8 @@
 {% block title %}Dashboard — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -85,7 +87,7 @@
   {% else %}
   <div class="empty-state">
     <p class="empty-state__text">No upcoming events. Add one manually or set up email forwarding.</p>
-    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;justify-content:center">
+    <div class="empty-state__actions">
       <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
       <a href="{% url 'dashboard:email_sources' %}" class="btn-ghost btn">Set up email sources</a>
     </div>

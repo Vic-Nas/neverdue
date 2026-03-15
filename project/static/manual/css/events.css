@@ -1,0 +1,204 @@
+/* static/manual/css/events.css */
+
+/* ── Event list ── */
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.event-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.event-card:hover {
+  border-color: var(--accent-light);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.event-card__date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+  text-align: center;
+}
+
+.event-card__day {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.event-card__month {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.event-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-card__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+
+.event-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.event-card__sep {
+  color: var(--border);
+}
+
+.event-card__arrow {
+  color: var(--text-muted);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* ── Event detail ── */
+.detail-page__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.detail-dates {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.detail-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.detail-date__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.detail-date__value {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.detail-date__sep {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+/* ── Reminder list (event detail) ── */
+.reminder-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.reminder-list li {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.reminder-list li::before {
+  content: '🔔';
+  font-size: 0.8rem;
+}
+
+/* ── Scan usage banner ── */
+.scan-banner {
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.scan-banner__top {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.scan-banner__last {
+  margin-left: auto;
+}
+
+.scan-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.scan-bar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.scan-bar__fill--warn  { background: #f6c026; }
+.scan-bar__fill--danger { background: #e67c73; }
+
+.scan-last {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .event-card {
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .event-card__arrow { display: none; }
+}
