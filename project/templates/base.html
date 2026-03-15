@@ -52,13 +52,14 @@
 <div class="layout">
 
   {# ── Ad sidebar ── #}
-  {# Slot logic:
-     - 0 AdSense → slots 1+2 Railway, slot 3 Railway, slot 4 Koho
-     - 1 AdSense → slot 1 AdSense, slot 2 Railway, slot 3 Railway, slot 4 Koho
-     - 2 AdSense → slots 1+2 AdSense, slot 3 Railway, slot 4 Koho
-     - 3 AdSense → slots 1+2+3 AdSense, slot 4 Koho
-     - 4 AdSense → all AdSense
-  #}
+  {% comment %}
+  Slot logic:
+  - 0 AdSense: slots 1+2+3 Railway, slot 4 Koho
+  - 1 AdSense: slot 1 AdSense, slots 2+3 Railway, slot 4 Koho
+  - 2 AdSense: slots 1+2 AdSense, slot 3 Railway, slot 4 Koho
+  - 3 AdSense: slots 1+2+3 AdSense, slot 4 Koho
+  - 4 AdSense: all AdSense
+  {% endcomment %}
   <aside class="ad-sidebar">
 
     {# Slot 1 #}

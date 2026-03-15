@@ -1,14 +1,17 @@
 /* static/manual/css/house_ads.css */
+
 .house-ad {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem;
+  gap: 0.3rem;
+  padding: 0.75rem;
   border-radius: var(--radius);
   width: 100%;
   height: 100%;
   text-decoration: none;
   transition: transform 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .house-ad:hover {
@@ -17,33 +20,42 @@
 }
 
 .house-ad__eyebrow {
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: 0.6rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .house-ad__logo {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   font-family: 'Syne', sans-serif;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .house-ad__text {
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 0.72rem;
+  line-height: 1.35;
   opacity: 0.85;
   flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .house-ad__cta {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  margin-top: 0.25rem;
+  margin-top: auto;
+  white-space: nowrap;
 }
 
 /* ── Railway ── */
@@ -53,17 +65,9 @@
   color: #f0f0f0;
 }
 
-.house-ad--railway .house-ad__eyebrow {
-  color: #a78bfa;
-}
-
-.house-ad--railway .house-ad__logo {
-  color: #ffffff;
-}
-
-.house-ad--railway .house-ad__cta {
-  color: #a78bfa;
-}
+.house-ad--railway .house-ad__eyebrow { color: #a78bfa; }
+.house-ad--railway .house-ad__logo    { color: #ffffff; }
+.house-ad--railway .house-ad__cta     { color: #a78bfa; }
 
 .house-ad--railway:hover {
   box-shadow: 0 4px 20px rgba(167, 139, 250, 0.2);
@@ -76,13 +80,8 @@
   color: #f0f0f0;
 }
 
-.house-ad--koho .house-ad__eyebrow {
-  color: #C8F135;
-}
-
-.house-ad--koho .house-ad__cta {
-  color: #C8F135;
-}
+.house-ad--koho .house-ad__eyebrow { color: #C8F135; }
+.house-ad--koho .house-ad__cta     { color: #C8F135; }
 
 .house-ad--koho:hover {
   box-shadow: 0 4px 20px rgba(200, 241, 53, 0.15);

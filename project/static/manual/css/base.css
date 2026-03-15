@@ -2,18 +2,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap');
 
 :root {
-  --accent: #2D6A4F;
+  --accent:       #2D6A4F;
   --accent-light: #52B788;
   --accent-muted: #D8F3DC;
-  --bg: #FAFAF8;
-  --surface: #FFFFFF;
-  --border: #E8E8E4;
-  --text: #1A1A18;
-  --text-muted: #6B6B65;
-  --danger: #C0392B;
-  --sidebar-width: 280px;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
+  --bg:           #F4F7F4;
+  --surface:      #FFFFFF;
+  --border:       #E2E8E4;
+  --text:         #1A1A18;
+  --text-muted:   #6B6B65;
+  --danger:       #C0392B;
+  --sidebar-width: 260px;
+  --radius:       10px;
+  --shadow:       0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
 }
 
 *, *::before, *::after {
@@ -38,6 +38,7 @@ body {
 h1, h2, h3, h4, h5 {
   font-family: 'Syne', sans-serif;
   line-height: 1.2;
+  color: var(--text);
 }
 
 a {
@@ -56,23 +57,26 @@ button, .btn {
   outline: none;
 }
 
+/* ── Buttons ── */
 .btn-primary {
   background: var(--accent);
   color: white;
   padding: 0.65rem 1.4rem;
   border-radius: var(--radius);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  box-shadow: 0 1px 3px rgba(45,106,79,0.25);
 }
 
 .btn-primary:hover {
   background: var(--accent-light);
   color: white;
   transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(45,106,79,0.3);
 }
 
 .btn-ghost {
@@ -89,29 +93,12 @@ button, .btn {
   color: var(--text);
 }
 
-input, textarea, select {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.95rem;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.65rem 0.9rem;
-  background: var(--surface);
-  color: var(--text);
-  width: 100%;
-  transition: border-color 0.2s;
-}
-
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
 .btn-danger {
   background: var(--danger);
   color: white;
   padding: 0.65rem 1.4rem;
   border-radius: var(--radius);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: background 0.2s, transform 0.1s;
   display: inline-flex;
@@ -125,6 +112,49 @@ input:focus, textarea:focus, select:focus {
   transform: translateY(-1px);
 }
 
+/* ── Inputs ── */
+input, textarea, select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45,106,79,0.1);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Messages ── */
+.messages {
+  list-style: none;
+  margin-bottom: 1rem;
+}
+
+.messages li {
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  border-left: 3px solid;
+}
+
+.messages .error   { background: #fdecea; color: var(--danger);  border-color: var(--danger); }
+.messages .success { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
+.messages .info    { background: #e8f4fd; color: #1a6fa0; border-color: #1a6fa0; }
+
+/* ── Confirm page ── */
 .confirm-page {
   max-width: 480px;
   margin: 3rem auto;
@@ -149,18 +179,43 @@ input:focus, textarea:focus, select:focus {
   align-items: center;
 }
 
-.messages {
-  list-style: none;
-  margin-bottom: 1rem;
+/* ── Site footer ── */
+.site-footer {
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  padding: 0.6rem 2rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  z-index: 50;
 }
 
-.messages li {
-  padding: 0.7rem 1rem;
-  border-radius: var(--radius);
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
+.site-footer__links {
+  display: flex;
+  gap: 1.25rem;
 }
 
-.messages .error { background: #fdecea; color: var(--danger); }
-.messages .success { background: var(--accent-muted); color: var(--accent); }
-.messages .info { background: #e8f4fd; color: #1a6fa0; }
+.site-footer__links a {
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.site-footer__links a:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .site-footer {
+    left: 0;
+    flex-direction: column;
+    gap: 0.35rem;
+    text-align: center;
+    padding: 0.5rem 1rem;
+  }
+}
