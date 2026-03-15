@@ -2,6 +2,9 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}How it works — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="page">
@@ -22,13 +25,13 @@
     <h2>3. Set up email forwarding</h2>
     <p>In your email client, create a forwarding rule to send relevant emails to your NeverDue address. You can forward everything or just specific senders — it's up to you. Here's how to set it up in common clients:</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Gmail</h3>
-    <p>Settings → See all settings → Filters and Blocked Addresses → Create a new filter → Forward to <code style="background:var(--surface);padding:0.1rem 0.35rem;border-radius:4px;font-size:0.85rem">username@user.neverdue.ca</code></p>
+    <h3>Gmail</h3>
+    <p>Settings → See all settings → Filters and Blocked Addresses → Create a new filter → Forward to <code>username@user.neverdue.ca</code></p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Outlook</h3>
+    <h3>Outlook</h3>
     <p>Settings → Mail → Rules → Add new rule → Forward to your NeverDue address.</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Apple Mail / iCloud</h3>
+    <h3>Apple Mail / iCloud</h3>
     <p>icloud.com/mail → Settings gear → Rules → Add a Rule → Forward to your NeverDue address.</p>
 
     <h2>4. Events appear automatically</h2>
@@ -45,19 +48,19 @@
 
     <h2>FAQ</h2>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">What if the AI misses an event or gets it wrong?</h3>
+    <h3>What if the AI misses an event or gets it wrong?</h3>
     <p>You can edit or delete any event from your dashboard. The AI is accurate but not perfect — always review important deadlines.</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Will I get duplicate events?</h3>
+    <h3>Will I get duplicate events?</h3>
     <p>NeverDue deduplicates events by start and end time — if two emails mention the same event at the same time, only one event is created.</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Can I use NeverDue with multiple email accounts?</h3>
+    <h3>Can I use NeverDue with multiple email accounts?</h3>
     <p>Yes — forward from as many email accounts as you want to your single NeverDue address.</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">Is my email content stored?</h3>
+    <h3>Is my email content stored?</h3>
     <p>No. Emails are processed in real time and discarded immediately. We only store the extracted event data.</p>
 
-    <h3 style="margin-top:1.25rem;font-size:0.95rem;font-weight:600">How do I cancel Pro?</h3>
+    <h3>How do I cancel Pro?</h3>
     <p>Go to Billing → Manage subscription. You can cancel anytime and keep Pro access until the end of your billing period.</p>
 
     <h2>Still have questions?</h2>

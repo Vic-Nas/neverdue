@@ -1,0 +1,167 @@
+/* static/manual/css/forms.css */
+
+/* ── Form groups ── */
+.form-group {
+  margin-bottom: 1.1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+}
+
+.form-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+}
+
+.form-hint--spaced {
+  margin-bottom: 0.75rem;
+}
+
+.form-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ── Form sections (category edit) ── */
+.form-section {
+  margin-bottom: 1.75rem;
+}
+
+.form-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.form-section__title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* ── Form page wrapper ── */
+.form-page {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.form-page__header {
+  margin-bottom: 1.75rem;
+}
+
+.form-page__title {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+}
+
+/* ── Optional label suffix ── */
+.label-optional {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ── Color picker ── */
+.color-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.75rem;
+  background: var(--surface);
+}
+
+.color-input-wrap input[type="color"] {
+  width: 28px;
+  height: 28px;
+  border: none;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: none;
+}
+
+.color-input-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+/* ── Reminder / rule rows ── */
+.reminders-list,
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.reminder-row,
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reminder-row input { width: 120px; flex-shrink: 0; }
+.rule-row input { flex: 1; min-width: 140px; }
+
+.reminder-row__label,
+.rule-row__sep {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.reminder-row__label { flex: 1; }
+
+.reminder-row__remove,
+.row-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.25rem;
+  transition: color 0.15s;
+}
+
+.reminder-row__remove:hover,
+.row-remove:hover {
+  color: var(--danger);
+}
+
+/* ── Disabled field group ── */
+.form-group--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── Full-width button modifier ── */
+.btn--full {
+  width: 100%;
+  justify-content: center;
+  display: flex;
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .form-row { grid-template-columns: 1fr; }
+  .rule-row { flex-direction: column; align-items: stretch; }
+  .reminder-row input { width: 100%; }
+}

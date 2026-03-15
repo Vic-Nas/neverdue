@@ -4,6 +4,7 @@
 {% block title %}{% if event %}Edit event{% else %}New event{% endif %} — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -43,7 +44,7 @@
     </div>
 
     <div class="form-group">
-      <label for="category">Category <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <label for="category">Category <span class="label-optional">(optional)</span></label>
       <select name="category" id="category">
         <option value="">— Uncategorized —</option>
         {% for cat in categories %}
@@ -56,13 +57,13 @@
     </div>
 
     <div class="form-group">
-      <label for="description">Notes <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <label for="description">Notes <span class="label-optional">(optional)</span></label>
       <textarea id="description" name="description" rows="3" placeholder="Any extra context…">{{ event.description|default:'' }}</textarea>
     </div>
 
     <div class="form-row">
       <div class="form-group">
-        <label for="recurrence_freq">Repeats <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <label for="recurrence_freq">Repeats <span class="label-optional">(optional)</span></label>
         <select name="recurrence_freq" id="recurrence_freq">
           <option value="">— Does not repeat —</option>
           <option value="DAILY" {% if event.recurrence_freq == 'DAILY' %}selected{% endif %}>Daily</option>
@@ -71,8 +72,8 @@
           <option value="YEARLY" {% if event.recurrence_freq == 'YEARLY' %}selected{% endif %}>Yearly</option>
         </select>
       </div>
-      <div class="form-group" id="recurrence-until-group" {% if not event.recurrence_freq %}style="opacity:0.4;pointer-events:none"{% endif %}>
-        <label for="recurrence_until">Repeat until <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <div class="form-group {% if not event.recurrence_freq %}form-group--disabled{% endif %}" id="recurrence-until-group">
+        <label for="recurrence_until">Repeat until <span class="label-optional">(optional)</span></label>
         <input type="date" id="recurrence_until" name="recurrence_until" value="{{ event.recurrence_until|date:'Y-m-d'|default:'' }}">
       </div>
     </div>
@@ -92,17 +93,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.getElementById('recurrence_freq').addEventListener('change', function() {
-  const group = document.getElementById('recurrence-until-group');
-  if (this.value) {
-    group.style.opacity = '1';
-    group.style.pointerEvents = 'auto';
-  } else {
-    group.style.opacity = '0.4';
-    group.style.pointerEvents = 'none';
-    document.getElementById('recurrence_until').value = '';
-  }
-});
-</script>
+<script src="{% static 'js/forms.js' %}"></script>
 {% endblock %}

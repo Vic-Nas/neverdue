@@ -4,6 +4,7 @@
 {% block title %}{% if category %}Edit category{% else %}New category{% endif %} — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -45,7 +46,7 @@
         <h3 class="form-section__title">Reminders</h3>
         <button type="button" class="btn-ghost btn btn--sm" onclick="addReminder()">+ Add reminder</button>
       </div>
-      <p class="form-hint" style="margin-bottom:0.75rem">All events in this category will receive these reminders via Google Calendar.</p>
+      <p class="form-hint form-hint--spaced">All events in this category will receive these reminders via Google Calendar.</p>
       <div id="reminders-list" class="reminders-list">
         {% if category.reminders %}
           {% for reminder in category.reminders %}
@@ -66,7 +67,7 @@
         <h3 class="form-section__title">Auto-assign rules</h3>
         <button type="button" class="btn-ghost btn btn--sm" onclick="addRule()">+ Add rule</button>
       </div>
-      <p class="form-hint" style="margin-bottom:0.75rem">Emails matching these rules will be automatically assigned to this category.</p>
+      <p class="form-hint form-hint--spaced">Emails matching these rules will be automatically assigned to this category.</p>
       <div id="rules-list" class="rules-list">
         {% if category %}
           {% for rule in category.rules.all %}
@@ -91,36 +92,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.getElementById('color').addEventListener('input', function() {
-  document.getElementById('color-label').textContent = this.value;
-});
-
-function addReminder() {
-  const list = document.getElementById('reminders-list');
-  const row = document.createElement('div');
-  row.className = 'reminder-row';
-  row.innerHTML = `
-    <input type="number" name="reminders" min="1" placeholder="Minutes before">
-    <span class="reminder-row__label">minutes before</span>
-    <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
-  `;
-  list.appendChild(row);
-  row.querySelector('input').focus();
-}
-
-function addRule() {
-  const list = document.getElementById('rules-list');
-  const row = document.createElement('div');
-  row.className = 'rule-row';
-  row.innerHTML = `
-    <input type="text" name="rule_sender" placeholder="Sender (e.g. prof@uni.ca)">
-    <span class="rule-row__sep">or contains</span>
-    <input type="text" name="rule_keyword" placeholder="Keyword (e.g. deadline)">
-    <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
-  `;
-  list.appendChild(row);
-  row.querySelector('input').focus();
-}
-</script>
+<script src="{% static 'js/forms.js' %}"></script>
 {% endblock %}

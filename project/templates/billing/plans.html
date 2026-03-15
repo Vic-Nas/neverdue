@@ -28,9 +28,9 @@
         <li class="disabled">Unlimited categories</li>
       </ul>
       {% if not request.user.is_pro %}
-        <span class="btn-primary" style="opacity:0.5;cursor:default;justify-content:center;display:flex;">Current plan</span>
+        <span class="btn-primary btn--full btn--disabled">Current plan</span>
       {% else %}
-        <a href="{% url 'billing:portal' %}" class="btn-ghost btn" style="width:100%;text-align:center;display:block;">Manage</a>
+        <a href="{% url 'billing:portal' %}" class="btn-ghost btn btn--full">Manage</a>
       {% endif %}
     </div>
 
@@ -49,9 +49,9 @@
         <li>Priority processing</li>
       </ul>
       {% if request.user.is_pro %}
-        <a href="{% url 'billing:portal' %}" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Manage subscription</a>
+        <a href="{% url 'billing:portal' %}" class="btn-primary btn--full">Manage subscription</a>
       {% else %}
-        <a href="{% url 'billing:checkout' %}" class="btn-primary" style="width:100%;justify-content:center;display:flex;">Upgrade to Pro →</a>
+        <a href="{% url 'billing:checkout' %}" class="btn-primary btn--full">Upgrade to Pro →</a>
       {% endif %}
     </div>
 

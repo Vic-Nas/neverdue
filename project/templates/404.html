@@ -1,11 +1,15 @@
 {# templates/404.html #}
 {% extends 'base.html' %}
+{% load static %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
 {% block title %}Page not found — NeverDue{% endblock %}
 {% block content %}
-<div class="page page--narrow" style="text-align:center;padding:4rem 1rem">
-  <div style="font-size:3rem;margin-bottom:1rem">404</div>
+<div class="page page--narrow error-page">
+  <div class="error-page__code">404</div>
   <h1 class="page__title">Page not found</h1>
-  <p class="page__sub" style="margin-bottom:2rem">The page you're looking for doesn't exist or has been moved.</p>
+  <p class="page__sub">The page you're looking for doesn't exist or has been moved.</p>
   <a href="{% url 'dashboard:index' %}" class="btn-primary">Go to dashboard</a>
 </div>
 {% endblock %}

@@ -4,6 +4,7 @@
 {% block title %}Categories — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -42,7 +43,7 @@
         </div>
         <div class="cat-card__actions">
           <a href="{% url 'dashboard:category_edit' pk=cat.pk %}" class="btn-ghost btn btn--sm">Edit</a>
-          <a href="{% url 'dashboard:category_delete' pk=cat.pk %}" class="btn-ghost btn btn--sm" style="color:var(--danger)">Delete</a>
+          <a href="{% url 'dashboard:category_delete' pk=cat.pk %}" class="btn-ghost btn btn--sm btn-ghost--danger">Delete</a>
         </div>
       </div>
 

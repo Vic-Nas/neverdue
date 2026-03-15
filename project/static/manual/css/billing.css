@@ -1,4 +1,4 @@
-/* static/css/billing.css */
+/* static/manual/css/billing.css */
 
 .billing-page {
   max-width: 860px;
@@ -116,6 +116,13 @@
 .plan-features li.disabled::before {
   content: '✕';
   color: var(--border);
+}
+
+/* ── Button modifiers (billing context) ── */
+.btn--disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
 }
 
 /* ── Status pages ── */

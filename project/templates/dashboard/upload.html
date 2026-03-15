@@ -4,6 +4,7 @@
 {% block title %}Import — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/sources.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -36,7 +37,7 @@
     </div>
 
     <div class="form-group">
-      <label for="category">Category <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+      <label for="category">Category <span class="label-optional">(optional)</span></label>
       <select name="category" id="category">
         <option value="">— Let NeverDue decide —</option>
         {% for cat in categories %}
@@ -58,46 +59,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-const input = document.getElementById('file-input');
-const dropzone = document.getElementById('dropzone');
-const preview = document.getElementById('file-preview');
-const fileName = document.getElementById('file-name');
-const submitBtn = document.getElementById('submit-btn');
-
-input.addEventListener('change', () => {
-  if (input.files.length) showFile(input.files[0]);
-});
-
-dropzone.addEventListener('dragover', e => {
-  e.preventDefault();
-  dropzone.classList.add('upload-dropzone--active');
-});
-
-dropzone.addEventListener('dragleave', () => {
-  dropzone.classList.remove('upload-dropzone--active');
-});
-
-dropzone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropzone.classList.remove('upload-dropzone--active');
-  const file = e.dataTransfer.files[0];
-  if (file) {
-    input.files = e.dataTransfer.files;
-    showFile(file);
-  }
-});
-
-function showFile(file) {
-  fileName.textContent = file.name;
-  preview.hidden = false;
-  submitBtn.disabled = false;
-}
-
-function clearFile() {
-  input.value = '';
-  preview.hidden = true;
-  submitBtn.disabled = true;
-}
-</script>
+<script src="{% static 'js/upload.js' %}"></script>
 {% endblock %}
