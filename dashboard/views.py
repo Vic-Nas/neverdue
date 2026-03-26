@@ -10,10 +10,12 @@ from .models import Category, Event, Rule
 def index(request):
     try:
         events = Event.objects.filter(user=request.user).order_by('start')
+        active_events = events.filter(status='active')
         pending_events = Event.objects.filter(user=request.user, status='pending').order_by('pending_expires_at', 'created_at')
         last_event = events.order_by('-created_at').first()
         ctx = {
             'events': events,
+            'active_events': active_events,
             'pending_events': pending_events,
             'last_event': last_event,
         }
