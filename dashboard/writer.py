@@ -1,9 +1,13 @@
 # dashboard/writer.py
+import logging
+
 import requests
-from django.utils.dateparse import parse_datetime
+from django.conf import settings
 
 from accounts.utils import get_valid_token
 from dashboard.models import Event, Category
+
+logger = logging.getLogger(__name__)
 
 
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
@@ -11,16 +15,29 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
     Write a single event to Google Calendar and save to DB.
     Returns the saved Event or None on failure or duplicate.
     """
-    # Hard dedup: same user + start + end already exists → skip
     start = event_data.get('start')
     end = event_data.get('end')
+
+    if settings.DEBUG:
+        logger.debug(
+            "[DEBUG] write_event_to_calendar | user=%s | title=%r | start=%s | end=%s | category=%s",
+            user.pk,
+            event_data.get('title'),
+            start,
+            end,
+            category.name if category else None,
+        )
+
+    # Hard dedup: same user + start + end already exists → skip
     if start and end:
         if Event.objects.filter(user=user, start=start, end=end).exists():
+            logger.info("Duplicate event skipped | user=%s | start=%s | end=%s", user.pk, start, end)
             return None
 
     try:
         token = get_valid_token(user)
-    except ValueError:
+    except ValueError as exc:
+        logger.warning("get_valid_token failed for user=%s: %s", user.pk, exc)
         return None
 
     reminders = []
@@ -51,6 +68,9 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
     if category and category.color:
         body['colorId'] = _hex_to_google_color(category.color)
 
+    if settings.DEBUG:
+        logger.debug("[DEBUG] POSTing to Google Calendar API | body=%s", body)
+
     response = requests.post(
         'https://www.googleapis.com/calendar/v3/calendars/primary/events',
         headers={
@@ -61,10 +81,16 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
     )
 
     if response.status_code not in (200, 201):
-        print(f"Google Calendar API error: {response.status_code} {response.text}")
+        logger.error(
+            "Google Calendar API error | user=%s | status=%s | response=%s",
+            user.pk, response.status_code, response.text,
+        )
         return None
 
     google_event = response.json()
+
+    if settings.DEBUG:
+        logger.debug("[DEBUG] Google Calendar event created | google_event_id=%s", google_event.get('id'))
 
     event = Event.objects.create(
         user=user,
@@ -79,6 +105,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
         source_email_id=event_data.get('source_email_id'),
     )
 
+    logger.info("Event created | user=%s | event_id=%s | title=%r | start=%s", user.pk, event.pk, event.title, event.start)
     return event
 
 
