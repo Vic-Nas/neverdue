@@ -17,7 +17,7 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
         events = extract_events(text)
     except ValueError:
         return []
-
+    print(f"EXTRACTED EVENTS: {events}")
     return _save_events(user, events, sender, source_email_id)
 
 
@@ -38,11 +38,13 @@ def process_file(user, file_bytes: bytes, media_type: str) -> list:
             events = extract_events(text)
         except ValueError:
             return []
+        print(f"EXTRACTED EVENTS: {events}")
     else:
         try:
             events = extract_events_from_image(file_bytes, media_type)
         except ValueError:
             return []
+        print(f"EXTRACTED EVENTS: {events}")
 
     return _save_events(user, events)
 
