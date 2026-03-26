@@ -11,7 +11,7 @@
   <h1 class="confirm-page__title">Delete category?</h1>
   <p class="confirm-page__text">
     <strong>{{ category.name }}</strong> will be permanently deleted.
-    Events in this category will become uncategorized — they won't be deleted.
+    All events in this category will also be deleted.
   </p>
   <form method="post" class="confirm-page__actions">
     {% csrf_token %}
