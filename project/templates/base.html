@@ -22,20 +22,17 @@
 <nav class="topnav">
   <a href="{% url 'dashboard:index' %}" class="topnav__logo">Never<span>Due</span></a>
 
-  <div class="topnav__links topnav__links--public">
-    <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
-  </div>
-
-  {% if user.is_authenticated %}
   <div class="topnav__links">
+    {% if user.is_authenticated %}
     <a href="{% url 'dashboard:index' %}" class="topnav__link {% if request.resolver_match.url_name == 'index' %}topnav__link--active{% endif %}">Dashboard</a>
     <a href="{% url 'dashboard:categories' %}" class="topnav__link {% if 'categor' in request.resolver_match.url_name %}topnav__link--active{% endif %}">Categories</a>
     <a href="{% url 'dashboard:email_sources' %}" class="topnav__link {% if request.resolver_match.url_name == 'email_sources' %}topnav__link--active{% endif %}">Sources</a>
     {% if user.is_pro %}
     <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
     {% endif %}
+    {% endif %}
+    <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
   </div>
-  {% endif %}
 
   <div class="topnav__actions">
     {% if user.is_authenticated %}
