@@ -99,8 +99,10 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
     if event_data.get('recurrence_freq'):
         rrule = f"RRULE:FREQ={event_data['recurrence_freq']}"
         if event_data.get('recurrence_until'):
+            # Google Calendar requires UNTIL as a UTC datetime string, not just a date.
+            # "20261215" is silently ignored; "20261215T000000Z" is honoured correctly.
             until = event_data['recurrence_until'].replace('-', '')
-            rrule += f';UNTIL={until}'
+            rrule += f';UNTIL={until}T000000Z'
         body['recurrence'] = [rrule]
 
     if category and category.color:
