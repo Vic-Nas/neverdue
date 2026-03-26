@@ -139,7 +139,7 @@
   try {
     var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!tz) return;
-    fetch("{% url 'set_timezone_auto' %}", {
+    fetch("{% url 'accounts:set_timezone_auto' %}", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
