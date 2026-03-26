@@ -5,7 +5,6 @@ from django.utils import timezone
 
 @shared_task
 def process_inbound_email(user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
-        print(f"TASK START user={user_id} message_id={message_id} body_len={len(body) if body else 0}")
     """
     Process a single inbound email through the LLM pipeline.
     Processes body text and each attachment as separate scans.
@@ -17,6 +16,8 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
     from dashboard.models import Event
     import base64
 
+    print(f"TASK START user={user_id} message_id={message_id} body_len={len(body) if body else 0}")
+    
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
