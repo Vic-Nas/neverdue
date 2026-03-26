@@ -25,7 +25,12 @@ def index(request):
             ctx['scans_total'] = 30
             ctx['scans_pct'] = min(int((scans_used / 30) * 100), 100)
         return render(request, 'dashboard/index.html', ctx)
-    except Exception:
+    except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Dashboard error: {e}")
+        logger.error(traceback.format_exc())
         return HttpResponse('Dashboard unavailable.', status=500)
 
 
