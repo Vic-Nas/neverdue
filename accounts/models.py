@@ -10,7 +10,9 @@ class User(AbstractUser):
     token_expiry = models.DateTimeField(null=True, blank=True)
     monthly_scans = models.IntegerField(default=0)
     scan_reset_date = models.DateField(null=True, blank=True)
-    language = models.CharField(max_length=50, default='English')
+
+    # Preferences
+    language = models.CharField(max_length=10, default='English')
     auto_delete_past_events = models.BooleanField(default=False)
     past_event_retention_days = models.IntegerField(default=30)
     delete_from_gcal_on_cleanup = models.BooleanField(default=False)
