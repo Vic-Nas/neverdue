@@ -51,7 +51,7 @@ Example output:
 ]"""
 
 
-def extract_events(text: str) -> list[dict]:
+def extract_events(text: str, language: str = 'English') -> list[dict]:
     """
     Extract calendar events from plain text.
     Returns a list of validated event dicts.
@@ -60,7 +60,7 @@ def extract_events(text: str) -> list[dict]:
     message = client.messages.create(
         model=settings.LLM_MODEL,
         max_tokens=1000,
-        system=SYSTEM_PROMPT,
+        system=SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, and category hints must be in {language}.',
         messages=[
             {'role': 'user', 'content': f'Extract all calendar events from this content:\n\n{text}'}
         ]
@@ -86,7 +86,7 @@ def extract_events(text: str) -> list[dict]:
     return [_validate_event(e) for e in events if _validate_event(e)]
 
 
-def extract_events_from_image(file_bytes: bytes, media_type: str) -> list[dict]:
+def extract_events_from_image(file_bytes: bytes, media_type: str, context: str = '', language: str = 'English') -> list[dict]:
     """
     Extract calendar events from an image or PDF.
     media_type: 'image/jpeg', 'image/png', or 'application/pdf'
@@ -109,16 +109,20 @@ def extract_events_from_image(file_bytes: bytes, media_type: str) -> list[dict]:
         }
         content_block = {'type': 'image', 'source': source}
 
+    user_text = 'Extract all calendar events from this file.'
+    if context:
+        user_text += f'\n\nUser context: {context}'
+
     message = client.messages.create(
         model=settings.LLM_MODEL,
         max_tokens=1000,
-        system=SYSTEM_PROMPT,
+        system=SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, and category hints must be in {language}.',
         messages=[
             {
                 'role': 'user',
                 'content': [
                     content_block,
-                    {'type': 'text', 'text': 'Extract all calendar events from this file.'}
+                    {'type': 'text', 'text': user_text}
                 ]
             }
         ]

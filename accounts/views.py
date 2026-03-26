@@ -6,6 +6,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -142,3 +143,18 @@ def username_pick(request):
         return redirect('dashboard:index')
 
     return render(request, 'accounts/username_pick.html')
+
+
+@login_required
+def user_settings(request):
+    """
+    Handle user settings (language, context, etc.).
+    Intentionally referer-based — saves and redirects back to calling page.
+    """
+    if request.method == 'POST':
+        language = request.POST.get('language', 'English').strip()
+        request.user.language = language
+        request.user.save(update_fields=['language'])
+        messages.success(request, 'Settings saved.')
+    
+    return redirect(request.META.get('HTTP_REFERER', 'dashboard:index'))

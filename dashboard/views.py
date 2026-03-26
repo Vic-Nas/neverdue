@@ -14,6 +14,7 @@ def index(request):
         ctx = {
             'events': events,
             'last_event': last_event,
+            'languages': ['English', 'Français', 'Español', 'Deutsch', 'Português', 'Italiano', '中文', '日本語', 'العربية'],
         }
         if not request.user.is_pro:
             scans_used = request.user.monthly_scans
@@ -236,8 +237,9 @@ def upload(request):
             from django.contrib import messages
             content_type = file.content_type
             file_bytes = file.read()
+            context = request.POST.get('context', '').strip()
 
-            created = process_file(request.user, file_bytes, content_type)
+            created = process_file(request.user, file_bytes, content_type, context=context)
 
             if created:
                 messages.success(request, f'{len(created)} event{"s" if len(created) != 1 else ""} added to your calendar.')
