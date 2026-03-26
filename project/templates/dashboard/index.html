@@ -96,7 +96,7 @@
           {{ event.start|time:"H:i" }} → {{ event.end|time:"H:i" }}
           {% if event.category %}
             <span class="event-card__sep">·</span>
-            <a href="{% url 'dashboard:category_detail' pk=event.category.pk %}"
+            <a href="{% url 'dashboard:category_edit' pk=event.category.pk %}"
                class="category-badge"
                {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}
                onclick="event.stopPropagation()">
