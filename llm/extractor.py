@@ -2,12 +2,15 @@
 import json
 import anthropic
 from django.conf import settings
+from django.utils import timezone
 
 client = anthropic.Anthropic(api_key=settings.LLM_API_KEY)
 
 SYSTEM_PROMPT = """You are a calendar event extractor. Given text content from an email or document, extract all calendar events, deadlines, and scheduled items.
 
 Return ONLY a valid JSON array. No explanation, no markdown, no extra text.
+
+Today's date will be provided in the user message. Use it to determine whether events are in the past or future.
 
 Each event must have:
 - "title": concise event name (string)
@@ -17,6 +20,9 @@ Each event must have:
 - "category_hint": suggested category name based on context (string, can be empty)
 - "recurrence_freq": recurrence frequency if clearly stated — one of "DAILY", "WEEKLY", "MONTHLY", "YEARLY" or empty string if not recurring or uncertain
 - "recurrence_until": end date for recurrence as "YYYY-MM-DD" string, or empty string if open-ended or not applicable
+- "status": either "active" or "pending"
+- "concern": if status is "pending", explain briefly what information is missing or ambiguous (string, empty if status is "active")
+- "expires_at": if status is "pending", the date after which this event is no longer relevant, as "YYYY-MM-DD". Use the earliest date you are certain about from the content (e.g. if an event clearly ends before March 10, set expires_at to March 11). Empty string if not determinable.
 
 Rules:
 - If only a date is given with no time, set start to 09:00 and end to 10:00 on that date
@@ -26,27 +32,45 @@ Rules:
 - Never return null values — use empty strings instead
 - All datetimes must be in UTC
 - Only set recurrence_freq if you are highly confident — when in doubt leave it empty
-- Never set recurrence_freq if the event duration would equal or exceed the recurrence interval (e.g. a month-long event cannot be weekly)
+- Never set recurrence_freq if the event duration would equal or exceed the recurrence interval
+
+When to set status "pending":
+- The year is ambiguous or missing and you had to guess
+- The event looks like a recurring schedule but no recurrence end date was provided or inferable
+- The content is contradictory or unclear
+- A one-time event's date has already passed (use today's date provided in the message)
+- Critical information is missing that would affect how the event is saved
+
+When to keep status "active":
+- Simple deadline with clear date and time
+- Recurring event with explicit or strongly implied end date
+- All required information is present and unambiguous
 
 Example output:
 [
   {
     "title": "Submit thesis draft",
     "description": "Final draft due to supervisor",
-    "start": "2025-11-01T09:00:00",
-    "end": "2025-11-01T10:00:00",
+    "start": "2026-11-01T09:00:00",
+    "end": "2026-11-01T10:00:00",
     "category_hint": "University",
     "recurrence_freq": "",
-    "recurrence_until": ""
+    "recurrence_until": "",
+    "status": "active",
+    "concern": "",
+    "expires_at": ""
   },
   {
     "title": "Weekly lecture",
     "description": "COMP 101 every Monday",
-    "start": "2025-09-08T10:00:00",
-    "end": "2025-09-08T11:00:00",
+    "start": "2026-09-08T10:00:00",
+    "end": "2026-09-08T11:00:00",
     "category_hint": "Courses",
     "recurrence_freq": "WEEKLY",
-    "recurrence_until": "2025-12-15"
+    "recurrence_until": "",
+    "status": "pending",
+    "concern": "Recurring weekly schedule detected but no end date provided. Please confirm the last date of this course.",
+    "expires_at": ""
   }
 ]"""
 
@@ -57,33 +81,19 @@ def extract_events(text: str, language: str = 'English') -> list[dict]:
     Returns a list of validated event dicts.
     Raises ValueError if LLM returns invalid output.
     """
+    today = timezone.now().date().isoformat()
+    system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+
     message = client.messages.create(
         model=settings.LLM_MODEL,
-        max_tokens=1000,
-        system=SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, and category hints must be in {language}.',
+        max_tokens=2000,
+        system=system,
         messages=[
-            {'role': 'user', 'content': f'Extract all calendar events from this content:\n\n{text}'}
+            {'role': 'user', 'content': f'Today\'s date: {today}\n\nExtract all calendar events from this content:\n\n{text}'}
         ]
     )
 
-    raw = message.content[0].text.strip()
-
-    # Strip accidental markdown fences
-    if raw.startswith('```'):
-        raw = raw.split('```')[1]
-        if raw.startswith('json'):
-            raw = raw[4:]
-        raw = raw.strip()
-
-    try:
-        events = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(f'LLM returned invalid JSON: {e}\nRaw output: {raw}')
-
-    if not isinstance(events, list):
-        raise ValueError(f'LLM returned non-list: {type(events)}')
-
-    return [_validate_event(e) for e in events if _validate_event(e)]
+    return _parse_and_validate(message)
 
 
 def extract_events_from_image(file_bytes: bytes, media_type: str, context: str = '', language: str = 'English') -> list[dict]:
@@ -95,28 +105,21 @@ def extract_events_from_image(file_bytes: bytes, media_type: str, context: str =
     encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
 
     if media_type == 'application/pdf':
-        source = {
-            'type': 'base64',
-            'media_type': media_type,
-            'data': encoded,
-        }
-        content_block = {'type': 'document', 'source': source}
+        content_block = {'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
     else:
-        source = {
-            'type': 'base64',
-            'media_type': media_type,
-            'data': encoded,
-        }
-        content_block = {'type': 'image', 'source': source}
+        content_block = {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
 
-    user_text = 'Extract all calendar events from this file.'
+    today = timezone.now().date().isoformat()
+    system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+
+    user_text = f'Today\'s date: {today}\n\nExtract all calendar events from this file.'
     if context:
         user_text += f'\n\nUser context: {context}'
 
     message = client.messages.create(
         model=settings.LLM_MODEL,
-        max_tokens=1000,
-        system=SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, and category hints must be in {language}.',
+        max_tokens=2000,
+        system=system,
         messages=[
             {
                 'role': 'user',
@@ -128,6 +131,11 @@ def extract_events_from_image(file_bytes: bytes, media_type: str, context: str =
         ]
     )
 
+    return _parse_and_validate(message)
+
+
+def _parse_and_validate(message) -> list[dict]:
+    """Parse LLM response and validate each event."""
     raw = message.content[0].text.strip()
 
     if raw.startswith('```'):
@@ -144,7 +152,7 @@ def extract_events_from_image(file_bytes: bytes, media_type: str, context: str =
     if not isinstance(events, list):
         raise ValueError(f'LLM returned non-list: {type(events)}')
 
-    return [_validate_event(e) for e in events if _validate_event(e)]
+    return [v for e in events if (v := _validate_event(e)) is not None]
 
 
 VALID_FREQS = {'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'}
@@ -162,12 +170,25 @@ def _validate_event(event: dict) -> dict | None:
     Validate and clean a single event dict.
     Returns None if the event is missing required fields.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone as dt_timezone
 
     required = ('title', 'start', 'end')
     for field in required:
         if not event.get(field):
             return None
+
+    # Make datetimes timezone-aware (UTC)
+    def make_aware(dt_str):
+        try:
+            dt = datetime.fromisoformat(dt_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=dt_timezone.utc)
+            return dt.isoformat()
+        except (ValueError, TypeError):
+            return dt_str
+
+    start = make_aware(event['start'])
+    end = make_aware(event['end'])
 
     # Validate recurrence against event duration
     recurrence_freq = event.get('recurrence_freq', '').strip().upper()
@@ -176,23 +197,40 @@ def _validate_event(event: dict) -> dict | None:
 
     if recurrence_freq:
         try:
-            start = datetime.fromisoformat(event['start'])
-            end = datetime.fromisoformat(event['end'])
-            duration_days = (end - start).total_seconds() / 86400
+            start_dt = datetime.fromisoformat(start)
+            end_dt = datetime.fromisoformat(end)
+            duration_days = (end_dt - start_dt).total_seconds() / 86400
             min_days = RECURRENCE_MIN_INTERVAL_DAYS[recurrence_freq]
             if duration_days >= min_days:
-                recurrence_freq = ''  # block invalid recurrence silently
+                recurrence_freq = ''
         except (ValueError, TypeError):
             recurrence_freq = ''
 
     recurrence_until = event.get('recurrence_until', '').strip() if recurrence_freq else ''
 
+    status = event.get('status', 'active').strip().lower()
+    if status not in ('active', 'pending'):
+        status = 'active'
+
+    concern = event.get('concern', '').strip() if status == 'pending' else ''
+    expires_at = event.get('expires_at', '').strip() if status == 'pending' else ''
+
+    # Validate expires_at format
+    if expires_at:
+        try:
+            datetime.fromisoformat(expires_at)
+        except ValueError:
+            expires_at = ''
+
     return {
         'title': str(event.get('title', '')).strip()[:255],
         'description': str(event.get('description', '')).strip(),
-        'start': event['start'],
-        'end': event['end'],
+        'start': start,
+        'end': end,
         'category_hint': str(event.get('category_hint', '')).strip(),
         'recurrence_freq': recurrence_freq,
         'recurrence_until': recurrence_until,
+        'status': status,
+        'concern': concern,
+        'expires_at': expires_at,
     }

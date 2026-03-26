@@ -11,4 +11,5 @@ urlpatterns = [
     path('auth/google/callback/', views.google_callback, name='google_callback'),
     path('auth/username/', views.username_pick, name='username_pick'),
     path('settings/', views.user_settings, name='settings'),
+    path('preferences/', views.preferences, name='preferences'),
 ]

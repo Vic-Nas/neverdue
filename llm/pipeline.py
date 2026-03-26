@@ -19,6 +19,7 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
         events = extract_events(text, language=language)
     except ValueError:
         return []
+
     print(f"EXTRACTED EVENTS: {events}")
     return _save_events(user, events, sender, source_email_id)
 
@@ -44,14 +45,13 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
             events = extract_events(text, language=language)
         except ValueError:
             return []
-        print(f"EXTRACTED EVENTS: {events}")
     else:
         try:
             events = extract_events_from_image(file_bytes, media_type, context=context, language=language)
         except ValueError:
             return []
-        print(f"EXTRACTED EVENTS: {events}")
 
+    print(f"EXTRACTED EVENTS: {events}")
     return _save_events(user, events)
 
 
@@ -62,7 +62,6 @@ def _check_and_increment_scans(user) -> bool:
     """
     today = timezone.now().date()
 
-    # Reset counter if new month
     if not user.scan_reset_date or user.scan_reset_date.month != today.month:
         user.monthly_scans = 0
         user.scan_reset_date = today

@@ -1,253 +1,179 @@
-# dashboard/views.py
+# accounts/views.py
+import secrets
+import requests
+from datetime import timedelta
+
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 
-from .models import Category, Event, Rule
+from .models import User
+
+LANGUAGES = [
+    'English', 'Français', 'Español', 'Deutsch',
+    'Português', 'Italiano', '中文', '日本語', 'العربية',
+]
 
 
-@login_required
-def index(request):
-    try:
-        events = Event.objects.filter(user=request.user).order_by('start')
-        last_event = events.order_by('-created_at').first()
-        ctx = {
-            'events': events,
-            'last_event': last_event,
-            'languages': ['English', 'Français', 'Español', 'Deutsch', 'Português', 'Italiano', '中文', '日本語', 'العربية'],
+def login(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard:index')
+    return render(request, 'accounts/login.html')
+
+
+def logout(request):
+    auth_logout(request)
+    return redirect('accounts:login')
+
+
+def google_login(request):
+    state = secrets.token_urlsafe(32)
+    request.session['oauth_state'] = state
+
+    params = {
+        'client_id': settings.GOOGLE_CLIENT_ID,
+        'redirect_uri': request.build_absolute_uri(reverse('accounts:google_callback')),
+        'response_type': 'code',
+        'scope': ' '.join([
+            'openid',
+            'email',
+            'profile',
+            'https://www.googleapis.com/auth/calendar',
+        ]),
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'state': state,
+    }
+    auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + '&'.join(
+        f'{k}={v}' for k, v in params.items()
+    )
+    return redirect(auth_url)
+
+
+def google_callback(request):
+    state = request.GET.get('state')
+    if not state or state != request.session.pop('oauth_state', None):
+        messages.error(request, 'Invalid OAuth state. Please try again.')
+        return redirect('accounts:login')
+
+    code = request.GET.get('code')
+    if not code:
+        messages.error(request, 'Google login failed. Please try again.')
+        return redirect('accounts:login')
+
+    token_response = requests.post('https://oauth2.googleapis.com/token', data={
+        'code': code,
+        'client_id': settings.GOOGLE_CLIENT_ID,
+        'client_secret': settings.GOOGLE_CLIENT_SECRET,
+        'redirect_uri': request.build_absolute_uri(reverse('accounts:google_callback')),
+        'grant_type': 'authorization_code',
+    })
+
+    if token_response.status_code != 200:
+        messages.error(request, 'Failed to authenticate with Google.')
+        return redirect('accounts:login')
+
+    token_data = token_response.json()
+    access_token = token_data.get('access_token')
+    refresh_token = token_data.get('refresh_token')
+
+    userinfo_response = requests.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        headers={'Authorization': f'Bearer {access_token}'}
+    )
+
+    if userinfo_response.status_code != 200:
+        messages.error(request, 'Failed to fetch your Google profile.')
+        return redirect('accounts:login')
+
+    userinfo = userinfo_response.json()
+    google_id = userinfo.get('sub')
+    email = userinfo.get('email')
+
+    user, created = User.objects.get_or_create(
+        google_id=google_id,
+        defaults={
+            'email': email,
+            'username': email.split('@')[0],
         }
-        if not request.user.is_pro:
-            scans_used = request.user.monthly_scans
-            ctx['scans_used'] = scans_used
-            ctx['scans_total'] = 30
-            ctx['scans_pct'] = min(int((scans_used / 30) * 100), 100)
-        return render(request, 'dashboard/index.html', ctx)
-    except Exception:
-        return HttpResponse('Dashboard unavailable.', status=500)
+    )
+
+    user.google_calendar_token = access_token
+    if refresh_token:
+        user.google_refresh_token = refresh_token
+    user.token_expiry = timezone.now() + timedelta(seconds=token_data.get('expires_in', 3600))
+    user.save(update_fields=['google_calendar_token', 'google_refresh_token', 'token_expiry'])
+
+    auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+    if created:
+        return redirect('accounts:username_pick')
+
+    return redirect('dashboard:index')
+
+
+def username_pick(request):
+    if not request.user.is_authenticated:
+        return redirect('accounts:login')
+
+    if request.user.username and request.user.username != request.user.email.split('@')[0]:
+        return redirect('dashboard:index')
+
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip().lower()
+
+        if not username:
+            messages.error(request, 'Username cannot be empty.')
+            return render(request, 'accounts/username_pick.html')
+
+        if not username.replace('_', '').isalnum():
+            messages.error(request, 'Only letters, numbers, and underscores allowed.')
+            return render(request, 'accounts/username_pick.html')
+
+        from emails.webhook import RESERVED_USERNAMES
+        if username in RESERVED_USERNAMES:
+            messages.error(request, 'That username is reserved. Please choose another.')
+            return render(request, 'accounts/username_pick.html')
+
+        if User.objects.filter(username=username).exclude(pk=request.user.pk).exists():
+            messages.error(request, 'That username is already taken.')
+            return render(request, 'accounts/username_pick.html')
+
+        request.user.username = username
+        request.user.save(update_fields=['username'])
+        return redirect('dashboard:index')
+
+    return render(request, 'accounts/username_pick.html')
 
 
 @login_required
-def event_detail(request, pk):
-    try:
-        event = get_object_or_404(Event, pk=pk, user=request.user)
-        return render(request, 'dashboard/event_detail.html', {'event': event})
-    except Exception:
-        return HttpResponse('Event unavailable.', status=500)
+def preferences(request):
+    if request.method == 'POST':
+        language = request.POST.get('language', 'English').strip()
+        auto_delete = request.POST.get('auto_delete_past_events') == 'on'
+        retention_days = request.POST.get('past_event_retention_days', '30').strip()
+        delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
 
+        try:
+            retention_days = max(1, int(retention_days))
+        except (ValueError, TypeError):
+            retention_days = 30
 
-@login_required
-def event_edit(request, pk=None):
-    try:
-        event = get_object_or_404(Event, pk=pk, user=request.user) if pk else None
-        categories = Category.objects.filter(user=request.user)
-        if request.method == 'POST':
-            title = request.POST.get('title', '').strip()
-            description = request.POST.get('description', '').strip()
-            start = request.POST.get('start')
-            end = request.POST.get('end')
-            category_id = request.POST.get('category')
-            category = get_object_or_404(Category, pk=category_id, user=request.user) if category_id else None
-            recurrence_freq = request.POST.get('recurrence_freq') or None
-            recurrence_until = request.POST.get('recurrence_until') or None
+        request.user.language = language
+        request.user.auto_delete_past_events = auto_delete
+        request.user.past_event_retention_days = retention_days
+        request.user.delete_from_gcal_on_cleanup = delete_gcal
+        request.user.save(update_fields=[
+            'language',
+            'auto_delete_past_events',
+            'past_event_retention_days',
+            'delete_from_gcal_on_cleanup',
+        ])
+        messages.success(request, 'Preferences saved.')
+        return redirect('accounts:preferences')
 
-            from django.utils.dateparse import parse_datetime
-            start_dt = parse_datetime(start)
-            end_dt = parse_datetime(end)
-
-            if not start_dt or not end_dt:
-                from django.contrib import messages
-                messages.error(request, 'Invalid date format.')
-                return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
-
-            if event:
-                event.title = title
-                event.description = description
-                event.start = start_dt
-                event.end = end_dt
-                event.category = category
-                event.recurrence_freq = recurrence_freq
-                event.recurrence_until = recurrence_until or None
-                event.save()
-            else:
-                event = Event.objects.create(
-                    user=request.user,
-                    title=title,
-                    description=description,
-                    start=start_dt,
-                    end=end_dt,
-                    category=category,
-                    recurrence_freq=recurrence_freq,
-                    recurrence_until=recurrence_until or None,
-                )
-            return redirect('dashboard:event_detail', pk=event.pk)
-        return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
-    except Exception:
-        return HttpResponse('Could not save event.', status=500)
-
-
-@login_required
-def event_delete(request, pk):
-    try:
-        event = get_object_or_404(Event, pk=pk, user=request.user)
-        if request.method == 'POST':
-            if event.google_event_id:
-                try:
-                    from accounts.utils import get_valid_token
-                    import requests as http
-                    token = get_valid_token(request.user)
-                    http.delete(
-                        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                        headers={'Authorization': f'Bearer {token}'},
-                    )
-                except Exception:
-                    pass  # Delete from DB regardless
-            event.delete()
-            return redirect('dashboard:index')
-        return render(request, 'dashboard/event_delete.html', {'event': event})
-    except Exception:
-        return HttpResponse('Could not delete event.', status=500)
-
-
-@login_required
-def categories(request):
-    try:
-        cats = Category.objects.filter(user=request.user).prefetch_related('rules')
-        return render(request, 'dashboard/categories.html', {'categories': cats})
-    except Exception:
-        return HttpResponse('Categories unavailable.', status=500)
-
-
-@login_required
-def category_edit(request, pk=None):
-    try:
-        category = get_object_or_404(Category, pk=pk, user=request.user) if pk else None
-        if request.method == 'POST':
-            name = request.POST.get('name', '').strip()
-            color = request.POST.get('color', '').strip()
-            reminders_raw = request.POST.getlist('reminders')
-            reminders = [{'minutes': int(m)} for m in reminders_raw if m.isdigit()]
-            if category:
-                category.name = name
-                category.color = color
-                category.reminders = reminders
-                category.save()
-            else:
-                category = Category.objects.create(
-                    user=request.user,
-                    name=name,
-                    color=color,
-                    reminders=reminders,
-                )
-            # Handle rules
-            category.rules.all().delete()
-            senders = request.POST.getlist('rule_sender')
-            keywords = request.POST.getlist('rule_keyword')
-            for sender, keyword in zip(senders, keywords):
-                if sender or keyword:
-                    Rule.objects.create(
-                        user=request.user,
-                        category=category,
-                        sender=sender or None,
-                        keyword=keyword or None,
-                    )
-            return redirect('dashboard:categories')
-        return render(request, 'dashboard/category_edit.html', {'category': category})
-    except Exception:
-        return HttpResponse('Could not save category.', status=500)
-
-
-@login_required
-def category_delete(request, pk):
-    try:
-        category = get_object_or_404(Category, pk=pk, user=request.user)
-        if request.method == 'POST':
-            category.delete()
-            return redirect('dashboard:categories')
-        return render(request, 'dashboard/category_delete.html', {'category': category})
-    except Exception:
-        return HttpResponse('Could not delete category.', status=500)
-
-
-@login_required
-def email_sources(request):
-    try:
-        from .models import FilterRule
-        filter_rules = FilterRule.objects.filter(user=request.user).order_by('action', 'pattern')
-        return render(request, 'dashboard/email_sources.html', {'filter_rules': filter_rules})
-    except Exception:
-        return HttpResponse('Email sources unavailable.', status=500)
-
-
-@login_required
-def filter_rule_add(request):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
-    try:
-        import json
-        from .models import FilterRule
-        data = json.loads(request.body)
-        action = data.get('action')
-        pattern = data.get('pattern', '').strip().lower()
-
-        if action not in ('allow', 'block'):
-            return JsonResponse({'ok': False, 'error': 'Invalid action'})
-        if not pattern:
-            return JsonResponse({'ok': False, 'error': 'Pattern required'})
-
-        rule, created = FilterRule.objects.get_or_create(
-            user=request.user,
-            pattern=pattern,
-            defaults={'action': action},
-        )
-        if not created:
-            return JsonResponse({'ok': False, 'error': 'Pattern already exists'})
-
-        return JsonResponse({'ok': True, 'id': rule.pk})
-    except Exception:
-        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
-
-
-@login_required
-def filter_rule_delete(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False}, status=405)
-    try:
-        from .models import FilterRule
-        FilterRule.objects.filter(pk=pk, user=request.user).delete()
-        return JsonResponse({'ok': True})
-    except Exception:
-        return JsonResponse({'ok': False}, status=500)
-
-
-@login_required
-def upload(request):
-    try:
-        if not request.user.is_pro:
-            return redirect('billing:plans')
-        categories = Category.objects.filter(user=request.user)
-
-        if request.method == 'POST':
-            file = request.FILES.get('file')
-            if not file:
-                from django.contrib import messages
-                messages.error(request, 'No file selected.')
-                return render(request, 'dashboard/upload.html', {'categories': categories})
-
-            from llm.pipeline import process_file
-            from django.contrib import messages
-            content_type = file.content_type
-            file_bytes = file.read()
-            context = request.POST.get('context', '').strip()
-
-            created = process_file(request.user, file_bytes, content_type, context=context)
-
-            if created:
-                messages.success(request, f'{len(created)} event{"s" if len(created) != 1 else ""} added to your calendar.')
-            else:
-                messages.error(request, 'No events found in that file.')
-
-            return redirect('dashboard:index')
-
-        return render(request, 'dashboard/upload.html', {'categories': categories})
-    except Exception:
-        return HttpResponse('Upload unavailable.', status=500)
+    return render(request, 'accounts/preferences.html', {'languages': LANGUAGES})

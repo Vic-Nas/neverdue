@@ -77,6 +77,36 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
 
 
 @shared_task
+def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context: str = ''):
+    """
+    Process a file uploaded via the dashboard upload form.
+    Runs asynchronously so the upload view returns immediately.
+    file_b64: base64-encoded file contents
+    """
+    import base64
+    from accounts.models import User
+    from llm.pipeline import process_file
+
+    logger.info("UPLOAD TASK START user=%s media_type=%s context_len=%s",
+                user_id, media_type, len(context) if context else 0)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.warning("process_uploaded_file: User pk=%s not found — aborting", user_id)
+        return
+
+    try:
+        file_bytes = base64.b64decode(file_b64)
+    except Exception as exc:
+        logger.error("process_uploaded_file: base64 decode failed for user=%s: %s", user_id, exc)
+        return
+
+    created = process_file(user, file_bytes, media_type, context=context)
+    logger.info("UPLOAD TASK DONE user=%s events_created=%s", user_id, len(created))
+
+
+@shared_task
 def reset_monthly_scans():
     """
     Reset monthly scan counters for all users at the start of each month.
@@ -89,3 +119,53 @@ def reset_monthly_scans():
         scan_reset_date__month__lt=today.month
     ).update(monthly_scans=0, scan_reset_date=today)
     logger.info("reset_monthly_scans: reset %s user(s)", updated)
+
+
+@shared_task
+def cleanup_events():
+    """
+    Daily cleanup task:
+    1. Delete expired pending events (pending_expires_at <= today).
+    2. For users with auto_delete_past_events enabled, delete active events
+       whose end date is older than their retention setting.
+    Scheduled via Celery Beat to run daily.
+    """
+    from dashboard.models import Event
+    from accounts.models import User
+    import requests as http
+
+    today = timezone.now().date()
+
+    # 1. Delete expired pending events
+    expired_pending = Event.objects.filter(
+        status='pending',
+        pending_expires_at__lte=today,
+    )
+    count = expired_pending.count()
+    expired_pending.delete()
+    if count:
+        logger.info("cleanup_events: deleted %s expired pending event(s)", count)
+
+    # 2. Auto-delete past active events for opted-in users
+    users = User.objects.filter(auto_delete_past_events=True)
+    for user in users:
+        cutoff = timezone.now() - timezone.timedelta(days=user.past_event_retention_days)
+        old_events = Event.objects.filter(user=user, status='active', end__lt=cutoff)
+
+        for event in old_events:
+            if user.delete_from_gcal_on_cleanup and event.google_event_id:
+                try:
+                    from accounts.utils import get_valid_token
+                    token = get_valid_token(user)
+                    http.delete(
+                        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
+                        headers={'Authorization': f'Bearer {token}'},
+                        timeout=10,
+                    )
+                except Exception as exc:
+                    logger.warning("cleanup_events: failed to delete gcal event %s for user=%s: %s",
+                                   event.google_event_id, user.pk, exc)
+
+        deleted_count, _ = old_events.delete()
+        if deleted_count:
+            logger.info("cleanup_events: deleted %s past event(s) for user=%s", deleted_count, user.pk)
