@@ -10,9 +10,11 @@ from .models import Category, Event, Rule
 def index(request):
     try:
         events = Event.objects.filter(user=request.user).order_by('start')
+        pending_events = Event.objects.filter(user=request.user, status='pending').order_by('pending_expires_at', 'created_at')
         last_event = events.order_by('-created_at').first()
         ctx = {
             'events': events,
+            'pending_events': pending_events,
             'last_event': last_event,
         }
         if not request.user.is_pro:
@@ -66,6 +68,10 @@ def event_edit(request, pk=None):
                 event.category = category
                 event.recurrence_freq = recurrence_freq
                 event.recurrence_until = recurrence_until or None
+                # Auto-promote pending events to active when edited
+                if event.status == 'pending':
+                    event.status = 'active'
+                    event.pending_expires_at = None
                 event.save()
             else:
                 event = Event.objects.create(
