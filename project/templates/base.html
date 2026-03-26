@@ -42,6 +42,7 @@
         <a href="{% url 'billing:plans' %}" class="topnav__upgrade">Upgrade</a>
       {% endif %}
       <span class="topnav__username">{{ user.username }}</span>
+      <a href="{% url 'accounts:preferences' %}" class="topnav__link">Preferences</a>
       <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
     {% endif %}
   </div>

@@ -12,20 +12,23 @@ logger = logging.getLogger(__name__)
 
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
     """
-    Write a single event to Google Calendar and save to DB.
+    Write a single event to the DB and optionally Google Calendar.
+    Pending events are saved to DB only — not pushed to Google Calendar.
     Returns the saved Event or None on failure or duplicate.
     """
     start = event_data.get('start')
     end = event_data.get('end')
+    status = event_data.get('status', 'active')
 
     if settings.DEBUG:
         logger.debug(
-            "[DEBUG] write_event_to_calendar | user=%s | title=%r | start=%s | end=%s | category=%s",
+            "[DEBUG] write_event_to_calendar | user=%s | title=%r | start=%s | end=%s | category=%s | status=%s",
             user.pk,
             event_data.get('title'),
             start,
             end,
             category.name if category else None,
+            status,
         )
 
     # Hard dedup: same user + start + end already exists → skip
@@ -34,6 +37,41 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
             logger.info("Duplicate event skipped | user=%s | start=%s | end=%s", user.pk, start, end)
             return None
 
+    # Pending events: save to DB only, no Google Calendar push
+    if status == 'pending':
+        from datetime import date
+        expires_at_raw = event_data.get('expires_at', '')
+        expires_at = None
+        if expires_at_raw:
+            try:
+                expires_at = date.fromisoformat(expires_at_raw)
+            except ValueError:
+                expires_at = None
+
+        try:
+            event = Event.objects.create(
+                user=user,
+                category=category,
+                title=event_data['title'],
+                description=event_data.get('description', ''),
+                start=event_data['start'],
+                end=event_data['end'],
+                recurrence_freq=event_data.get('recurrence_freq') or None,
+                recurrence_until=event_data.get('recurrence_until') or None,
+                source_email_id=event_data.get('source_email_id'),
+                status='pending',
+                pending_concern=event_data.get('concern', ''),
+                pending_expires_at=expires_at,
+            )
+            logger.info("Pending event saved | user=%s | event_id=%s | title=%r | concern=%r",
+                        user.pk, event.pk, event.title, event.pending_concern)
+            return event
+        except Exception as exc:
+            logger.error("Failed to save pending event | user=%s | title=%r | error=%s",
+                         user.pk, event_data.get('title'), exc)
+            return None
+
+    # Active events: push to Google Calendar then save to DB
     try:
         token = get_valid_token(user)
     except ValueError as exc:
@@ -103,6 +141,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
         recurrence_until=event_data.get('recurrence_until') or None,
         google_event_id=google_event.get('id'),
         source_email_id=event_data.get('source_email_id'),
+        status='active',
     )
 
     logger.info("Event created | user=%s | event_id=%s | title=%r | start=%s", user.pk, event.pk, event.title, event.start)
@@ -111,16 +150,16 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
 
 def _hex_to_google_color(hex_color: str) -> str:
     mapping = {
-        '#7986cb': '1',  # lavender
-        '#33b679': '2',  # sage
-        '#8e24aa': '3',  # grape
-        '#e67c73': '4',  # flamingo
-        '#f6c026': '5',  # banana
-        '#f5511d': '6',  # tangerine
-        '#039be5': '7',  # peacock
-        '#616161': '8',  # graphite
-        '#3f51b5': '9',  # blueberry
-        '#0b8043': '10', # basil
-        '#d60000': '11', # tomato
+        '#7986cb': '1',
+        '#33b679': '2',
+        '#8e24aa': '3',
+        '#e67c73': '4',
+        '#f6c026': '5',
+        '#f5511d': '6',
+        '#039be5': '7',
+        '#616161': '8',
+        '#3f51b5': '9',
+        '#0b8043': '10',
+        '#d60000': '11',
     }
     return mapping.get(hex_color.lower(), '1')

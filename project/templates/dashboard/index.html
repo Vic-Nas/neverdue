@@ -15,21 +15,13 @@
   <div class="page__header--row">
     <div>
       <h1 class="page__title">Upcoming</h1>
-      <p class="page__sub">{{ events|length }} event{{ events|length|pluralize }} scheduled</p>
+      <p class="page__sub">{{ active_events|length }} event{{ active_events|length|pluralize }} scheduled</p>
     </div>
     <div class="page__actions">
       {% if request.user.is_pro %}
         <a href="{% url 'dashboard:upload' %}" class="btn-ghost btn">↑ Import</a>
       {% endif %}
       <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
-      <form method="post" action="{% url 'accounts:settings' %}" style="display:inline">
-        {% csrf_token %}
-        <select name="language" onchange="this.form.submit()" class="btn-ghost btn" style="cursor:pointer">
-          {% for lang in languages %}
-            <option value="{{ lang }}" {% if request.user.language == lang %}selected{% endif %}>{{ lang }}</option>
-          {% endfor %}
-        </select>
-      </form>
     </div>
   </div>
 
@@ -62,10 +54,43 @@
   <p class="scan-last">Last event added {{ last_event.created_at|timesince }} ago</p>
   {% endif %}
 
-  {# ── Event list ── #}
-  {% if events %}
+  {# ── Pending / needs attention ── #}
+  {% if pending_events %}
+  <div class="pending-banner">
+    <div class="pending-banner__header">
+      <span class="pending-banner__icon">⚠</span>
+      <span class="pending-banner__title">{{ pending_events|length }} event{{ pending_events|length|pluralize }} need{{ pending_events|length|pluralize:"s," }} attention</span>
+    </div>
+    <div class="event-list event-list--pending">
+      {% for event in pending_events %}
+      <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card event-card--pending">
+        <div class="event-card__date">
+          <span class="event-card__day">{{ event.start|date:"d" }}</span>
+          <span class="event-card__month">{{ event.start|date:"M" }}</span>
+        </div>
+        <div class="event-card__body">
+          <div class="event-card__title">{{ event.title }}</div>
+          <div class="event-card__concern">{{ event.pending_concern }}</div>
+        </div>
+        <div class="event-card__arrow">→</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Sort controls ── #}
+  <div class="sort-bar">
+    <span class="sort-bar__label">Sort by</span>
+    <a href="?sort=added" class="sort-bar__opt {% if sort == 'added' %}sort-bar__opt--active{% endif %}">Date added</a>
+    <a href="?sort=start" class="sort-bar__opt {% if sort == 'start' %}sort-bar__opt--active{% endif %}">Start date</a>
+    <a href="?sort=category" class="sort-bar__opt {% if sort == 'category' %}sort-bar__opt--active{% endif %}">Category</a>
+  </div>
+
+  {# ── Active event list ── #}
+  {% if active_events %}
   <div class="event-list">
-    {% for event in events %}
+    {% for event in active_events %}
     <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card">
 
       <div class="event-card__date">
@@ -79,9 +104,16 @@
           {{ event.start|time:"H:i" }} → {{ event.end|time:"H:i" }}
           {% if event.category %}
             <span class="event-card__sep">·</span>
-            <span class="category-badge" {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}>
+            <a href="{% url 'dashboard:category_detail' pk=event.category.pk %}"
+               class="category-badge"
+               {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}
+               onclick="event.stopPropagation()">
               {{ event.category.name }}
-            </span>
+            </a>
+          {% endif %}
+          {% if event.recurrence_freq %}
+            <span class="event-card__sep">·</span>
+            <span class="event-card__recur">↻ {{ event.get_recurrence_freq_display }}</span>
           {% endif %}
         </div>
       </div>

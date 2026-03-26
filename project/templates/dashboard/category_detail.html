@@ -1,0 +1,68 @@
+{# templates/dashboard/category_detail.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ category.name }} — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/categories.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page page--wide">
+
+  <div class="page__header--row">
+    <div>
+      <span class="category-badge category-badge--lg"
+        {% if category.color %}style="--cat-color:{{ category.color }}"{% endif %}>
+        {{ category.name }}
+      </span>
+      <p class="page__sub">{{ events|length }} event{{ events|length|pluralize }}</p>
+    </div>
+    <div class="page__actions">
+      <a href="{% url 'dashboard:category_edit' pk=category.pk %}" class="btn-ghost btn">Edit category</a>
+      <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">← Dashboard</a>
+    </div>
+  </div>
+
+  {% if events %}
+  <div class="event-list">
+    {% for event in events %}
+    <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card {% if event.status == 'pending' %}event-card--pending{% endif %}">
+
+      <div class="event-card__date">
+        <span class="event-card__day">{{ event.start|date:"d" }}</span>
+        <span class="event-card__month">{{ event.start|date:"M" }}</span>
+      </div>
+
+      <div class="event-card__body">
+        <div class="event-card__title">{{ event.title }}</div>
+        <div class="event-card__meta">
+          {{ event.start|time:"H:i" }} → {{ event.end|time:"H:i" }}
+          {% if event.recurrence_freq %}
+            <span class="event-card__sep">·</span>
+            <span class="event-card__recur">↻ {{ event.get_recurrence_freq_display }}</span>
+          {% endif %}
+          {% if event.status == 'pending' %}
+            <span class="event-card__sep">·</span>
+            <span class="event-card__pending-badge">⚠ Needs attention</span>
+          {% endif %}
+        </div>
+        {% if event.pending_concern %}
+        <div class="event-card__concern">{{ event.pending_concern }}</div>
+        {% endif %}
+      </div>
+
+      <div class="event-card__arrow">→</div>
+
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state__text">No events in this category yet.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
