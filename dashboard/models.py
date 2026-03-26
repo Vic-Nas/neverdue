@@ -58,6 +58,11 @@ class FilterRule(models.Model):
 
 
 class Event(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('active', 'Active'),
+    ]
+
     RECURRENCE_CHOICES = [
         ('DAILY', 'Daily'),
         ('WEEKLY', 'Weekly'),
@@ -83,6 +88,9 @@ class Event(models.Model):
     recurrence_until = models.DateField(null=True, blank=True)
     google_event_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     source_email_id = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
+    pending_expires_at = models.DateField(null=True, blank=True)
+    pending_concern = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
