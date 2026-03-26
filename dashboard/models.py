@@ -79,7 +79,7 @@ class Event(models.Model):
     }
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='events')
-    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name='events')
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.CASCADE, related_name='events')
     title = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     start = models.DateTimeField()
