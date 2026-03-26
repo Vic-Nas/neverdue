@@ -23,7 +23,7 @@ def fetch_full_email(email_id: str) -> dict:
         logger.error("RESEND_API_KEY is not set — cannot fetch email body")
         return {}
 
-    url = f"https://api.resend.com/emails/received/{email_id}"
+    url = f"https://api.resend.com/emails/receiving/{email_id}"
     try:
         response = requests.get(
             url,
