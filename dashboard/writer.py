@@ -61,6 +61,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
     )
 
     if response.status_code not in (200, 201):
+        print(f"Google Calendar API error: {response.status_code} {response.text}")
         return None
 
     google_event = response.json()
