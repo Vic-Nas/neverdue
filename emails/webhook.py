@@ -5,9 +5,48 @@ import hmac
 import logging
 import time
 
+import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
+def fetch_full_email(email_id: str) -> dict:
+    """
+    Fetch full email content from Resend's Received Emails API.
+    Resend webhooks only contain metadata — body and attachments
+    must be retrieved separately via this API call.
+    https://resend.com/docs/api-reference/emails/retrieve-email
+    """
+    api_key = getattr(settings, 'RESEND_API_KEY', '')
+    if not api_key:
+        logger.error("RESEND_API_KEY is not set — cannot fetch email body")
+        return {}
+
+    url = f"https://api.resend.com/emails/{email_id}"
+    try:
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if settings.DEBUG:
+                logger.debug(
+                    "[DEBUG] fetch_full_email | email_id=%s | keys=%s",
+                    email_id, list(data.keys()),
+                )
+            return data
+        else:
+            logger.error(
+                "fetch_full_email failed | email_id=%s | status=%s | response=%s",
+                email_id, response.status_code, response.text,
+            )
+            return {}
+    except requests.RequestException as exc:
+        logger.error("fetch_full_email request error | email_id=%s | %s", email_id, exc)
+        return {}
 
 SUPPORTED_ATTACHMENT_TYPES = {
     'application/pdf',
@@ -65,74 +104,90 @@ def verify_resend_signature(payload_bytes, headers):
     return False
 
 
-def extract_email_text(payload):
+def extract_email_text(payload, full_email: dict = None):
     """
     Extract plain text body from Resend inbound webhook payload.
+    
+    Because Resend webhooks only include metadata, pass `full_email`
+    (the result of fetch_full_email) to get the actual body.
     Falls back to stripping HTML if plain text is absent.
     """
-    # Resend sometimes puts content at root, sometimes under 'data'
-    data = payload.get('data') or payload
+    # Prefer full_email from the Resend API (has 'text' and 'html')
+    source = full_email if full_email else (payload.get('data') or payload)
 
     if settings.DEBUG:
-        logger.debug("[DEBUG] extract_email_text | top-level keys=%s | data keys=%s", list(payload.keys()), list(data.keys()))
+        logger.debug(
+            "[DEBUG] extract_email_text | source=full_email=%s | keys=%s",
+            bool(full_email), list(source.keys()),
+        )
 
-    text = data.get('text', '').strip()
+    text = (source.get('text') or '').strip()
     if text:
         if settings.DEBUG:
             logger.debug("[DEBUG] Found plain text body, len=%s | preview=%r", len(text), text[:200])
         return text
 
     if settings.DEBUG:
-        logger.debug("[DEBUG] No plain text found under data['text']")
+        logger.debug("[DEBUG] No plain text found — trying HTML fallback")
 
-    html = data.get('html', '')
+    html = source.get('html') or ''
     if html:
         import re
         stripped = re.sub(r'<[^>]+>', ' ', html)
         stripped = re.sub(r'\s+', ' ', stripped).strip()
         if settings.DEBUG:
-            logger.debug("[DEBUG] Fell back to HTML stripping | html_len=%s | stripped_len=%s | preview=%r", len(html), len(stripped), stripped[:200])
+            logger.debug("[DEBUG] Fell back to HTML stripping | stripped_len=%s | preview=%r", len(stripped), stripped[:200])
         return stripped
 
     logger.warning(
-        "extract_email_text: no text or HTML found in payload. "
-        "Top-level keys=%s | data keys=%s",
-        list(payload.keys()),
-        list(data.keys()),
+        "extract_email_text: no text or HTML found. "
+        "Top-level keys=%s | full_email provided=%s",
+        list(source.keys()), bool(full_email),
     )
     return ''
 
 
-def extract_attachments(payload):
+def extract_attachments(payload, full_email: dict = None):
     """
     Extract supported attachments from Resend inbound webhook payload.
-    Returns list of (bytes, media_type) tuples.
+    Pass `full_email` (result of fetch_full_email) to get actual attachment content.
+    Returns list of (base64_string, media_type) tuples — NOT decoded bytes.
+    tasks.py is responsible for base64 decoding.
     """
-    data = payload.get('data', {})
-    attachments = data.get('attachments', [])
+    source = full_email if full_email else (payload.get('data') or payload)
+    attachments = source.get('attachments', [])
     result = []
 
     if settings.DEBUG:
         logger.debug("[DEBUG] extract_attachments | found %s attachment(s)", len(attachments))
 
     for idx, attachment in enumerate(attachments):
-        content_type = attachment.get('contentType', '').split(';')[0].strip().lower()
+        content_type = attachment.get('contentType') or attachment.get('content-type') or attachment.get('type', '')
+        content_type = content_type.split(';')[0].strip().lower()
+
         if content_type not in SUPPORTED_ATTACHMENT_TYPES:
             if settings.DEBUG:
                 logger.debug("[DEBUG] Attachment %s skipped — unsupported type: %s", idx, content_type)
             continue
+
+        # Generic/Postmark: base64 string in 'content'
         content = attachment.get('content', '')
         if not content:
             logger.warning("Attachment %s has no content (content_type=%s)", idx, content_type)
             continue
+
+        # Validate it's actually decodable before passing downstream
         try:
-            file_bytes = base64.b64decode(content)
-            if settings.DEBUG:
-                logger.debug("[DEBUG] Attachment %s accepted | type=%s | size=%s bytes", idx, content_type, len(file_bytes))
-            result.append((file_bytes, content_type))
+            base64.b64decode(content)
         except Exception as exc:
-            logger.warning("Failed to decode attachment %s: %s", idx, exc)
+            logger.warning("Failed to validate attachment %s base64: %s", idx, exc)
             continue
+
+        if settings.DEBUG:
+            logger.debug("[DEBUG] Attachment %s accepted | type=%s", idx, content_type)
+
+        # Return raw b64 string — tasks.py decodes it
+        result.append((content, content_type))
 
     return result
 

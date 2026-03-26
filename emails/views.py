@@ -5,7 +5,13 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .webhook import extract_attachments, extract_email_text, get_user_from_recipient, verify_resend_signature
+from .webhook import (
+    extract_attachments,
+    extract_email_text,
+    fetch_full_email,
+    get_user_from_recipient,
+    verify_resend_signature,
+)
 
 
 @csrf_exempt
@@ -37,15 +43,13 @@ def inbound(request):
     if not sender_is_allowed(user, sender):
         return HttpResponse('OK', status=200)
 
-    body = extract_email_text(payload)
+    # Fetch full email content from Resend API (webhooks only contain metadata)
+    email_id = data.get('email_id')
+    full_email = fetch_full_email(email_id) if email_id else {}
 
-    # Extract attachments as [base64_string, media_type] — JSON-serializable for Celery
-    raw_attachments = extract_attachments(payload)
-    import base64
-    attachments = [
-        [base64.b64encode(file_bytes).decode(), media_type]
-        for file_bytes, media_type in raw_attachments
-    ]
+    # Extract body and attachments, using full_email content
+    body = extract_email_text(payload, full_email=full_email)
+    attachments = extract_attachments(payload, full_email=full_email)
 
     from .tasks import process_inbound_email
     process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
