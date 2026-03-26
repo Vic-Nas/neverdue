@@ -99,6 +99,49 @@
       </div>
     </div>
 
+    <div class="form-section">
+      <h2 class="form-section__title">Timezone</h2>
+      <div class="form-group">
+        <label for="id_timezone">Timezone</label>
+        <select id="id_timezone" name="timezone">
+          <optgroup label="Americas">
+            <option value="America/St_Johns"    {% if user.timezone == "America/St_Johns" %}selected{% endif %}>Newfoundland (UTC−3:30/−2:30)</option>
+            <option value="America/Halifax"     {% if user.timezone == "America/Halifax" %}selected{% endif %}>Atlantic (UTC−4/−3)</option>
+            <option value="America/Toronto"     {% if user.timezone == "America/Toronto" %}selected{% endif %}>Eastern (UTC−5/−4)</option>
+            <option value="America/Winnipeg"    {% if user.timezone == "America/Winnipeg" %}selected{% endif %}>Central (UTC−6/−5)</option>
+            <option value="America/Edmonton"    {% if user.timezone == "America/Edmonton" %}selected{% endif %}>Mountain (UTC−7/−6)</option>
+            <option value="America/Vancouver"   {% if user.timezone == "America/Vancouver" %}selected{% endif %}>Pacific (UTC−8/−7)</option>
+            <option value="America/New_York"    {% if user.timezone == "America/New_York" %}selected{% endif %}>New York (UTC−5/−4)</option>
+            <option value="America/Chicago"     {% if user.timezone == "America/Chicago" %}selected{% endif %}>Chicago (UTC−6/−5)</option>
+            <option value="America/Denver"      {% if user.timezone == "America/Denver" %}selected{% endif %}>Denver (UTC−7/−6)</option>
+            <option value="America/Los_Angeles" {% if user.timezone == "America/Los_Angeles" %}selected{% endif %}>Los Angeles (UTC−8/−7)</option>
+            <option value="America/Sao_Paulo"   {% if user.timezone == "America/Sao_Paulo" %}selected{% endif %}>São Paulo (UTC−3/−2)</option>
+            <option value="America/Mexico_City" {% if user.timezone == "America/Mexico_City" %}selected{% endif %}>Mexico City (UTC−6/−5)</option>
+          </optgroup>
+          <optgroup label="Europe">
+            <option value="Europe/London"       {% if user.timezone == "Europe/London" %}selected{% endif %}>London (UTC+0/+1)</option>
+            <option value="Europe/Paris"        {% if user.timezone == "Europe/Paris" %}selected{% endif %}>Paris / Berlin / Rome (UTC+1/+2)</option>
+            <option value="Europe/Helsinki"     {% if user.timezone == "Europe/Helsinki" %}selected{% endif %}>Helsinki / Athens (UTC+2/+3)</option>
+            <option value="Europe/Moscow"       {% if user.timezone == "Europe/Moscow" %}selected{% endif %}>Moscow (UTC+3)</option>
+          </optgroup>
+          <optgroup label="Asia / Pacific">
+            <option value="Asia/Dubai"          {% if user.timezone == "Asia/Dubai" %}selected{% endif %}>Dubai (UTC+4)</option>
+            <option value="Asia/Kolkata"        {% if user.timezone == "Asia/Kolkata" %}selected{% endif %}>India (UTC+5:30)</option>
+            <option value="Asia/Dhaka"          {% if user.timezone == "Asia/Dhaka" %}selected{% endif %}>Dhaka (UTC+6)</option>
+            <option value="Asia/Bangkok"        {% if user.timezone == "Asia/Bangkok" %}selected{% endif %}>Bangkok / Jakarta (UTC+7)</option>
+            <option value="Asia/Singapore"      {% if user.timezone == "Asia/Singapore" %}selected{% endif %}>Singapore / HK (UTC+8)</option>
+            <option value="Asia/Tokyo"          {% if user.timezone == "Asia/Tokyo" %}selected{% endif %}>Tokyo (UTC+9)</option>
+            <option value="Australia/Sydney"    {% if user.timezone == "Australia/Sydney" %}selected{% endif %}>Sydney (UTC+10/+11)</option>
+            <option value="Pacific/Auckland"    {% if user.timezone == "Pacific/Auckland" %}selected{% endif %}>Auckland (UTC+12/+13)</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="UTC"                 {% if user.timezone == "UTC" %}selected{% endif %}>UTC</option>
+          </optgroup>
+        </select>
+        <p class="form-hint">Used to interpret times in your emails and files. Auto-detected from your browser if not set.</p>
+      </div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn-primary">Save preferences</button>
       <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>

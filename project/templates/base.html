@@ -132,5 +132,25 @@
 </footer>
 
 {% block extra_js %}{% endblock %}
+
+{% if user.is_authenticated and user.timezone == 'UTC' and not user.timezone_auto_detected %}
+<script>
+(function () {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!tz) return;
+    fetch("{% url 'set_timezone_auto' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}"
+      },
+      body: JSON.stringify({ timezone: tz })
+    });
+    // Fire and forget — no reload needed, takes effect on next scan
+  } catch (e) {}
+})();
+</script>
+{% endif %}
 </body>
 </html>
