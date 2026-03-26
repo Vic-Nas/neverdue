@@ -25,15 +25,7 @@
     </div>
   </div>
 
-  {% if messages %}
-  <ul class="messages">
-    {% for message in messages %}
-    <li class="{{ message.tags }}">{{ message }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
-  {# ── Scan usage bar (free users only) ── #}
+  {# Scan usage bar (free users only) ── #}
   {% if scans_used is not None %}
   <div class="scan-banner">
     <div class="scan-banner__top">
