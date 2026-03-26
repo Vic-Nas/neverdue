@@ -13,15 +13,17 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
     if not _check_and_increment_scans(user):
         return []
 
+    language = getattr(user, 'language', 'English')
+
     try:
-        events = extract_events(text)
+        events = extract_events(text, language=language)
     except ValueError:
         return []
     print(f"EXTRACTED EVENTS: {events}")
     return _save_events(user, events, sender, source_email_id)
 
 
-def process_file(user, file_bytes: bytes, media_type: str) -> list:
+def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> list:
     """
     Full pipeline for image, PDF, or text file upload.
     Returns list of created Event objects.
@@ -32,16 +34,20 @@ def process_file(user, file_bytes: bytes, media_type: str) -> list:
     if not _check_and_increment_scans(user):
         return []
 
+    language = getattr(user, 'language', 'English')
+
     if media_type == 'text/plain':
         text = file_bytes.decode('utf-8', errors='ignore')
+        if context:
+            text = f"{text}\n\nUser context: {context}"
         try:
-            events = extract_events(text)
+            events = extract_events(text, language=language)
         except ValueError:
             return []
         print(f"EXTRACTED EVENTS: {events}")
     else:
         try:
-            events = extract_events_from_image(file_bytes, media_type)
+            events = extract_events_from_image(file_bytes, media_type, context=context, language=language)
         except ValueError:
             return []
         print(f"EXTRACTED EVENTS: {events}")

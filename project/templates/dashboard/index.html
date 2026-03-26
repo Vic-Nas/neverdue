@@ -22,6 +22,14 @@
         <a href="{% url 'dashboard:upload' %}" class="btn-ghost btn">↑ Import</a>
       {% endif %}
       <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
+      <form method="post" action="{% url 'accounts:settings' %}" style="display:inline">
+        {% csrf_token %}
+        <select name="language" onchange="this.form.submit()" class="btn-ghost btn" style="cursor:pointer">
+          {% for lang in languages %}
+            <option value="{{ lang }}" {% if request.user.language == lang %}selected{% endif %}>{{ lang }}</option>
+          {% endfor %}
+        </select>
+      </form>
     </div>
   </div>
 

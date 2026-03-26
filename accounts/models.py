@@ -10,6 +10,7 @@ class User(AbstractUser):
     token_expiry = models.DateTimeField(null=True, blank=True)
     monthly_scans = models.IntegerField(default=0)
     scan_reset_date = models.DateField(null=True, blank=True)
+    language = models.CharField(max_length=50, default='English')
 
     @property
     def is_pro(self):
