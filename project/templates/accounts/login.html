@@ -9,6 +9,10 @@
   <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/login.css' %}">
+
+  {% if ADSENSE_CLIENT_ID %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ADSENSE_CLIENT_ID }}" crossorigin="anonymous"></script>
+  {% endif %}
 </head>
 <body>
 
