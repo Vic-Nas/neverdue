@@ -1,5 +1,7 @@
 # llm/extractor.py
 import json
+import zoneinfo
+from datetime import datetime, timezone as dt_timezone
 import anthropic
 from django.conf import settings
 from django.utils import timezone
@@ -10,13 +12,13 @@ SYSTEM_PROMPT = """You are a calendar event extractor. Given text content from a
 
 Return ONLY a valid JSON array. No explanation, no markdown, no extra text.
 
-Today's date will be provided in the user message. Use it to determine whether events are in the past or future.
+Today's date and the user's local timezone will be provided in the user message. All times mentioned in the source content should be interpreted as being in that local timezone unless the content explicitly states a different timezone. Output all datetimes in that same local timezone (no UTC conversion — just use the times as written or implied by the content).
 
 Each event must have:
 - "title": concise event name (string)
 - "description": relevant context from the source (string, can be empty)
-- "start": ISO 8601 datetime string (e.g. "2025-09-15T09:00:00")
-- "end": ISO 8601 datetime string (must be after start)
+- "start": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (e.g. "2025-09-15T09:00:00")
+- "end": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (must be after start)
 - "category_hint": suggested category name based on context (string, can be empty)
 - "recurrence_freq": recurrence frequency if clearly stated — one of "DAILY", "WEEKLY", "MONTHLY", "YEARLY" or empty string if not recurring or uncertain
 - "recurrence_until": end date for recurrence as "YYYY-MM-DD" string, or empty string if open-ended or not applicable
@@ -30,7 +32,7 @@ Rules:
 - YEAR INFERENCE: When no year is given, always use the year from today's date provided. Only advance to the next year if the resulting date would be in the past relative to today (e.g. today is Nov 2026, event says "March 15" → use March 15 2027). Never leave the year ambiguous — always commit to a specific year.
 - If no events are found, return an empty array []
 - Never return null values — use empty strings instead
-- All datetimes must be in UTC
+- Do NOT apply any UTC offset — output the local time as-is
 - Only set recurrence_freq if you are highly confident — when in doubt leave it empty
 - Never set recurrence_freq if the event duration would equal or exceed the recurrence interval
 - If the user provides context (e.g. "weekly schedule", "repeats until April 23", "ignore prices"), follow it strictly. Context overrides your own inference.
@@ -75,13 +77,27 @@ Example output:
 ]"""
 
 
-def extract_events(text: str, language: str = 'English') -> list[dict]:
+def _get_tz(tz_name: str) -> zoneinfo.ZoneInfo:
+    """Return a ZoneInfo object, falling back to UTC if the name is invalid."""
+    try:
+        return zoneinfo.ZoneInfo(tz_name)
+    except (zoneinfo.ZoneInfoNotFoundError, KeyError):
+        return dt_timezone.utc
+
+
+def _today_in_tz(tz: zoneinfo.ZoneInfo | dt_timezone) -> str:
+    """Return today's date string in the given timezone."""
+    return datetime.now(tz=tz).date().isoformat()
+
+
+def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC') -> list[dict]:
     """
     Extract calendar events from plain text.
-    Returns a list of validated event dicts.
+    Returns a list of validated event dicts (stored as UTC-aware datetimes).
     Raises ValueError if LLM returns invalid output.
     """
-    today = timezone.now().date().isoformat()
+    tz = _get_tz(user_timezone)
+    today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
     message = client.messages.create(
@@ -89,14 +105,27 @@ def extract_events(text: str, language: str = 'English') -> list[dict]:
         max_tokens=2000,
         system=system,
         messages=[
-            {'role': 'user', 'content': f'Today\'s date: {today}\n\nExtract all calendar events from this content:\n\n{text}'}
+            {
+                'role': 'user',
+                'content': (
+                    f"Today's date: {today}\n"
+                    f"User's timezone: {user_timezone}\n\n"
+                    f"Extract all calendar events from this content:\n\n{text}"
+                )
+            }
         ]
     )
 
-    return _parse_and_validate(message)
+    return _parse_and_validate(message, tz)
 
 
-def extract_events_from_image(file_bytes: bytes, media_type: str, context: str = '', language: str = 'English') -> list[dict]:
+def extract_events_from_image(
+    file_bytes: bytes,
+    media_type: str,
+    context: str = '',
+    language: str = 'English',
+    user_timezone: str = 'UTC',
+) -> list[dict]:
     """
     Extract calendar events from an image or PDF.
     media_type: 'image/jpeg', 'image/png', or 'application/pdf'
@@ -109,10 +138,15 @@ def extract_events_from_image(file_bytes: bytes, media_type: str, context: str =
     else:
         content_block = {'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}}
 
-    today = timezone.now().date().isoformat()
+    tz = _get_tz(user_timezone)
+    today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
-    user_text = f'Today\'s date: {today}\n\nExtract all calendar events from this file.'
+    user_text = (
+        f"Today's date: {today}\n"
+        f"User's timezone: {user_timezone}\n\n"
+        f"Extract all calendar events from this file."
+    )
     if context:
         user_text += f'\n\nUser context (follow strictly): {context}'
 
@@ -131,10 +165,10 @@ def extract_events_from_image(file_bytes: bytes, media_type: str, context: str =
         ]
     )
 
-    return _parse_and_validate(message)
+    return _parse_and_validate(message, tz)
 
 
-def _parse_and_validate(message) -> list[dict]:
+def _parse_and_validate(message, tz) -> list[dict]:
     """Parse LLM response and validate each event."""
     raw = message.content[0].text.strip()
 
@@ -152,7 +186,7 @@ def _parse_and_validate(message) -> list[dict]:
     if not isinstance(events, list):
         raise ValueError(f'LLM returned non-list: {type(events)}')
 
-    return [v for e in events if (v := _validate_event(e)) is not None]
+    return [v for e in events if (v := _validate_event(e, tz)) is not None]
 
 
 VALID_FREQS = {'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'}
@@ -165,30 +199,35 @@ RECURRENCE_MIN_INTERVAL_DAYS = {
 }
 
 
-def _validate_event(event: dict) -> dict | None:
+def _validate_event(event: dict, tz) -> dict | None:
     """
     Validate and clean a single event dict.
+    The LLM returns naive local datetimes — we interpret them in `tz` and convert to UTC.
     Returns None if the event is missing required fields.
     """
-    from datetime import datetime, timezone as dt_timezone
-
     required = ('title', 'start', 'end')
     for field in required:
         if not event.get(field):
             return None
 
-    # Make datetimes timezone-aware (UTC)
-    def make_aware(dt_str):
+    def local_to_utc(dt_str: str) -> str:
+        """
+        Parse a naive ISO datetime string, attach the user's timezone,
+        convert to UTC, and return an aware ISO string.
+        """
         try:
             dt = datetime.fromisoformat(dt_str)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=dt_timezone.utc)
-            return dt.isoformat()
+            if dt.tzinfo is not None:
+                # LLM already attached an offset — trust it, just normalise to UTC
+                return dt.astimezone(dt_timezone.utc).isoformat()
+            # Naive: treat as user's local time
+            dt_local = dt.replace(tzinfo=tz)
+            return dt_local.astimezone(dt_timezone.utc).isoformat()
         except (ValueError, TypeError):
-            return dt_str
+            return dt_str  # pass through broken values; writer will catch them
 
-    start = make_aware(event['start'])
-    end = make_aware(event['end'])
+    start = local_to_utc(event['start'])
+    end = local_to_utc(event['end'])
 
     # Validate recurrence against event duration
     recurrence_freq = event.get('recurrence_freq', '').strip().upper()
@@ -215,7 +254,6 @@ def _validate_event(event: dict) -> dict | None:
     concern = event.get('concern', '').strip() if status == 'pending' else ''
     expires_at = event.get('expires_at', '').strip() if status == 'pending' else ''
 
-    # Validate expires_at format
     if expires_at:
         try:
             datetime.fromisoformat(expires_at)

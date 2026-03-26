@@ -17,6 +17,11 @@ class User(AbstractUser):
     past_event_retention_days = models.IntegerField(default=30)
     delete_from_gcal_on_cleanup = models.BooleanField(default=False)
 
+    # Timezone — stored as IANA string e.g. "America/Toronto"
+    # timezone_auto_detected: False means user has manually set it (don't overwrite with JS detection)
+    timezone = models.CharField(max_length=100, default='UTC')
+    timezone_auto_detected = models.BooleanField(default=False)
+
     @property
     def is_pro(self):
         return hasattr(self, 'subscription') and self.subscription.is_pro

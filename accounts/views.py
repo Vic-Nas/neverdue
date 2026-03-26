@@ -10,6 +10,10 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+import json
+import zoneinfo
 
 from .models import User
 
@@ -157,23 +161,88 @@ def preferences(request):
         auto_delete = request.POST.get('auto_delete_past_events') == 'on'
         retention_days = request.POST.get('past_event_retention_days', '30').strip()
         delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
+        timezone_str = request.POST.get('timezone', 'UTC').strip()
 
         try:
             retention_days = max(1, int(retention_days))
         except (ValueError, TypeError):
             retention_days = 30
 
+        # Validate timezone
+        if timezone_str not in zoneinfo.available_timezones():
+            timezone_str = 'UTC'
+
         request.user.language = language
         request.user.auto_delete_past_events = auto_delete
         request.user.past_event_retention_days = retention_days
         request.user.delete_from_gcal_on_cleanup = delete_gcal
+        request.user.timezone = timezone_str
+        request.user.timezone_auto_detected = False
         request.user.save(update_fields=[
             'language',
             'auto_delete_past_events',
             'past_event_retention_days',
             'delete_from_gcal_on_cleanup',
+            'timezone',
+            'timezone_auto_detected',
         ])
         messages.success(request, 'Preferences saved.')
         return redirect('accounts:preferences')
 
     return render(request, 'accounts/preferences.html', {'languages': LANGUAGES})
+
+
+VALID_TIMEZONES = zoneinfo.available_timezones()
+
+
+@login_required
+@require_POST
+def set_timezone_auto(request):
+    """
+    Called once by browser JS on first visit if timezone has never been set.
+    Only updates if timezone_auto_detected is False AND timezone is still 'UTC'
+    (meaning the user has never manually saved a preference).
+    Silently ignored if user already has a real timezone set.
+    """
+    try:
+        data = json.loads(request.body)
+        tz = data.get('timezone', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'ok': False, 'error': 'bad request'}, status=400)
+
+    if tz not in VALID_TIMEZONES:
+        return JsonResponse({'ok': False, 'error': 'unknown timezone'}, status=400)
+
+    user = request.user
+    # Only auto-set if user has never manually chosen a timezone
+    if user.timezone == 'UTC' and not user.timezone_auto_detected:
+        user.timezone = tz
+        user.timezone_auto_detected = True
+        user.save(update_fields=['timezone', 'timezone_auto_detected'])
+
+    return JsonResponse({'ok': True, 'timezone': user.timezone})
+
+
+@login_required
+@require_POST
+def set_timezone_manual(request):
+    """
+    Called from preferences form when user explicitly picks a timezone.
+    Sets timezone_auto_detected = False so auto-detection never overwrites it again.
+    You can wire this into your existing preferences save view instead if you prefer.
+    """
+    try:
+        data = json.loads(request.body)
+        tz = data.get('timezone', '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'ok': False, 'error': 'bad request'}, status=400)
+
+    if tz not in VALID_TIMEZONES:
+        return JsonResponse({'ok': False, 'error': 'unknown timezone'}, status=400)
+
+    user = request.user
+    user.timezone = tz
+    user.timezone_auto_detected = False  # manually set = don't auto-overwrite ever again
+    user.save(update_fields=['timezone', 'timezone_auto_detected'])
+
+    return JsonResponse({'ok': True, 'timezone': user.timezone})

@@ -14,9 +14,10 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
         return []
 
     language = getattr(user, 'language', 'English')
+    user_timezone = getattr(user, 'timezone', 'UTC')
 
     try:
-        events = extract_events(text, language=language)
+        events = extract_events(text, language=language, user_timezone=user_timezone)
     except ValueError:
         return []
 
@@ -36,18 +37,19 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
         return []
 
     language = getattr(user, 'language', 'English')
+    user_timezone = getattr(user, 'timezone', 'UTC')
 
     if media_type == 'text/plain':
         text = file_bytes.decode('utf-8', errors='ignore')
         if context:
             text = f"{text}\n\nUser context: {context}"
         try:
-            events = extract_events(text, language=language)
+            events = extract_events(text, language=language, user_timezone=user_timezone)
         except ValueError:
             return []
     else:
         try:
-            events = extract_events_from_image(file_bytes, media_type, context=context, language=language)
+            events = extract_events_from_image(file_bytes, media_type, context=context, language=language, user_timezone=user_timezone)
         except ValueError:
             return []
 
