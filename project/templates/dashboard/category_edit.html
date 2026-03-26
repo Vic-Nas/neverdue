@@ -14,14 +14,6 @@
     <h1 class="form-page__title">{% if category %}Edit category{% else %}New category{% endif %}</h1>
   </div>
 
-  {% if messages %}
-  <ul class="messages">
-    {% for message in messages %}
-    <li class="{{ message.tags }}">{{ message }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
   <form method="post" class="category-form">
     {% csrf_token %}
 
