@@ -13,7 +13,7 @@ class User(AbstractUser):
 
     # Preferences
     language = models.CharField(max_length=10, default='English')
-    auto_delete_past_events = models.BooleanField(default=False)
+    auto_delete_past_events = models.BooleanField(default=True)
     past_event_retention_days = models.IntegerField(default=30)
     delete_from_gcal_on_cleanup = models.BooleanField(default=False)
 
