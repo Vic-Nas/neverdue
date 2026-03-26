@@ -44,14 +44,6 @@
     <p class="page__sub">Customize how NeverDue works for you.</p>
   </div>
 
-  {% if messages %}
-  <ul class="messages">
-    {% for message in messages %}
-    <li class="{{ message.tags }}">{{ message }}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
   <form method="post" class="event-form">
     {% csrf_token %}
 
