@@ -13,6 +13,11 @@ from django.utils import timezone
 
 from .models import User
 
+LANGUAGES = [
+    'English', 'Français', 'Español', 'Deutsch',
+    'Português', 'Italiano', '中文', '日本語', 'العربية',
+]
+
 
 def login(request):
     if request.user.is_authenticated:
@@ -146,57 +151,29 @@ def username_pick(request):
 
 
 @login_required
-def user_settings(request):
-    """
-    Handle user settings (language, context, etc.).
-    Intentionally referer-based — saves and redirects back to calling page.
-    """
-    if request.method == 'POST':
-        language = request.POST.get('language', 'English').strip()
-        request.user.language = language
-        request.user.save(update_fields=['language'])
-        messages.success(request, 'Settings saved.')
-    
-    return redirect(request.META.get('HTTP_REFERER', 'dashboard:index'))
-
-
-@login_required
 def preferences(request):
-    """
-    Handle user preferences page (language, cleanup settings).
-    """
-    languages = ['English', 'Français', 'Español', 'Deutsch', 'Português', 'Italiano', '中文', '日本語', 'العربية']
-    
     if request.method == 'POST':
         language = request.POST.get('language', 'English').strip()
         auto_delete = request.POST.get('auto_delete_past_events') == 'on'
-        past_event_retention_days = request.POST.get('past_event_retention_days', '30')
-        delete_from_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
-        
+        retention_days = request.POST.get('past_event_retention_days', '30').strip()
+        delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
+
         try:
-            retention_days = int(past_event_retention_days)
-            if retention_days < 1:
-                retention_days = 1
-            if retention_days > 365:
-                retention_days = 365
+            retention_days = max(1, int(retention_days))
         except (ValueError, TypeError):
             retention_days = 30
-        
+
         request.user.language = language
         request.user.auto_delete_past_events = auto_delete
         request.user.past_event_retention_days = retention_days
-        request.user.delete_from_gcal_on_cleanup = delete_from_gcal
+        request.user.delete_from_gcal_on_cleanup = delete_gcal
         request.user.save(update_fields=[
             'language',
             'auto_delete_past_events',
             'past_event_retention_days',
             'delete_from_gcal_on_cleanup',
         ])
-        
         messages.success(request, 'Preferences saved.')
         return redirect('accounts:preferences')
-    
-    ctx = {
-        'languages': languages,
-    }
-    return render(request, 'accounts/preferences.html', ctx)
+
+    return render(request, 'accounts/preferences.html', {'languages': LANGUAGES})
