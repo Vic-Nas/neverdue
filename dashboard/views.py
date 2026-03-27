@@ -473,7 +473,8 @@ def queue_status(request):
             'id': j.pk,
             'status': j.status,
             'source': j.source,
-            'summary': j.summary,
+            'from_address': j.from_address,
+            'notes': j.notes,
             'created_at': j.created_at.isoformat(),
             'duration_seconds': round(j.duration_seconds),
         }

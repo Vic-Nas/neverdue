@@ -29,8 +29,8 @@ class ScanJob(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scan_jobs')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_EMAIL)
-    # Human-readable hint: sender address, filename, prompt snippet, etc.
-    summary = models.CharField(max_length=255, blank=True, default='')
+    from_address = models.CharField(max_length=255, blank=True, default='')
+    notes = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

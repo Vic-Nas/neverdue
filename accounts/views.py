@@ -166,7 +166,7 @@ def username_pick(request):
 
         request.user.username = username
         request.user.save(update_fields=['username'])
-        return redirect('dashboard:index')
+        return redirect('billing:plans')
 
     return render(request, 'accounts/username_pick.html')
 

@@ -7,7 +7,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def _create_job(user_id: int, source: str, summary: str = '') -> int | None:
+def _create_job(user_id: int, source: str, from_address: str = '') -> int | None:
     """Create a ScanJob in queued state. Returns job pk or None on failure."""
     try:
         from emails.models import ScanJob
@@ -17,7 +17,7 @@ def _create_job(user_id: int, source: str, summary: str = '') -> int | None:
             user=user,
             status=ScanJob.STATUS_QUEUED,
             source=source,
-            summary=summary[:255],
+            from_address=from_address,
         )
         return job.pk
     except Exception as exc:
@@ -36,6 +36,17 @@ def _set_job_status(job_pk: int | None, status: str) -> None:
         logger.warning("_set_job_status: failed pk=%s status=%s: %s", job_pk, status, exc)
 
 
+def _set_job_notes(job_pk: int | None, notes: str) -> None:
+    """Update a ScanJob's notes field. Silently ignores missing jobs."""
+    if job_pk is None:
+        return
+    try:
+        from emails.models import ScanJob
+        ScanJob.objects.filter(pk=job_pk).update(notes=notes[:255])
+    except Exception as exc:
+        logger.warning("_set_job_notes: failed pk=%s: %s", job_pk, exc)
+
+
 @shared_task
 def process_inbound_email(user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
     """
@@ -48,8 +59,7 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
     from llm.pipeline import process_email
     from dashboard.models import Event
 
-    summary = f"From: {sender}" if sender else "Inbound email"
-    job_pk = _create_job(user_id, source='email', summary=summary)
+    job_pk = _create_job(user_id, source='email', from_address=sender or '')
 
     logger.info("TASK START user=%s message_id=%s body_len=%s", user_id, message_id, len(body) if body else 0)
 
@@ -67,7 +77,9 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
 
     _set_job_status(job_pk, 'processing')
     try:
-        process_email(user, body, attachments, sender=sender, source_email_id=message_id)
+        created, notes = process_email(user, body, attachments, sender=sender, source_email_id=message_id)
+        if notes:
+            _set_job_notes(job_pk, notes)
         _set_job_status(job_pk, 'done')
     except Exception as exc:
         logger.error("process_inbound_email: failed for user=%s: %s", user_id, exc)
@@ -89,8 +101,8 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
     from accounts.models import User
     from llm.pipeline import process_email
 
-    summary = f"File: {filename}" if filename else f"Upload ({media_type})"
-    job_pk = _create_job(user_id, source='upload', summary=summary)
+    from_address = f"{user.username}@neverdue.ca" if user else ''
+    job_pk = _create_job(user_id, source='upload', from_address=from_address)
 
     logger.info("UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
                 user_id, media_type, filename, len(context) if context else 0)
@@ -110,7 +122,9 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
 
     _set_job_status(job_pk, 'processing')
     try:
-        created = process_email(user, body, attachments)
+        created, notes = process_email(user, body, attachments)
+        if notes:
+            _set_job_notes(job_pk, notes)
         _set_job_status(job_pk, 'done')
         logger.info("UPLOAD TASK DONE user=%s events_created=%s", user_id, len(created))
     except Exception as exc:
@@ -129,9 +143,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str):
     from dashboard.models import Event
     from llm.pipeline import process_text
 
-    snippet = (prompt[:80] + '…') if len(prompt) > 80 else prompt
-    summary = f"Reprocess: {snippet}" if snippet else "Reprocess (no prompt)"
-    job_pk = _create_job(user_id, source='reprocess', summary=summary)
+    job_pk = _create_job(user_id, source='reprocess')
 
     logger.info("REPROCESS TASK START user=%s event_ids=%s", user_id, event_ids)
 
@@ -149,7 +161,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str):
     if prompt.strip():
         _set_job_status(job_pk, 'processing')
         try:
-            created = process_text(user, prompt)
+            created, _ = process_text(user, prompt)
             _set_job_status(job_pk, 'done')
             logger.info("reprocess_events: created %s new event(s) for user=%s", len(created), user_id)
         except Exception as exc:
