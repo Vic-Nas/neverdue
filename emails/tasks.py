@@ -13,7 +13,8 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
     Process a single inbound email through the LLM pipeline.
     Body and attachments are sent together in a single LLM call.
     Runs asynchronously so the Resend webhook returns immediately.
-    attachments: list of [base64_string, media_type] pairs
+    attachments: list of [base64_string, media_type] or [base64_string, media_type, filename] entries.
+                 filename is optional and used as context hints for the LLM when informative.
     """
     from accounts.models import User
     from llm.pipeline import process_email
