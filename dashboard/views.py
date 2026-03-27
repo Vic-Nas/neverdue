@@ -4,8 +4,10 @@ import json as _json
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_GET
 
 from .models import Category, Event, Rule
+from .ical import build_ics
 
 
 @login_required
@@ -379,3 +381,45 @@ def upload(request):
         return render(request, 'dashboard/upload.html', {'categories': categories})
     except Exception:
         return HttpResponse('Upload unavailable.', status=500)
+
+
+@login_required
+@require_GET
+def export_events(request):
+    """
+    Export selected active events as a .ics file download.
+
+    Query params:
+      ?ids=1,2,3   — export specific events by PK
+      ?ids=all     — export all active events for the user
+    """
+    ids_param = request.GET.get('ids', '')
+
+    if ids_param == 'all':
+        events = Event.objects.filter(
+            user=request.user,
+            status='active',
+        ).select_related('category').order_by('start')
+    else:
+        try:
+            ids = [int(i) for i in ids_param.split(',') if i.strip()]
+        except ValueError:
+            return HttpResponse('Invalid ids parameter.', status=400)
+
+        if not ids:
+            return HttpResponse('No event IDs provided.', status=400)
+
+        events = Event.objects.filter(
+            user=request.user,
+            status='active',
+            pk__in=ids,
+        ).select_related('category').order_by('start')
+
+    if not events.exists():
+        return HttpResponse('No active events found for the given IDs.', status=404)
+
+    ics_bytes = build_ics(events)
+
+    response = HttpResponse(ics_bytes, content_type='text/calendar; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="neverdue-events.ics"'
+    return response
