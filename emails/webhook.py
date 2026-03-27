@@ -58,6 +58,43 @@ SUPPORTED_ATTACHMENT_TYPES = {
 }
 
 
+def fetch_attachment_content(email_id: str, attachment_id: str) -> tuple[bytes, str] | None:
+    """
+    Fetch a single attachment's content via the Resend Attachments API.
+    Returns (raw_bytes, content_type) or None on failure.
+    """
+    api_key = getattr(settings, 'RESEND_API_KEY', '')
+    url = f"https://api.resend.com/emails/receiving/{email_id}/attachments/{attachment_id}"
+    try:
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+        if response.status_code != 200:
+            logger.error("fetch_attachment failed | id=%s | status=%s", attachment_id, response.status_code)
+            return None
+
+        data = response.json()
+        download_url = data.get('download_url')
+        content_type = data.get('content_type', '')
+
+        if not download_url:
+            logger.warning("No download_url for attachment_id=%s", attachment_id)
+            return None
+
+        dl_response = requests.get(download_url, timeout=30)
+        if dl_response.status_code != 200:
+            logger.error("Failed to download attachment from download_url | status=%s", dl_response.status_code)
+            return None
+
+        return dl_response.content, content_type
+
+    except requests.RequestException as exc:
+        logger.error("fetch_attachment_content error | attachment_id=%s | %s", attachment_id, exc)
+        return None
+
+
 def verify_resend_signature(payload_bytes, headers):
     """
     Verify Resend webhook signature using Svix signing scheme.
@@ -149,45 +186,46 @@ def extract_email_text(payload, full_email: dict = None):
 
 def extract_attachments(payload, full_email: dict = None):
     """
-    Extract supported attachments from Resend inbound webhook payload.
-    Pass `full_email` (result of fetch_full_email) to get actual attachment content.
-    Returns list of (base64_string, media_type) tuples — NOT decoded bytes.
-    tasks.py is responsible for base64 decoding.
+    Extract supported attachments using Resend's Attachments API.
+    Attachment metadata comes from the webhook payload; content is fetched separately.
+    Returns list of (base64_string, media_type) tuples.
     """
-    source = full_email if full_email else (payload.get('data') or payload)
-    attachments = source.get('attachments', [])
-    result = []
+    data = payload.get('data', {})
+    email_id = data.get('email_id')
+    attachment_metas = data.get('attachments', [])  # metadata only, from webhook
+
+    if not email_id or not attachment_metas:
+        return []
 
     if settings.DEBUG:
-        logger.debug("[DEBUG] extract_attachments | found %s attachment(s)", len(attachments))
+        logger.debug("[DEBUG] extract_attachments | found %s attachment(s) in webhook metadata", len(attachment_metas))
 
-    for idx, attachment in enumerate(attachments):
-        content_type = attachment.get('contentType') or attachment.get('content-type') or attachment.get('type', '')
-        content_type = content_type.split(';')[0].strip().lower()
+    result = []
+    for idx, attachment in enumerate(attachment_metas):
+        content_type = (attachment.get('content_type') or '').split(';')[0].strip().lower()
+        attachment_id = attachment.get('id')
 
         if content_type not in SUPPORTED_ATTACHMENT_TYPES:
             if settings.DEBUG:
                 logger.debug("[DEBUG] Attachment %s skipped — unsupported type: %s", idx, content_type)
             continue
 
-        # Generic/Postmark: base64 string in 'content'
-        content = attachment.get('content', '')
-        if not content:
-            logger.warning("Attachment %s has no content (content_type=%s)", idx, content_type)
+        if not attachment_id:
+            logger.warning("Attachment %s has no id", idx)
             continue
 
-        # Validate it's actually decodable before passing downstream
-        try:
-            base64.b64decode(content)
-        except Exception as exc:
-            logger.warning("Failed to validate attachment %s base64: %s", idx, exc)
+        fetched = fetch_attachment_content(email_id, attachment_id)
+        if fetched is None:
             continue
+
+        raw_bytes, fetched_content_type = fetched
+        final_type = fetched_content_type or content_type
+        b64 = base64.b64encode(raw_bytes).decode()
 
         if settings.DEBUG:
-            logger.debug("[DEBUG] Attachment %s accepted | type=%s", idx, content_type)
+            logger.debug("[DEBUG] Attachment %s accepted | type=%s | bytes=%s", idx, final_type, len(raw_bytes))
 
-        # Return raw b64 string — tasks.py decodes it
-        result.append((content, content_type))
+        result.append((b64, final_type))
 
     return result
 
