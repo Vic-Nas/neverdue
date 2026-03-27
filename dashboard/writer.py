@@ -24,6 +24,12 @@ def _priority_color_id(user, priority: int) -> str:
     return str(getattr(user, field, 2))
 
 
+def _resolve_color_id(user, category, event_color: str = '') -> str:
+    if event_color:
+        return str(event_color)
+    return _priority_color_id(user, category.priority if category else 1)
+
+
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
     """
     Write a single event to the DB and optionally Google Calendar.
@@ -110,7 +116,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
         },
         # Color is always set: driven by the category's priority level and the
         # user's priority color preferences, not the category's hex display color.
-        'colorId': _priority_color_id(user, category.priority if category else 1),
+        'colorId': _resolve_color_id(user, category),
     }
 
     if event_data.get('recurrence_freq'):
@@ -158,6 +164,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
         google_event_id=google_event.get('id'),
         source_email_id=event_data.get('source_email_id'),
         status='active',
+        gcal_link=google_event.get('htmlLink', ''),
     )
 
     logger.info("Event created | user=%s | event_id=%s | title=%r | start=%s", user.pk, event.pk, event.title, event.start)

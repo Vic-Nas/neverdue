@@ -22,6 +22,11 @@ class User(AbstractUser):
     timezone = models.CharField(max_length=100, default='UTC')
     timezone_auto_detected = models.BooleanField(default=False)
 
+    # GCal watch channel for push notifications
+    gcal_channel_id = models.CharField(max_length=255, null=True, blank=True)
+    gcal_channel_resource_id = models.CharField(max_length=255, null=True, blank=True)
+    gcal_channel_expiration = models.DateTimeField(null=True, blank=True)
+
     # Priority colors — stored as Google Calendar colorId (1–11).
     # Defaults: Low→Sage(2), Medium→Banana(5), High→Tangerine(6), Urgent→Tomato(11)
     priority_color_low = models.IntegerField(default=2)

@@ -89,3 +89,72 @@ def event_pre_delete(sender, instance, **kwargs):
         return
 
     delete_from_gcal(instance.user, instance.google_event_id)
+
+
+def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
+    from accounts.utils import get_valid_token
+    if not google_event_id:
+        return False
+    try:
+        token = get_valid_token(user)
+    except Exception as exc:
+        logger.warning("patch_event_color: token failed user=%s: %s", user.pk, exc)
+        return False
+    response = requests.patch(
+        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{google_event_id}',
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+        json={'colorId': color_id},
+        timeout=10,
+    )
+    if response.status_code in (200, 204):
+        return True
+    logger.warning("patch_event_color: status=%s event=%s user=%s",
+                   response.status_code, google_event_id, user.pk)
+    return False
+
+
+def register_gcal_watch(user) -> bool:
+    """
+    Register a push notification channel for the user's primary calendar.
+    Stores channel_id, resource_id, and expiration on the user.
+    Safe to call on login or channel renewal.
+    """
+    import uuid
+    from django.conf import settings
+    from accounts.utils import get_valid_token
+
+    try:
+        token = get_valid_token(user)
+    except Exception as exc:
+        logger.warning("register_gcal_watch: token failed user=%s: %s", user.pk, exc)
+        return False
+
+    channel_id = str(uuid.uuid4())
+    response = requests.post(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+        json={
+            'id': channel_id,
+            'type': 'web_hook',
+            'address': f'https://{settings.DOMAIN}/gcal/webhook/',
+        },
+        timeout=10,
+    )
+    if response.status_code != 200:
+        logger.warning("register_gcal_watch: status=%s user=%s body=%s",
+                       response.status_code, user.pk, response.text)
+        return False
+
+    data = response.json()
+    from datetime import datetime, timezone as dt_timezone
+    expiration_ms = int(data.get('expiration', 0))
+    expiration_dt = datetime.fromtimestamp(expiration_ms / 1000, tz=dt_timezone.utc)
+
+    user.gcal_channel_id = channel_id
+    user.gcal_channel_resource_id = data.get('resourceId', '')
+    user.gcal_channel_expiration = expiration_dt
+    user.save(update_fields=['gcal_channel_id', 'gcal_channel_resource_id', 'gcal_channel_expiration'])
+
+    logger.info("register_gcal_watch: registered channel=%s expiry=%s user=%s",
+                channel_id, expiration_dt, user.pk)
+    return True

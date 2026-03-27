@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import webhook
 
 app_name = 'dashboard'
 
@@ -25,4 +26,5 @@ urlpatterns = [
     path('sources/add/', views.filter_rule_add, name='filter_rule_add'),
     path('sources/<int:pk>/delete/', views.filter_rule_delete, name='filter_rule_delete'),
     path('upload/', views.upload, name='upload'),
+    path('gcal/webhook/', webhook.gcal_webhook, name='gcal_webhook'),
 ]
