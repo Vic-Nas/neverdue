@@ -285,15 +285,24 @@ def extract_events_from_email(
     recon_text = (
         f"Today's date: {today}\n"
         f"User's timezone: {user_timezone}\n\n"
-        f"Events already extracted from attachments (dates and times are ground truth):\n"
-        f"{json.dumps(attachment_events, ensure_ascii=False)}\n\n"
     )
+    if attachment_events:
+        recon_text += (
+            f"Events already extracted from attachments (dates and times are ground truth):\n"
+            f"{json.dumps(attachment_events, ensure_ascii=False)}\n\n"
+        )
     if body:
-        recon_text += f"Email body:\n{body}"
+        if attachment_events:
+            recon_text += f"Email body:\n{body}"
+        else:
+            recon_text += f"Extract all calendar events from this content:\n\n{body}"
 
     recon_content.append({'type': 'text', 'text': recon_text})
 
-    recon_system = RECONCILIATION_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+    if attachment_events:
+        recon_system = RECONCILIATION_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+    else:
+        recon_system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
     try:
         message = client.messages.create(
