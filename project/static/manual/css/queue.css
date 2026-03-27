@@ -1,0 +1,176 @@
+/* ── Queue page ── */
+.queue-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+
+.queue-page__header {
+  margin-bottom: 2rem;
+}
+
+.queue-page__title {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.35rem;
+}
+
+.queue-page__sub {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.queue-empty {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 2rem 0;
+}
+
+/* ── Queue table ── */
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.queue-table thead tr {
+  background: var(--bg);
+  border-bottom: 1.5px solid var(--border);
+}
+
+.queue-table th {
+  text-align: left;
+  padding: 0.75rem 1.25rem;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.queue-table td {
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.queue-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.queue-table tbody tr:hover {
+  background: var(--bg);
+}
+
+/* Column widths */
+.queue-table th:nth-child(1),
+.queue-table td:nth-child(1) { width: 100px; }
+
+.queue-table th:nth-child(2),
+.queue-table td:nth-child(2) { width: auto; }           /* Summary — takes remaining space */
+
+.queue-table th:nth-child(3),
+.queue-table td:nth-child(3) { width: 130px; }
+
+.queue-table th:nth-child(4),
+.queue-table td:nth-child(4) { width: 90px; white-space: nowrap; }
+
+.queue-table th:nth-child(5),
+.queue-table td:nth-child(5) { width: 140px; white-space: nowrap; color: var(--text-muted); }
+
+.queue-summary {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Status badges ── */
+.queue-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.queue-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status--queued {
+  background: #f0f0f0;
+  color: var(--text-muted);
+}
+.status--queued::before { background: #aaa; }
+
+.status--processing {
+  background: #fff8e1;
+  color: #b07d00;
+}
+.status--processing::before {
+  background: #f0a500;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.status--done {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.status--done::before { background: var(--accent); }
+
+.status--failed {
+  background: #fdecea;
+  color: var(--danger);
+}
+.status--failed::before { background: var(--danger); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* ── Queue nav badge ── */
+.topnav__link--queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.queue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  animation: badge-pop 0.2s ease-out;
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}

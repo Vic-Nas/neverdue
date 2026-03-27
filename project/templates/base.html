@@ -31,7 +31,7 @@
     <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
     {% endif %}
     <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
-      Queue<span class="queue-badge" id="queue-badge" hidden></span>
+       (<span class="queue-badge" id="queue-badge" hidden></span>)
     </a>
     {% endif %}
     <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
