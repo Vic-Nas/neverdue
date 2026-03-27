@@ -45,8 +45,6 @@
     <h1 class="page__title">{% if event %}Edit event{% else %}New event{% endif %}</h1>
   </div>
 
-  {% if event %}
-
   <form method="post" class="event-form">
     {% csrf_token %}
 
@@ -59,12 +57,12 @@
       <div class="form-group">
         <label for="start">Starts</label>
         <input type="datetime-local" id="start" name="start"
-          value="{{ event.start|date:'Y-m-d' }}T{{ event.start|time:'H:i'|default:'' }}" required>
+          value="{% if event %}{{ event.start|date:'Y-m-d' }}T{{ event.start|time:'H:i' }}{% endif %}" required>
       </div>
       <div class="form-group">
         <label for="end">Ends</label>
         <input type="datetime-local" id="end" name="end"
-          value="{{ event.end|date:'Y-m-d' }}T{{ event.end|time:'H:i'|default:'' }}" required>
+          value="{% if event %}{{ event.end|date:'Y-m-d' }}T{{ event.end|time:'H:i' }}{% endif %}" required>
       </div>
     </div>
 
@@ -114,7 +112,7 @@
 
   </form>
 
-  {# ── Prompt-based edit — only for existing events ── #}
+  {# AI edit — only for existing events #}
   {% if event %}
   <div class="prompt-edit-section">
     <h2 class="prompt-edit-section__title">Edit with AI</h2>
