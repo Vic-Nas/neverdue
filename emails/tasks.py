@@ -110,7 +110,7 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
 def reprocess_events(user_id: int, event_ids: list, prompt: str):
     """
     Delete selected events (and from GCal), then re-extract using the prompt text.
-    Called from the bulk reprocess action on the dashboard.
+    GCal deletion is handled automatically by the pre_delete signal on Event.
     """
     from accounts.models import User
     from dashboard.models import Event
@@ -125,22 +125,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str):
         return
 
     events = Event.objects.filter(pk__in=event_ids, user=user)
-
-    for event in events:
-        if event.google_event_id:
-            try:
-                from accounts.utils import get_valid_token
-                import requests as http
-                token = get_valid_token(user)
-                http.delete(
-                    f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                    headers={'Authorization': f'Bearer {token}'},
-                    timeout=10,
-                )
-            except Exception as exc:
-                logger.warning("reprocess_events: failed to delete gcal event %s: %s", event.google_event_id, exc)
-
-    deleted_count, _ = events.delete()
+    deleted_count, _ = events.delete()  # signal fires per instance, handles GCal
     logger.info("reprocess_events: deleted %s event(s) for user=%s", deleted_count, user_id)
 
     if prompt.strip():
@@ -170,15 +155,22 @@ def cleanup_events():
     1. Delete expired pending events (pending_expires_at <= today).
     2. For users with auto_delete_past_events enabled, delete active events
        whose end date is older than their retention setting.
-    Scheduled via Celery Beat to run daily.
+
+    Pending events are never in GCal — no cleanup needed there.
+
+    For past active events: respects delete_from_gcal_on_cleanup preference.
+    - If True:  call delete_from_gcal() directly, then delete the row.
+                _skip_gcal_delete=True is set so the signal doesn't double-delete.
+    - If False: set _skip_gcal_delete=True so the signal skips GCal,
+                then delete the row (leaves event in GCal as user intended).
     """
     from dashboard.models import Event
+    from dashboard.gcal import delete_from_gcal
     from accounts.models import User
-    import requests as http
 
     today = timezone.now().date()
 
-    # 1. Delete expired pending events
+    # 1. Delete expired pending events (never in GCal, signal skips them automatically)
     expired_pending = Event.objects.filter(
         status='pending',
         pending_expires_at__lte=today,
@@ -195,19 +187,13 @@ def cleanup_events():
         old_events = Event.objects.filter(user=user, status='active', end__lt=cutoff)
 
         for event in old_events:
-            if user.delete_from_gcal_on_cleanup and event.google_event_id:
-                try:
-                    from accounts.utils import get_valid_token
-                    token = get_valid_token(user)
-                    http.delete(
-                        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                        headers={'Authorization': f'Bearer {token}'},
-                        timeout=10,
-                    )
-                except Exception as exc:
-                    logger.warning("cleanup_events: failed to delete gcal event %s for user=%s: %s",
-                                   event.google_event_id, user.pk, exc)
+            # Mark the instance so the pre_delete signal always skips GCal —
+            # we handle it ourselves here to respect the preference.
+            event._skip_gcal_delete = True
 
-        deleted_count, _ = old_events.delete()
-        if deleted_count:
-            logger.info("cleanup_events: deleted %s past event(s) for user=%s", deleted_count, user.pk)
+            if user.delete_from_gcal_on_cleanup and event.google_event_id:
+                delete_from_gcal(user, event.google_event_id)
+
+            event.delete()
+            logger.info("cleanup_events: deleted event_id=%s for user=%s (gcal_removed=%s)",
+                        event.pk, user.pk, user.delete_from_gcal_on_cleanup)
