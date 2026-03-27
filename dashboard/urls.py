@@ -16,6 +16,7 @@ urlpatterns = [
     path('events/<int:pk>/prompt-edit/', views.event_prompt_edit, name='event_prompt_edit'),
     path('categories/', views.categories, name='categories'),
     path('categories/new/', views.category_edit, name='category_create'),
+    path('categories/<int:pk>/', views.category_detail, name='category_detail'),
     path('categories/<int:pk>/edit/', views.category_edit, name='category_edit'),
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
     path('sources/', views.email_sources, name='email_sources'),

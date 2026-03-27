@@ -168,6 +168,51 @@ def extract_events_from_image(
     return _parse_and_validate(message, tz)
 
 
+def extract_events_from_email(
+    body: str,
+    attachments: list[tuple[bytes, str]],  # list of (file_bytes, media_type)
+    language: str = 'English',
+    user_timezone: str = 'UTC',
+) -> list[dict]:
+    """
+    Extract calendar events from an email body + attachments in a single LLM call.
+    attachments: list of (file_bytes, media_type) tuples.
+    """
+    import base64
+
+    tz = _get_tz(user_timezone)
+    today = _today_in_tz(tz)
+    system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+
+    content = []
+
+    for file_bytes, media_type in attachments:
+        encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
+        if media_type == 'application/pdf':
+            content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+        else:
+            content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+
+    user_text = (
+        f"Today's date: {today}\n"
+        f"User's timezone: {user_timezone}\n\n"
+        f"Extract all calendar events from this email and its attachments."
+    )
+    if body:
+        user_text += f"\n\nEmail body:\n{body}"
+
+    content.append({'type': 'text', 'text': user_text})
+
+    message = client.messages.create(
+        model=settings.LLM_MODEL,
+        max_tokens=2000,
+        system=system,
+        messages=[{'role': 'user', 'content': content}]
+    )
+
+    return _parse_and_validate(message, tz)
+
+
 def _parse_and_validate(message, tz) -> list[dict]:
     """Parse LLM response and validate each event."""
     raw = message.content[0].text.strip()
