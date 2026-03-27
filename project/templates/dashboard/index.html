@@ -148,6 +148,7 @@
     <span class="bulk-bar__count"><span id="selected-count">0</span> selected</span>
     <div class="bulk-bar__actions">
       <button type="button" class="btn-ghost btn btn--sm" id="select-all-btn">Select all</button>
+      <a id="export-btn" href="#" class="btn btn-ghost btn--sm" style="display:none;text-decoration:none;">Export .ics</a>
       <button type="button" class="btn-ghost btn btn--sm btn--danger" id="bulk-delete-btn">Delete</button>
       <button type="button" class="btn-ghost btn btn--sm" id="bulk-reprocess-btn">Re-process with prompt…</button>
     </div>
@@ -252,9 +253,19 @@ function getSelectedIds() {
 
 function updateBulkBar() {
   const count = getChecked().length;
+  const ids = getSelectedIds();
   selectedCountEl.textContent = count;
   bulkBar.classList.toggle('visible', count > 0);
   selectAllBtn.textContent = count === getCheckboxes().length ? 'Deselect all' : 'Select all';
+  
+  // Update export button href
+  const exportBtn = document.getElementById('export-btn');
+  if (count > 0) {
+    exportBtn.style.display = 'inline-block';
+    exportBtn.href = "{% url 'dashboard:events_export' %}?ids=" + ids.join(',');
+  } else {
+    exportBtn.style.display = 'none';
+  }
 }
 
 function enterSelectMode() {

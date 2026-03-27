@@ -8,6 +8,7 @@ urlpatterns = [
     # Literal paths first (more specific)
     path('events/new/', views.event_edit, name='event_create'),
     path('events/bulk/', views.events_bulk_action, name='events_bulk_action'),
+    path('events/export/', views.export_events, name='events_export'),
     # Parameterized paths (less specific)
     path('events/<int:pk>/', views.event_detail, name='event_detail'),
     path('events/<int:pk>/edit/', views.event_edit, name='event_edit'),
