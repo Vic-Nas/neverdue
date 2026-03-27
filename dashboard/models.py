@@ -5,9 +5,17 @@ from accounts.models import User
 
 
 class Category(models.Model):
+    PRIORITY_CHOICES = [
+        (1, 'Low'),
+        (2, 'Medium'),
+        (3, 'High'),
+        (4, 'Urgent'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
-    color = models.CharField(max_length=7, null=True, blank=True)  # hex color
+    color = models.CharField(max_length=7, null=True, blank=True)  # hex color for UI display
+    priority = models.IntegerField(choices=PRIORITY_CHOICES, default=1)
     reminders = models.JSONField(default=list)  # e.g. [{"minutes": 10080}, {"minutes": 60}]
     created_at = models.DateTimeField(auto_now_add=True)
 

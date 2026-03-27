@@ -32,6 +32,7 @@
         <div class="cat-card__name">
           <span class="cat-card__dot" {% if cat.color %}style="background:{{ cat.color }}"{% endif %}></span>
           <a href="{% url 'dashboard:category_detail' pk=cat.pk %}" class="cat-card__name-link">{{ cat.name }}</a>
+          <span class="priority-badge priority-badge--{{ cat.priority }}">{{ cat.get_priority_display }}</span>
         </div>
         <div class="cat-card__actions">
           <a href="{% url 'dashboard:category_edit' pk=cat.pk %}" class="btn-ghost btn btn--sm">Edit</a>

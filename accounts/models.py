@@ -22,6 +22,13 @@ class User(AbstractUser):
     timezone = models.CharField(max_length=100, default='UTC')
     timezone_auto_detected = models.BooleanField(default=False)
 
+    # Priority colors — stored as Google Calendar colorId (1–11).
+    # Defaults: Low→Sage(2), Medium→Banana(5), High→Tangerine(6), Urgent→Tomato(11)
+    priority_color_low = models.IntegerField(default=2)
+    priority_color_medium = models.IntegerField(default=5)
+    priority_color_high = models.IntegerField(default=6)
+    priority_color_urgent = models.IntegerField(default=11)
+
     @property
     def is_pro(self):
         return hasattr(self, 'subscription') and self.subscription.is_pro

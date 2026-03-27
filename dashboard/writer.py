@@ -10,6 +10,20 @@ from dashboard.models import Event, Category
 logger = logging.getLogger(__name__)
 
 
+# Maps Category.priority (1–4) to the user preference field name.
+_PRIORITY_FIELD = {
+    1: 'priority_color_low',
+    2: 'priority_color_medium',
+    3: 'priority_color_high',
+    4: 'priority_color_urgent',
+}
+
+
+def _priority_color_id(user, priority: int) -> str:
+    field = _PRIORITY_FIELD.get(priority, 'priority_color_low')
+    return str(getattr(user, field, 2))
+
+
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
     """
     Write a single event to the DB and optionally Google Calendar.
@@ -94,6 +108,9 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
             'useDefault': False,
             'overrides': reminders,
         },
+        # Color is always set: driven by the category's priority level and the
+        # user's priority color preferences, not the category's hex display color.
+        'colorId': _priority_color_id(user, category.priority if category else 1),
     }
 
     if event_data.get('recurrence_freq'):
@@ -104,9 +121,6 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
             until = event_data['recurrence_until'].replace('-', '')
             rrule += f';UNTIL={until}T000000Z'
         body['recurrence'] = [rrule]
-
-    if category and category.color:
-        body['colorId'] = _hex_to_google_color(category.color)
 
     if settings.DEBUG:
         logger.debug("[DEBUG] POSTing to Google Calendar API | body=%s", body)
@@ -148,20 +162,3 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
 
     logger.info("Event created | user=%s | event_id=%s | title=%r | start=%s", user.pk, event.pk, event.title, event.start)
     return event
-
-
-def _hex_to_google_color(hex_color: str) -> str:
-    mapping = {
-        '#7986cb': '1',
-        '#33b679': '2',
-        '#8e24aa': '3',
-        '#e67c73': '4',
-        '#f6c026': '5',
-        '#f5511d': '6',
-        '#039be5': '7',
-        '#616161': '8',
-        '#3f51b5': '9',
-        '#0b8043': '10',
-        '#d60000': '11',
-    }
-    return mapping.get(hex_color.lower(), '1')

@@ -13,6 +13,38 @@
   letter-spacing: 0.02em;
 }
 
+/* ── Priority badge ── */
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.priority-badge--1 {
+  background: #e6f4ea;
+  color: #2d6a4f;
+}
+
+.priority-badge--2 {
+  background: #fef9e0;
+  color: #7d6608;
+}
+
+.priority-badge--3 {
+  background: #fdebd0;
+  color: #a04000;
+}
+
+.priority-badge--4 {
+  background: #fdecea;
+  color: #922b21;
+}
+
 /* ── Category list ── */
 .cat-list {
   display: flex;
