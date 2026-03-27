@@ -32,6 +32,20 @@
       </div>
     </div>
 
+    {# ── Priority ── #}
+    <div class="form-row">
+      <div class="form-group">
+        <label for="priority">Priority</label>
+        <select id="priority" name="priority">
+          <option value="1" {% if not category or category.priority == 1 %}selected{% endif %}>Low</option>
+          <option value="2" {% if category.priority == 2 %}selected{% endif %}>Medium</option>
+          <option value="3" {% if category.priority == 3 %}selected{% endif %}>High</option>
+          <option value="4" {% if category.priority == 4 %}selected{% endif %}>Urgent</option>
+        </select>
+        <p class="form-hint">Sets the color of events in this category on Google Calendar, based on your priority colors in preferences.</p>
+      </div>
+    </div>
+
     {# ── Reminders ── #}
     <div class="form-section">
       <div class="form-section__header">
@@ -64,10 +78,6 @@
         {% if category %}
           {% for rule in category.rules.all %}
           <div class="rule-row">
-            {#
-              Rule.pattern holds either a sender (email/domain) or a keyword.
-              We show it in the sender field — user can move it to keyword if needed.
-            #}
             <input type="text" name="rule_sender" value="{{ rule.pattern }}" placeholder="Sender (e.g. prof@uni.ca)">
             <span class="rule-row__sep">or contains</span>
             <input type="text" name="rule_keyword" value="" placeholder="Keyword (e.g. deadline)">

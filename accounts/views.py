@@ -22,6 +22,23 @@ LANGUAGES = [
     'Português', 'Italiano', '中文', '日本語', 'العربية',
 ]
 
+# Google Calendar color palette (colorId → display info).
+GCAL_COLORS = [
+    {'id': 1,  'name': 'Lavender',  'hex': '#7986cb'},
+    {'id': 2,  'name': 'Sage',      'hex': '#33b679'},
+    {'id': 3,  'name': 'Grape',     'hex': '#8e24aa'},
+    {'id': 4,  'name': 'Flamingo',  'hex': '#e67c73'},
+    {'id': 5,  'name': 'Banana',    'hex': '#f6c026'},
+    {'id': 6,  'name': 'Tangerine', 'hex': '#f5511d'},
+    {'id': 7,  'name': 'Peacock',   'hex': '#039be5'},
+    {'id': 8,  'name': 'Graphite',  'hex': '#616161'},
+    {'id': 9,  'name': 'Blueberry', 'hex': '#3f51b5'},
+    {'id': 10, 'name': 'Basil',     'hex': '#0b8043'},
+    {'id': 11, 'name': 'Tomato',    'hex': '#d60000'},
+]
+
+VALID_PRIORITY_COLOR_IDS = {c['id'] for c in GCAL_COLORS}
+
 
 def login(request):
     if request.user.is_authenticated:
@@ -154,6 +171,15 @@ def username_pick(request):
     return render(request, 'accounts/username_pick.html')
 
 
+def _parse_priority_color(post, field, default):
+    """Parse and validate a priority colorId from POST data."""
+    try:
+        value = int(post.get(field, default))
+    except (ValueError, TypeError):
+        return default
+    return value if value in VALID_PRIORITY_COLOR_IDS else default
+
+
 @login_required
 def preferences(request):
     if request.method == 'POST':
@@ -168,9 +194,13 @@ def preferences(request):
         except (ValueError, TypeError):
             retention_days = 30
 
-        # Validate timezone
         if timezone_str not in zoneinfo.available_timezones():
             timezone_str = 'UTC'
+
+        priority_color_low    = _parse_priority_color(request.POST, 'priority_color_low',    2)
+        priority_color_medium = _parse_priority_color(request.POST, 'priority_color_medium',  5)
+        priority_color_high   = _parse_priority_color(request.POST, 'priority_color_high',    6)
+        priority_color_urgent = _parse_priority_color(request.POST, 'priority_color_urgent', 11)
 
         request.user.language = language
         request.user.auto_delete_past_events = auto_delete
@@ -178,6 +208,10 @@ def preferences(request):
         request.user.delete_from_gcal_on_cleanup = delete_gcal
         request.user.timezone = timezone_str
         request.user.timezone_auto_detected = False
+        request.user.priority_color_low    = priority_color_low
+        request.user.priority_color_medium = priority_color_medium
+        request.user.priority_color_high   = priority_color_high
+        request.user.priority_color_urgent = priority_color_urgent
         request.user.save(update_fields=[
             'language',
             'auto_delete_past_events',
@@ -185,11 +219,27 @@ def preferences(request):
             'delete_from_gcal_on_cleanup',
             'timezone',
             'timezone_auto_detected',
+            'priority_color_low',
+            'priority_color_medium',
+            'priority_color_high',
+            'priority_color_urgent',
         ])
         messages.success(request, 'Preferences saved.')
         return redirect('accounts:preferences')
 
-    return render(request, 'accounts/preferences.html', {'languages': LANGUAGES})
+    user = request.user
+    priority_levels = [
+        {'label': 'Low',    'field': 'priority_color_low',    'current': user.priority_color_low},
+        {'label': 'Medium', 'field': 'priority_color_medium', 'current': user.priority_color_medium},
+        {'label': 'High',   'field': 'priority_color_high',   'current': user.priority_color_high},
+        {'label': 'Urgent', 'field': 'priority_color_urgent', 'current': user.priority_color_urgent},
+    ]
+
+    return render(request, 'accounts/preferences.html', {
+        'languages': LANGUAGES,
+        'gcal_colors': GCAL_COLORS,
+        'priority_levels': priority_levels,
+    })
 
 
 VALID_TIMEZONES = zoneinfo.available_timezones()
@@ -214,7 +264,6 @@ def set_timezone_auto(request):
         return JsonResponse({'ok': False, 'error': 'unknown timezone'}, status=400)
 
     user = request.user
-    # Only auto-set if user has never manually chosen a timezone
     if user.timezone == 'UTC' and not user.timezone_auto_detected:
         user.timezone = tz
         user.timezone_auto_detected = True
@@ -229,7 +278,6 @@ def set_timezone_manual(request):
     """
     Called from preferences form when user explicitly picks a timezone.
     Sets timezone_auto_detected = False so auto-detection never overwrites it again.
-    You can wire this into your existing preferences save view instead if you prefer.
     """
     try:
         data = json.loads(request.body)
@@ -242,7 +290,7 @@ def set_timezone_manual(request):
 
     user = request.user
     user.timezone = tz
-    user.timezone_auto_detected = False  # manually set = don't auto-overwrite ever again
+    user.timezone_auto_detected = False
     user.save(update_fields=['timezone', 'timezone_auto_detected'])
 
     return JsonResponse({'ok': True, 'timezone': user.timezone})

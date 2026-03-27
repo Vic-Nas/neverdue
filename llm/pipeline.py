@@ -114,11 +114,27 @@ def _check_and_increment_scans(user) -> bool:
     return True
 
 
+def _get_or_create_uncategorized(user):
+    """
+    Lazily create the Uncategorized category for a user.
+    Always priority=1 (low). Created only when needed.
+    """
+    from dashboard.models import Category
+    category, _ = Category.objects.get_or_create(
+        user=user,
+        name='Uncategorized',
+        defaults={'priority': 1},
+    )
+    return category
+
+
 def _save_events(user, events: list, sender: str = '', source_email_id: str = '') -> list:
     created = []
     for event_data in events:
         event_data['source_email_id'] = source_email_id
         category = resolve_category(user, event_data, sender)
+        if category is None:
+            category = _get_or_create_uncategorized(user)
         event = write_event_to_calendar(user, event_data, category)
         if event:
             created.append(event)

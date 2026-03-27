@@ -1,6 +1,16 @@
 # dashboard/ical.py
-from icalendar import Calendar, Event as VEvent, vText
+from icalendar import Calendar, Event as VEvent, vText, vInt
 from datetime import datetime, timezone as dt_timezone
+
+
+# RFC 5545 PRIORITY: 1=highest, 9=lowest, 0=undefined.
+# Maps Category.priority (1=low … 4=urgent) to iCal PRIORITY value.
+_ICAL_PRIORITY = {
+    1: 9,  # low
+    2: 5,  # medium
+    3: 3,  # high
+    4: 1,  # urgent
+}
 
 
 def build_ics(events) -> bytes:
@@ -33,6 +43,8 @@ def build_ics(events) -> bytes:
 
         if event.category:
             vevent.add('categories', [event.category.name])
+            ical_priority = _ICAL_PRIORITY.get(event.category.priority, 0)
+            vevent.add('priority', ical_priority)
 
         vevent.add('status', 'CONFIRMED')
         vevent.add('dtstamp', datetime.now(tz=dt_timezone.utc))
