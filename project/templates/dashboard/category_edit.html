@@ -64,9 +64,13 @@
         {% if category %}
           {% for rule in category.rules.all %}
           <div class="rule-row">
-            <input type="text" name="rule_sender" value="{{ rule.sender|default:'' }}" placeholder="Sender (e.g. prof@uni.ca)">
+            {#
+              Rule.pattern holds either a sender (email/domain) or a keyword.
+              We show it in the sender field — user can move it to keyword if needed.
+            #}
+            <input type="text" name="rule_sender" value="{{ rule.pattern }}" placeholder="Sender (e.g. prof@uni.ca)">
             <span class="rule-row__sep">or contains</span>
-            <input type="text" name="rule_keyword" value="{{ rule.keyword|default:'' }}" placeholder="Keyword (e.g. deadline)">
+            <input type="text" name="rule_keyword" value="" placeholder="Keyword (e.g. deadline)">
             <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
           </div>
           {% endfor %}

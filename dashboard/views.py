@@ -262,6 +262,7 @@ def category_edit(request, pk=None):
             color = request.POST.get('color', '').strip()
             reminders_raw = request.POST.getlist('reminders')
             reminders = [{'minutes': int(m)} for m in reminders_raw if m.isdigit()]
+
             if category:
                 category.name = name
                 category.color = color
@@ -274,21 +275,35 @@ def category_edit(request, pk=None):
                     color=color,
                     reminders=reminders,
                 )
+
+            # Rebuild rules from scratch
             category.rules.all().delete()
             senders = request.POST.getlist('rule_sender')
             keywords = request.POST.getlist('rule_keyword')
+
             for sender, keyword in zip(senders, keywords):
-                if sender or keyword:
-                    Rule.objects.create(
+                sender = sender.strip()
+                keyword = keyword.strip()
+                # Each non-empty field becomes its own rule with action='categorize'
+                if sender:
+                    Rule.objects.get_or_create(
                         user=request.user,
-                        category=category,
-                        sender=sender or None,
-                        keyword=keyword or None,
+                        pattern=sender,
+                        defaults={'action': 'categorize', 'category': category},
                     )
+                if keyword:
+                    Rule.objects.get_or_create(
+                        user=request.user,
+                        pattern=keyword,
+                        defaults={'action': 'categorize', 'category': category},
+                    )
+
             return redirect('dashboard:categories')
         return render(request, 'dashboard/category_edit.html', {'category': category})
-    except Exception:
-        return HttpResponse('Could not save category.', status=500)
+    except Exception as e:
+        import traceback, logging
+        logging.getLogger(__name__).error(traceback.format_exc())
+        return HttpResponse(f'Could not save category: {e}', status=500)
 
 
 @login_required
