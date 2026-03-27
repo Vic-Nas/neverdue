@@ -82,16 +82,23 @@ RECONCILIATION_PROMPT = """You are a calendar event reconciler. You are given:
 1. A list of events already extracted from attachments (their dates and times are ground truth — do not modify them)
 2. An email body and any non-calendar attachments that may provide additional context
 
-Your job is to produce a final merged event list by:
-- Enriching extracted events with context from the body (e.g. location, description, recurrence end date) without overriding their dates or times
-- Folding complementary attachment info (e.g. room lists, instructor names) into event descriptions
-- Merging duplicate events (same title + same start time) into one, keeping the most complete version
-- Adding new events found only in the body that are not already covered by the extracted events
-- If the body contradicts an extracted event's date or time, do NOT override — set status "pending" and explain the conflict in "concern"
+Your job is to produce a final merged event list. Apply these rules strictly in order:
 
-Return ONLY a valid JSON array using the same schema as the input events. No explanation, no markdown, no extra text.
+RECURRENCE: If the body states that a schedule repeats (e.g. "every week", "weekly until X", "repeats from date A to date B"), apply recurrence_freq and recurrence_until to all matching extracted events. A past start date is NOT a reason to mark an event pending if it has a future recurrence_until — set status "active". This is the most important rule.
 
-Never return null values — use empty strings instead."""
+CATEGORY: If the body or filename provides category context (e.g. "exams calendar", "weekly courses"), override category_hint on matching events accordingly. Exam events must use a hint like "Examens", course events "Cours", etc.
+
+ENRICHMENT: Add context from the body to descriptions (location, instructor, notes) without changing dates or times.
+
+COMPLEMENTARY ATTACHMENTS: Fold info from non-calendar attachments (room lists, etc.) into event descriptions.
+
+DEDUPLICATION: Merge events with the same title and same start time into one, keeping the most complete version.
+
+NEW EVENTS: Add events mentioned only in the body that are not covered by the extracted events.
+
+CONFLICTS: If the body contradicts an extracted event's date or time, do NOT override — set status "pending" and explain in "concern".
+
+Return ONLY a valid JSON array using the same schema as the input events. No explanation, no markdown, no extra text. Never return null values — use empty strings instead."""
 
 
 # Filename stems that carry no useful information for the LLM.
