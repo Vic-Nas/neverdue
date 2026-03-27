@@ -1,5 +1,6 @@
 # llm/extractor.py
 import json
+import re
 import zoneinfo
 from datetime import datetime, timezone as dt_timezone
 import anthropic
@@ -75,6 +76,61 @@ Example output:
     "expires_at": ""
   }
 ]"""
+
+# Filename stems that carry no useful information for the LLM.
+_JUNK_STEMS = frozenset({
+    'screenshot', 'screen shot', 'image', 'img', 'photo', 'pic', 'picture',
+    'scan', 'scanned', 'document', 'doc', 'file', 'attachment', 'attach',
+    'untitled', 'unnamed', 'noname', 'new', 'copy', 'temp', 'tmp',
+    'download', 'export', 'output',
+})
+
+# A filename is junk if its stem (after stripping extension) is:
+#   • one of the known junk words above (case-insensitive), optionally followed
+#     by digits / separators  (e.g. "screenshot_001", "image(2)")
+#   • a UUID  (8-4-4-4-12 hex)
+#   • a pure timestamp / mostly-numeric blob  (e.g. "20241023_143812",
+#     "1714123456789", "2024-10-23T14-38-12")
+_RE_UUID = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    re.IGNORECASE,
+)
+_RE_TIMESTAMP = re.compile(r'^[\d_\-T:.]+$')  # only digits and separators
+
+
+def _is_informative_filename(filename: str) -> bool:
+    """
+    Return True only if the filename stem is likely to carry useful context
+    for the LLM (e.g. 'final_exam_schedule_fall2026' → True,
+    'screenshot_20241023_143812' → False).
+    """
+    if not filename:
+        return False
+
+    stem = filename.rsplit('.', 1)[0]  # strip extension
+    stem_stripped = stem.strip()
+
+    if len(stem_stripped) <= 4:
+        return False
+
+    if _RE_UUID.match(stem_stripped):
+        return False
+
+    if _RE_TIMESTAMP.match(stem_stripped):
+        return False
+
+    # Normalise to lowercase words for junk-word check
+    words = re.split(r'[\s_\-.()\[\]]+', stem_stripped.lower())
+    non_numeric_words = [w for w in words if w and not w.isdigit()]
+
+    if not non_numeric_words:
+        return False  # nothing but numbers and separators
+
+    # Junk if every non-numeric word is a known junk term
+    if all(w in _JUNK_STEMS for w in non_numeric_words):
+        return False
+
+    return True
 
 
 def _get_tz(tz_name: str) -> zoneinfo.ZoneInfo:
@@ -170,13 +226,14 @@ def extract_events_from_image(
 
 def extract_events_from_email(
     body: str,
-    attachments: list[tuple[bytes, str]],  # list of (file_bytes, media_type)
+    attachments: list[tuple[bytes, str, str]],  # list of (file_bytes, media_type, filename)
     language: str = 'English',
     user_timezone: str = 'UTC',
 ) -> list[dict]:
     """
     Extract calendar events from an email body + attachments in a single LLM call.
-    attachments: list of (file_bytes, media_type) tuples.
+    attachments: list of (file_bytes, media_type, filename) tuples.
+                 filename is used as a context hint when it is informative.
     """
     import base64
 
@@ -186,7 +243,11 @@ def extract_events_from_email(
 
     content = []
 
-    for file_bytes, media_type in attachments:
+    for file_bytes, media_type, filename in attachments:
+        # Prepend a filename hint as a text block when the name is informative.
+        if _is_informative_filename(filename):
+            content.append({'type': 'text', 'text': f'Attachment filename: {filename}'})
+
         encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
         if media_type == 'application/pdf':
             content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})

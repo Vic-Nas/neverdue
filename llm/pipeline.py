@@ -61,7 +61,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
     """
     Full pipeline for an inbound email with optional attachments.
     Body and attachments are sent together in a single LLM call.
-    attachments: list of (base64_string, media_type) tuples (as received from webhook).
+    attachments: list of [base64_string, media_type] or [base64_string, media_type, filename] entries.
     """
     from .extractor import extract_events_from_email
     import base64
@@ -72,11 +72,13 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
 
-    # Decode b64 attachments to bytes
+    # Decode b64 attachments to bytes, carrying the optional filename through.
     decoded_attachments = []
-    for b64_content, media_type in (attachments or []):
+    for entry in (attachments or []):
         try:
-            decoded_attachments.append((base64.b64decode(b64_content), media_type))
+            b64_content, media_type = entry[0], entry[1]
+            filename = entry[2] if len(entry) > 2 else ''
+            decoded_attachments.append((base64.b64decode(b64_content), media_type, filename))
         except Exception:
             continue
 
