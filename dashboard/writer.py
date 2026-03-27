@@ -30,6 +30,34 @@ def _resolve_color_id(user, category, event_color: str = '') -> str:
     return _priority_color_id(user, category.priority if category else 1)
 
 
+def _build_gcal_body(event) -> dict:
+    """Build GCal API request body from an Event instance."""
+    reminders = []
+    if event.category and event.category.reminders:
+        reminders = [
+            {'method': 'popup', 'minutes': r['minutes']}
+            for r in event.category.reminders
+        ]
+
+    body = {
+        'summary': event.title,
+        'description': event.description or '',
+        'start': {'dateTime': event.start.isoformat(), 'timeZone': 'UTC'},
+        'end': {'dateTime': event.end.isoformat(), 'timeZone': 'UTC'},
+        'reminders': {'useDefault': False, 'overrides': reminders},
+        'colorId': _resolve_color_id(event.user, event.category, event.color),
+    }
+
+    if event.recurrence_freq:
+        rrule = f"RRULE:FREQ={event.recurrence_freq}"
+        if event.recurrence_until:
+            until = event.recurrence_until.strftime('%Y%m%d')
+            rrule += f';UNTIL={until}T000000Z'
+        body['recurrence'] = [rrule]
+
+    return body
+
+
 def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
     """
     Write a single event to the DB and optionally Google Calendar.

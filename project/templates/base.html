@@ -27,6 +27,9 @@
     <a href="{% url 'dashboard:index' %}" class="topnav__link {% if request.resolver_match.url_name == 'index' %}topnav__link--active{% endif %}">Dashboard</a>
     <a href="{% url 'dashboard:categories' %}" class="topnav__link {% if 'categor' in request.resolver_match.url_name %}topnav__link--active{% endif %}">Categories</a>
     <a href="{% url 'dashboard:email_sources' %}" class="topnav__link {% if request.resolver_match.url_name == 'email_sources' %}topnav__link--active{% endif %}">Sources</a>
+    <a href="https://calendar.google.com/calendar/u/0/r"
+       target="_blank" rel="noopener"
+       class="topnav__link">Calendar ↗</a>
     {% if user.is_pro %}
     <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
     {% endif %}

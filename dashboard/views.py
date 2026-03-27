@@ -75,7 +75,11 @@ def event_edit(request, pk=None):
                 messages.error(request, 'Invalid date format.')
                 return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
 
+            from django.contrib import messages
+            from dashboard.gcal import push_event_to_gcal, update_event_in_gcal
+
             if event:
+                was_pending = event.status == 'pending'
                 event.title = title
                 event.description = description
                 event.start = start_dt
@@ -83,10 +87,23 @@ def event_edit(request, pk=None):
                 event.category = category
                 event.recurrence_freq = recurrence_freq
                 event.recurrence_until = recurrence_until or None
-                if event.status == 'pending':
+
+                if was_pending:
                     event.status = 'active'
                     event.pending_expires_at = None
-                event.save()
+                    event.save()
+                    result = push_event_to_gcal(request.user, event)
+                    if result:
+                        html_link, gcal_id = result
+                        event.google_event_id = gcal_id
+                        event.gcal_link = html_link
+                        event.save(update_fields=['google_event_id', 'gcal_link'])
+                    else:
+                        messages.warning(request, 'Event saved but could not sync to Google Calendar.')
+                else:
+                    event.save()
+                    if not update_event_in_gcal(request.user, event):
+                        messages.warning(request, 'Event saved but could not sync to Google Calendar.')
             else:
                 event = Event.objects.create(
                     user=request.user,
@@ -98,6 +115,14 @@ def event_edit(request, pk=None):
                     recurrence_freq=recurrence_freq,
                     recurrence_until=recurrence_until or None,
                 )
+                result = push_event_to_gcal(request.user, event)
+                if result:
+                    html_link, gcal_id = result
+                    event.google_event_id = gcal_id
+                    event.gcal_link = html_link
+                    event.save(update_fields=['google_event_id', 'gcal_link'])
+                else:
+                    messages.warning(request, 'Event saved but could not sync to Google Calendar.')
             return redirect('dashboard:event_detail', pk=event.pk)
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
     except Exception as e:
