@@ -74,6 +74,14 @@
   </div>
   {% endif %}
 
+  {% if event.gcal_link %}
+  <div class="page__footer-gcal">
+    <a href="{{ event.gcal_link }}" target="_blank" rel="noopener" class="btn-ghost btn">
+      Open in Google Calendar ↗
+    </a>
+  </div>
+  {% endif %}
+
   <div class="page__footer">
     <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">← Back to dashboard</a>
   </div>

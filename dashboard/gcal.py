@@ -91,6 +91,47 @@ def event_pre_delete(sender, instance, **kwargs):
     delete_from_gcal(instance.user, instance.google_event_id)
 
 
+def push_event_to_gcal(user, event):
+    """Create a new GCal event. Returns (html_link, gcal_id) or None."""
+    from dashboard.writer import _build_gcal_body
+    try:
+        token = get_valid_token(user)
+    except ValueError:
+        return None
+
+    body = _build_gcal_body(event)
+    response = requests.post(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+        json=body,
+        timeout=10,
+    )
+    if response.status_code not in (200, 201):
+        return None
+    data = response.json()
+    return data.get('htmlLink', ''), data.get('id', '')
+
+
+def update_event_in_gcal(user, event) -> bool:
+    """Patch an existing GCal event. Returns True on success."""
+    from dashboard.writer import _build_gcal_body
+    if not event.google_event_id:
+        return False
+    try:
+        token = get_valid_token(user)
+    except ValueError:
+        return False
+
+    body = _build_gcal_body(event)
+    response = requests.patch(
+        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+        json=body,
+        timeout=10,
+    )
+    return response.status_code in (200, 201)
+
+
 def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
     from accounts.utils import get_valid_token
     if not google_event_id:
