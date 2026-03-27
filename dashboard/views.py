@@ -1,5 +1,6 @@
 # dashboard/views.py
 import json as _json
+import zoneinfo
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
@@ -74,6 +75,15 @@ def event_edit(request, pk=None):
                 from django.contrib import messages
                 messages.error(request, 'Invalid date format.')
                 return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
+
+            # Convert from user's timezone to UTC for storage
+            user_tz = zoneinfo.ZoneInfo(request.user.timezone or 'UTC')
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=user_tz)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=user_tz)
+            start_dt = start_dt.astimezone(zoneinfo.ZoneInfo('UTC'))
+            end_dt = end_dt.astimezone(zoneinfo.ZoneInfo('UTC'))
 
             from django.contrib import messages
             from dashboard.gcal import push_event_to_gcal, update_event_in_gcal
