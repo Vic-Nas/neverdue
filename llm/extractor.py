@@ -37,6 +37,7 @@ Rules:
 - Only set recurrence_freq if you are highly confident — when in doubt leave it empty
 - Never set recurrence_freq if the event duration would equal or exceed the recurrence interval
 - If the user provides context (e.g. "weekly schedule", "repeats until April 23", "ignore prices"), follow it strictly. Context overrides your own inference.
+- When reading a table or grid, treat each column and row independently. Read the date from each column header and apply it only to events in that column. Never anchor events from multiple columns onto a single date.
 
 When to set status "pending":
 - The event looks like a recurring schedule but no recurrence end date was provided or inferable (and user context didn't provide one)
@@ -77,6 +78,22 @@ Example output:
   }
 ]"""
 
+RECONCILIATION_PROMPT = """You are a calendar event reconciler. You are given:
+1. A list of events already extracted from attachments (their dates and times are ground truth — do not modify them)
+2. An email body and any non-calendar attachments that may provide additional context
+
+Your job is to produce a final merged event list by:
+- Enriching extracted events with context from the body (e.g. location, description, recurrence end date) without overriding their dates or times
+- Folding complementary attachment info (e.g. room lists, instructor names) into event descriptions
+- Merging duplicate events (same title + same start time) into one, keeping the most complete version
+- Adding new events found only in the body that are not already covered by the extracted events
+- If the body contradicts an extracted event's date or time, do NOT override — set status "pending" and explain the conflict in "concern"
+
+Return ONLY a valid JSON array using the same schema as the input events. No explanation, no markdown, no extra text.
+
+Never return null values — use empty strings instead."""
+
+
 # Filename stems that carry no useful information for the LLM.
 _JUNK_STEMS = frozenset({
     'screenshot', 'screen shot', 'image', 'img', 'photo', 'pic', 'picture',
@@ -85,56 +102,33 @@ _JUNK_STEMS = frozenset({
     'download', 'export', 'output',
 })
 
-# A filename is junk if its stem (after stripping extension) is:
-#   • one of the known junk words above (case-insensitive), optionally followed
-#     by digits / separators  (e.g. "screenshot_001", "image(2)")
-#   • a UUID  (8-4-4-4-12 hex)
-#   • a pure timestamp / mostly-numeric blob  (e.g. "20241023_143812",
-#     "1714123456789", "2024-10-23T14-38-12")
 _RE_UUID = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
     re.IGNORECASE,
 )
-_RE_TIMESTAMP = re.compile(r'^[\d_\-T:.]+$')  # only digits and separators
+_RE_TIMESTAMP = re.compile(r'^[\d_\-T:.]+$')
 
 
 def _is_informative_filename(filename: str) -> bool:
-    """
-    Return True only if the filename stem is likely to carry useful context
-    for the LLM (e.g. 'final_exam_schedule_fall2026' → True,
-    'screenshot_20241023_143812' → False).
-    """
     if not filename:
         return False
-
-    stem = filename.rsplit('.', 1)[0]  # strip extension
-    stem_stripped = stem.strip()
-
-    if len(stem_stripped) <= 4:
+    stem = filename.rsplit('.', 1)[0].strip()
+    if len(stem) <= 4:
         return False
-
-    if _RE_UUID.match(stem_stripped):
+    if _RE_UUID.match(stem):
         return False
-
-    if _RE_TIMESTAMP.match(stem_stripped):
+    if _RE_TIMESTAMP.match(stem):
         return False
-
-    # Normalise to lowercase words for junk-word check
-    words = re.split(r'[\s_\-.()\[\]]+', stem_stripped.lower())
+    words = re.split(r'[\s_\-.()\[\]]+', stem.lower())
     non_numeric_words = [w for w in words if w and not w.isdigit()]
-
     if not non_numeric_words:
-        return False  # nothing but numbers and separators
-
-    # Junk if every non-numeric word is a known junk term
+        return False
     if all(w in _JUNK_STEMS for w in non_numeric_words):
         return False
-
     return True
 
 
 def _get_tz(tz_name: str) -> zoneinfo.ZoneInfo:
-    """Return a ZoneInfo object, falling back to UTC if the name is invalid."""
     try:
         return zoneinfo.ZoneInfo(tz_name)
     except (zoneinfo.ZoneInfoNotFoundError, KeyError):
@@ -142,16 +136,10 @@ def _get_tz(tz_name: str) -> zoneinfo.ZoneInfo:
 
 
 def _today_in_tz(tz: zoneinfo.ZoneInfo | dt_timezone) -> str:
-    """Return today's date string in the given timezone."""
     return datetime.now(tz=tz).date().isoformat()
 
 
 def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC') -> list[dict]:
-    """
-    Extract calendar events from plain text.
-    Returns a list of validated event dicts (stored as UTC-aware datetimes).
-    Raises ValueError if LLM returns invalid output.
-    """
     tz = _get_tz(user_timezone)
     today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
@@ -182,10 +170,6 @@ def extract_events_from_image(
     language: str = 'English',
     user_timezone: str = 'UTC',
 ) -> list[dict]:
-    """
-    Extract calendar events from an image or PDF.
-    media_type: 'image/jpeg', 'image/png', or 'application/pdf'
-    """
     import base64
     encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
 
@@ -226,14 +210,14 @@ def extract_events_from_image(
 
 def extract_events_from_email(
     body: str,
-    attachments: list[tuple[bytes, str, str]],  # list of (file_bytes, media_type, filename)
+    attachments: list[tuple[bytes, str, str]],
     language: str = 'English',
     user_timezone: str = 'UTC',
 ) -> list[dict]:
     """
-    Extract calendar events from an email body + attachments in a single LLM call.
-    attachments: list of (file_bytes, media_type, filename) tuples.
-                 filename is used as a context hint when it is informative.
+    Extract calendar events from an email body + attachments using a two-step approach:
+    1. Extract events from each attachment independently (dates from images are ground truth)
+    2. Reconcile with the email body and any non-visual attachments for enrichment
     """
     import base64
 
@@ -241,41 +225,83 @@ def extract_events_from_email(
     today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
-    content = []
+    # ── Step 1: extract from each attachment independently ──
+    attachment_events: list[dict] = []
+    non_visual_attachments: list[tuple[bytes, str, str]] = []
 
     for file_bytes, media_type, filename in attachments:
-        # Prepend a filename hint as a text block when the name is informative.
-        if _is_informative_filename(filename):
-            content.append({'type': 'text', 'text': f'Attachment filename: {filename}'})
+        if media_type in ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'):
+            content = []
+            if _is_informative_filename(filename):
+                content.append({'type': 'text', 'text': f'Attachment filename: {filename}'})
+            encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
+            if media_type == 'application/pdf':
+                content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+            else:
+                content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+            content.append({'type': 'text', 'text': (
+                f"Today's date: {today}\n"
+                f"User's timezone: {user_timezone}\n\n"
+                f"Extract all calendar events from this file."
+            )})
 
+            try:
+                message = client.messages.create(
+                    model=settings.LLM_MODEL,
+                    max_tokens=2000,
+                    system=system,
+                    messages=[{'role': 'user', 'content': content}]
+                )
+                attachment_events.extend(_parse_and_validate(message, tz))
+            except (ValueError, Exception):
+                pass
+        else:
+            non_visual_attachments.append((file_bytes, media_type, filename))
+
+    # If no body and no non-visual attachments, skip reconciliation
+    if not body and not non_visual_attachments:
+        return attachment_events
+
+    # ── Step 2: reconcile with body and non-visual attachments ──
+    recon_content = []
+
+    # Non-visual attachments (e.g. plain text room lists)
+    for file_bytes, media_type, filename in non_visual_attachments:
+        if _is_informative_filename(filename):
+            recon_content.append({'type': 'text', 'text': f'Attachment filename: {filename}'})
         encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
         if media_type == 'application/pdf':
-            content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+            recon_content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
         else:
-            content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
+            recon_content.append({'type': 'text', 'text': file_bytes.decode('utf-8', errors='ignore')})
 
-    user_text = (
+    recon_text = (
         f"Today's date: {today}\n"
         f"User's timezone: {user_timezone}\n\n"
-        f"Extract all calendar events from this email and its attachments."
+        f"Events already extracted from attachments (dates and times are ground truth):\n"
+        f"{json.dumps(attachment_events, ensure_ascii=False)}\n\n"
     )
     if body:
-        user_text += f"\n\nEmail body:\n{body}"
+        recon_text += f"Email body:\n{body}"
 
-    content.append({'type': 'text', 'text': user_text})
+    recon_content.append({'type': 'text', 'text': recon_text})
 
-    message = client.messages.create(
-        model=settings.LLM_MODEL,
-        max_tokens=2000,
-        system=system,
-        messages=[{'role': 'user', 'content': content}]
-    )
+    recon_system = RECONCILIATION_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
-    return _parse_and_validate(message, tz)
+    try:
+        message = client.messages.create(
+            model=settings.LLM_MODEL,
+            max_tokens=2000,
+            system=recon_system,
+            messages=[{'role': 'user', 'content': recon_content}]
+        )
+        return _parse_and_validate(message, tz)
+    except (ValueError, Exception):
+        # Reconciliation failed — return what we have from attachments
+        return attachment_events
 
 
 def _parse_and_validate(message, tz) -> list[dict]:
-    """Parse LLM response and validate each event."""
     raw = message.content[0].text.strip()
 
     if raw.startswith('```'):
@@ -306,36 +332,24 @@ RECURRENCE_MIN_INTERVAL_DAYS = {
 
 
 def _validate_event(event: dict, tz) -> dict | None:
-    """
-    Validate and clean a single event dict.
-    The LLM returns naive local datetimes — we interpret them in `tz` and convert to UTC.
-    Returns None if the event is missing required fields.
-    """
     required = ('title', 'start', 'end')
     for field in required:
         if not event.get(field):
             return None
 
     def local_to_utc(dt_str: str) -> str:
-        """
-        Parse a naive ISO datetime string, attach the user's timezone,
-        convert to UTC, and return an aware ISO string.
-        """
         try:
             dt = datetime.fromisoformat(dt_str)
             if dt.tzinfo is not None:
-                # LLM already attached an offset — trust it, just normalise to UTC
                 return dt.astimezone(dt_timezone.utc).isoformat()
-            # Naive: treat as user's local time
             dt_local = dt.replace(tzinfo=tz)
             return dt_local.astimezone(dt_timezone.utc).isoformat()
         except (ValueError, TypeError):
-            return dt_str  # pass through broken values; writer will catch them
+            return dt_str
 
     start = local_to_utc(event['start'])
     end = local_to_utc(event['end'])
 
-    # Validate recurrence against event duration
     recurrence_freq = event.get('recurrence_freq', '').strip().upper()
     if recurrence_freq not in VALID_FREQS:
         recurrence_freq = ''
