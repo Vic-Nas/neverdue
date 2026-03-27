@@ -1,0 +1,107 @@
+{# templates/dashboard/queue.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Queue — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="queue-page">
+
+  <div class="queue-page__header">
+    <h1 class="queue-page__title">Processing queue</h1>
+    <p class="queue-page__sub">Jobs from the last 24 hours. Completed jobs are cleaned up daily.</p>
+  </div>
+
+  <div id="queue-list">
+    <p class="queue-empty" id="queue-empty-msg" hidden>No recent jobs.</p>
+    <table class="queue-table" id="queue-table" hidden>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Summary</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Started</th>
+        </tr>
+      </thead>
+      <tbody id="queue-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var tbody = document.getElementById('queue-tbody');
+  var table = document.getElementById('queue-table');
+  var emptyMsg = document.getElementById('queue-empty-msg');
+  var pollInterval = null;
+  var POLL_MS = 4000;
+
+  var SOURCE_LABELS = { email: 'Email', upload: 'Upload', reprocess: 'Reprocess' };
+  var STATUS_LABELS = { queued: 'Queued', processing: 'Processing…', done: 'Done', failed: 'Failed' };
+  var STATUS_CLASSES = { queued: 'status--queued', processing: 'status--processing', done: 'status--done', failed: 'status--failed' };
+
+  function fmt(isoStr) {
+    var d = new Date(isoStr);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+           ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function fmtDuration(secs) {
+    if (secs < 2) return '< 1s';
+    if (secs < 60) return secs + 's';
+    return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+  }
+
+  function render(jobs) {
+    if (!jobs || jobs.length === 0) {
+      table.hidden = true;
+      emptyMsg.hidden = false;
+      return;
+    }
+    emptyMsg.hidden = true;
+    table.hidden = false;
+    tbody.innerHTML = '';
+    jobs.forEach(function (j) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (SOURCE_LABELS[j.source] || j.source) + '</td>' +
+        '<td class="queue-summary">' + (j.summary || '—') + '</td>' +
+        '<td><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
+        '<td>' + (j.status === 'done' || j.status === 'failed' ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
+        '<td>' + fmt(j.created_at) + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function hasActive(jobs) {
+    return jobs && jobs.some(function (j) { return j.status === 'queued' || j.status === 'processing'; });
+  }
+
+  function poll() {
+    fetch("{% url 'dashboard:queue_status' %}", {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data) return;
+      render(data.jobs);
+      if (!hasActive(data.jobs) && pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    })
+    .catch(function () {});
+  }
+
+  // Initial load + polling while jobs are active
+  poll();
+  pollInterval = setInterval(poll, POLL_MS);
+})();
+</script>
+{% endblock %}

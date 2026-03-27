@@ -30,6 +30,9 @@
     {% if user.is_pro %}
     <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
     {% endif %}
+    <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
+      Queue<span class="queue-badge" id="queue-badge" hidden></span>
+    </a>
     {% endif %}
     <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
   </div>
@@ -148,8 +151,63 @@
       },
       body: JSON.stringify({ timezone: tz })
     });
-    // Fire and forget — no reload needed, takes effect on next scan
   } catch (e) {}
+})();
+</script>
+{% endif %}
+
+{% if user.is_authenticated %}
+<script>
+(function () {
+  var badge = document.getElementById('queue-badge');
+  var pollInterval = null;
+  var POLL_MS = 5000;
+
+  function updateBadge(count) {
+    if (count > 0) {
+      badge.textContent = count;
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  function poll() {
+    fetch("{% url 'dashboard:queue_status' %}", {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      if (!data) return;
+      updateBadge(data.active_count);
+      // Stop polling once queue drains; restart on next user action if needed
+      if (data.active_count === 0 && pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    })
+    .catch(function () {});
+  }
+
+  function startPolling() {
+    if (!pollInterval) {
+      poll(); // immediate first check
+      pollInterval = setInterval(poll, POLL_MS);
+    }
+  }
+
+  // Always do one check on load to show badge if jobs are already running
+  poll();
+
+  // Re-start polling whenever user submits a form (upload, reprocess, etc.)
+  document.addEventListener('submit', function () {
+    setTimeout(startPolling, 1000); // slight delay so task is queued first
+  });
+
+  // Also restart when fetch-based actions complete (bulk reprocess, prompt edit)
+  // by exposing a global hook other scripts can call
+  window.neverdue = window.neverdue || {};
+  window.neverdue.startQueuePolling = startPolling;
 })();
 </script>
 {% endif %}
