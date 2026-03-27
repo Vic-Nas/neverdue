@@ -47,9 +47,9 @@ def inbound(request):
     email_id = data.get('email_id')
     full_email = fetch_full_email(email_id) if email_id else {}
 
-    # Extract body and attachments, using full_email content
+    # Body comes from full_email; attachments are fetched separately via Attachments API
     body = extract_email_text(payload, full_email=full_email)
-    attachments = extract_attachments(payload, full_email=full_email)
+    attachments = extract_attachments(payload)
 
     from .tasks import process_inbound_email
     process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
