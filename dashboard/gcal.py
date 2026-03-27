@@ -162,6 +162,7 @@ def register_gcal_watch(user) -> bool:
     """
     import uuid
     from django.conf import settings
+    from django.urls import reverse
     from accounts.utils import get_valid_token
 
     try:
@@ -171,13 +172,14 @@ def register_gcal_watch(user) -> bool:
         return False
 
     channel_id = str(uuid.uuid4())
+    webhook_path = reverse('dashboard:gcal_webhook')
     response = requests.post(
         'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
         headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
         json={
             'id': channel_id,
             'type': 'web_hook',
-            'address': f'https://{settings.DOMAIN}/gcal/webhook/',
+            'address': f'https://{settings.DOMAIN}{webhook_path}',
         },
         timeout=10,
     )
