@@ -18,12 +18,14 @@ That's it. No manual entry, no copy-pasting dates.
 
 ## Plans
 
-**Free**
+### Free
+
 - 30 email scans per month
 - Up to 3 categories
 - Google Calendar sync
 
-**Pro — $8/month CAD**
+### Pro — $8/month CAD
+
 - Unlimited scans
 - Unlimited categories
 - Upload files, images, and PDFs
