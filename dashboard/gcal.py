@@ -94,6 +94,7 @@ def event_pre_delete(sender, instance, **kwargs):
 def push_event_to_gcal(user, event):
     """Create a new GCal event. Returns (html_link, gcal_id) or None."""
     from dashboard.writer import _build_gcal_body
+    from accounts.utils import get_valid_token
     try:
         token = get_valid_token(user)
     except ValueError:
@@ -115,6 +116,7 @@ def push_event_to_gcal(user, event):
 def update_event_in_gcal(user, event) -> bool:
     """Patch an existing GCal event. Returns True on success."""
     from dashboard.writer import _build_gcal_body
+    from accounts.utils import get_valid_token
     if not event.google_event_id:
         return False
     try:
