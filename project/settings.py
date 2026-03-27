@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'accounts',
     'billing',
-    'dashboard',
+    'dashboard.apps.DashboardConfig',
     'emails',
     'llm',
 ]
