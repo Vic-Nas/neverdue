@@ -254,6 +254,16 @@ def categories(request):
 
 
 @login_required
+def category_detail(request, pk):
+    try:
+        category = get_object_or_404(Category, pk=pk, user=request.user)
+        events = Event.objects.filter(user=request.user, category=category).order_by('start')
+        return render(request, 'dashboard/category_detail.html', {'category': category, 'events': events})
+    except Exception:
+        return HttpResponse('Category unavailable.', status=500)
+
+
+@login_required
 def category_edit(request, pk=None):
     try:
         category = get_object_or_404(Category, pk=pk, user=request.user) if pk else None

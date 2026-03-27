@@ -57,6 +57,43 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
     return _save_events(user, events)
 
 
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> list:
+    """
+    Full pipeline for an inbound email with optional attachments.
+    Body and attachments are sent together in a single LLM call.
+    attachments: list of (base64_string, media_type) tuples (as received from webhook).
+    """
+    from .extractor import extract_events_from_email
+    import base64
+
+    if not _check_and_increment_scans(user):
+        return []
+
+    language = getattr(user, 'language', 'English')
+    user_timezone = getattr(user, 'timezone', 'UTC')
+
+    # Decode b64 attachments to bytes
+    decoded_attachments = []
+    for b64_content, media_type in (attachments or []):
+        try:
+            decoded_attachments.append((base64.b64decode(b64_content), media_type))
+        except Exception:
+            continue
+
+    try:
+        events = extract_events_from_email(
+            body=body or '',
+            attachments=decoded_attachments,
+            language=language,
+            user_timezone=user_timezone,
+        )
+    except ValueError:
+        return []
+
+    print(f"EXTRACTED EVENTS: {events}")
+    return _save_events(user, events, sender, source_email_id)
+
+
 def _check_and_increment_scans(user) -> bool:
     """
     Check scan limit for free users and reset monthly counter if needed.
