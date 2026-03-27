@@ -29,6 +29,10 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
     """
     Full pipeline for image, PDF, or text file upload.
     Returns list of created Event objects.
+
+    NOTE: The dashboard upload view now routes through process_email instead,
+    so filename context is passed to the LLM consistently. This function is
+    retained for any direct callers.
     """
     if not user.is_pro:
         return []
@@ -61,6 +65,8 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
     """
     Full pipeline for an inbound email with optional attachments.
     Body and attachments are sent together in a single LLM call.
+    Also used by process_uploaded_file (empty body, single attachment).
+
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename] entries.
     """
     from .extractor import extract_events_from_email

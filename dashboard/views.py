@@ -148,7 +148,6 @@ def event_prompt_edit(request, pk):
 
         event = get_object_or_404(Event, pk=pk, user=request.user)
 
-        # Build a rich text description of the event so the LLM has full context
         lines = [
             f"Title: {event.title}",
             f"Start: {event.start.isoformat()}",
@@ -165,7 +164,6 @@ def event_prompt_edit(request, pk):
         lines.append(f"\nUser instruction: {prompt}")
         full_text = "\n".join(lines)
 
-        # Delete from GCal then DB
         if event.google_event_id:
             try:
                 from accounts.utils import get_valid_token
@@ -180,7 +178,6 @@ def event_prompt_edit(request, pk):
                 pass
         event.delete()
 
-        # Queue re-extraction — event already deleted, just re-process the text
         from emails.tasks import reprocess_events
         reprocess_events.delay(request.user.pk, [], full_text)
 
@@ -207,7 +204,6 @@ def events_bulk_action(request):
         if not ids:
             return JsonResponse({'ok': False, 'error': 'No events selected'})
 
-        # Verify ownership
         owned_ids = list(Event.objects.filter(pk__in=ids, user=request.user).values_list('pk', flat=True))
         if not owned_ids:
             return JsonResponse({'ok': False, 'error': 'No matching events'})
@@ -237,9 +233,7 @@ def events_bulk_action(request):
             reprocess_events.delay(request.user.pk, owned_ids, prompt)
             return JsonResponse({'ok': True, 'queued': len(owned_ids)})
 
-        else:
-            return JsonResponse({'ok': False, 'error': 'Unknown action'})
-
+        return JsonResponse({'ok': False, 'error': 'Unknown action'})
     except Exception:
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
 
@@ -286,7 +280,6 @@ def category_edit(request, pk=None):
                     reminders=reminders,
                 )
 
-            # Rebuild rules from scratch
             category.rules.all().delete()
             senders = request.POST.getlist('rule_sender')
             keywords = request.POST.getlist('rule_keyword')
@@ -294,7 +287,6 @@ def category_edit(request, pk=None):
             for sender, keyword in zip(senders, keywords):
                 sender = sender.strip()
                 keyword = keyword.strip()
-                # Each non-empty field becomes its own rule with action='categorize'
                 if sender:
                     Rule.objects.get_or_create(
                         user=request.user,
@@ -395,13 +387,13 @@ def upload(request):
 
             context = request.POST.get('context', '').strip()
             content_type = file.content_type
+            filename = file.name or ''
             file_bytes = file.read()
 
-            # Queue async — user does not wait
             import base64
             from emails.tasks import process_uploaded_file
             file_b64 = base64.b64encode(file_bytes).decode('utf-8')
-            process_uploaded_file.delay(request.user.pk, file_b64, content_type, context)
+            process_uploaded_file.delay(request.user.pk, file_b64, content_type, context, filename)
 
             messages.success(request, 'Your file is being processed. Events will appear shortly.')
             return redirect('dashboard:index')
@@ -451,3 +443,41 @@ def export_events(request):
     response = HttpResponse(ics_bytes, content_type='text/calendar; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="neverdue-events.ics"'
     return response
+
+
+@login_required
+@require_GET
+def queue(request):
+    """Render the queue page. Data is loaded client-side via queue_status."""
+    return render(request, 'dashboard/queue.html')
+
+
+@login_required
+@require_GET
+def queue_status(request):
+    """
+    Returns the count of active (queued + processing) ScanJobs for the current user,
+    plus the jobs themselves for the queue page.
+    Used by the nav badge (polling) and the queue page.
+    """
+    from emails.models import ScanJob
+
+    jobs = ScanJob.objects.filter(
+        user=request.user,
+    ).order_by('-created_at')[:50]  # cap at 50 for the page view
+
+    active_count = sum(1 for j in jobs if j.status in (ScanJob.STATUS_QUEUED, ScanJob.STATUS_PROCESSING))
+
+    jobs_data = [
+        {
+            'id': j.pk,
+            'status': j.status,
+            'source': j.source,
+            'summary': j.summary,
+            'created_at': j.created_at.isoformat(),
+            'duration_seconds': round(j.duration_seconds),
+        }
+        for j in jobs
+    ]
+
+    return JsonResponse({'active_count': active_count, 'jobs': jobs_data})
