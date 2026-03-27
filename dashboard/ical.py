@@ -27,7 +27,7 @@ def build_ics(events) -> bytes:
     for event in events:
         vevent = VEvent()
 
-        vevent.add('uid', vText(f'{event.pk}@neverdue.ca'))
+        vevent.add('uid', vText(f'{event.pk}@service.neverdue.ca'))
         vevent.add('summary', event.title)
 
         if event.description:

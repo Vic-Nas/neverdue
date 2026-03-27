@@ -9,7 +9,7 @@ NeverDue watches your inbox and automatically adds deadlines, appointments, and 
 ## How it works
 
 1. Sign in with Google
-2. Forward emails to your personal NeverDue address (e.g. `yourname@neverdue.ca`)
+2. Forward emails to your personal NeverDue address (e.g. `yourname@user.neverdue.ca`)
 3. NeverDue extracts the dates and adds them straight to your calendar
 
 That's it. No manual entry, no copy-pasting dates.

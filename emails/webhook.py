@@ -241,7 +241,7 @@ def get_user_from_recipient(recipient):
     """
     Extract username from recipient address and return User or None.
     Supports both:
-      username@neverdue.ca
+      username@user.neverdue.ca
       username@user.neverdue.ca
     """
     from accounts.models import User
