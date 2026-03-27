@@ -13,8 +13,8 @@ from .ical import build_ics
 @login_required
 def index(request):
     try:
-        sort = request.GET.get('sort', 'start')
-        order = {'start': 'start', 'added': '-created_at', 'category': 'category__name'}.get(sort, 'start')
+        sort = request.GET.get('sort', 'added')
+        order = {'start': 'start', 'added': '-created_at', 'category': 'category__name'}.get(sort, '-created_at')
 
         events = Event.objects.filter(user=request.user).order_by(order)
         active_events = events.filter(status='active')

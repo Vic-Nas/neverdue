@@ -31,7 +31,7 @@ def in_user_tz(value, user):
     if isinstance(value, datetime):
         if value.tzinfo is None:
             value = value.replace(tzinfo=dt_timezone.utc)
-        return value.astimezone(tz)
+        return value.astimezone(tz).replace(tzinfo=None)  # strip tzinfo so |date won't reconvert
 
     return value
 

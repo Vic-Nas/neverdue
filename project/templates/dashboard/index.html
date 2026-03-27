@@ -174,8 +174,8 @@
   {# ── Sort controls ── #}
   <div class="sort-bar">
     <span class="sort-bar__label">Sort by</span>
-    <a href="?sort=added" class="sort-bar__opt {% if sort == 'added' %}sort-bar__opt--active{% endif %}">Date added</a>
-    <a href="?sort=start" class="sort-bar__opt {% if sort == 'start' or not sort %}sort-bar__opt--active{% endif %}">Start date</a>
+    <a href="?sort=added" class="sort-bar__opt {% if sort == 'added' or not sort %}sort-bar__opt--active{% endif %}">Date added</a>
+    <a href="?sort=start" class="sort-bar__opt {% if sort == 'start' %}sort-bar__opt--active{% endif %}">Start date</a>
     <a href="?sort=category" class="sort-bar__opt {% if sort == 'category' %}sort-bar__opt--active{% endif %}">Category</a>
   </div>
 
