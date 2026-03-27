@@ -101,7 +101,7 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
     from accounts.models import User
     from llm.pipeline import process_email
 
-    from_address = f"{user.username}@neverdue.ca" if user else ''
+    from_address = f"{user.username}@user.neverdue.ca" if user else ''
     job_pk = _create_job(user_id, source='upload', from_address=from_address)
 
     logger.info("UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
