@@ -100,8 +100,11 @@ def event_edit(request, pk=None):
                 )
             return redirect('dashboard:event_detail', pk=event.pk)
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
-    except Exception:
-        return HttpResponse('Could not save event.', status=500)
+    except Exception as e:
+        import traceback
+        import logging
+        logging.getLogger(__name__).error(traceback.format_exc())
+        return HttpResponse(f'Could not save event: {e}', status=500)
 
 
 @login_required
