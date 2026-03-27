@@ -131,6 +131,9 @@ def google_callback(request):
 
     auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
+    from dashboard.gcal import register_gcal_watch
+    register_gcal_watch(user)
+
     if created:
         return redirect('accounts:username_pick')
 

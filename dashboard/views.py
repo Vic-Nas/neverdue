@@ -272,6 +272,16 @@ def category_edit(request, pk=None):
                 category.color = color
                 category.reminders = reminders
                 category.save()
+                
+                # Sync GCal colors after category save
+                from dashboard.gcal import patch_event_color
+                from dashboard.writer import _resolve_color_id
+                events_to_patch = category.events.filter(
+                    status='active', color=''
+                ).exclude(google_event_id='').exclude(google_event_id__isnull=True)
+                for ev in events_to_patch:
+                    patch_event_color(request.user, ev.google_event_id,
+                                      _resolve_color_id(request.user, category))
             else:
                 category = Category.objects.create(
                     user=request.user,
