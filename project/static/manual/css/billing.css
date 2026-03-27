@@ -80,6 +80,15 @@
   letter-spacing: 0;
 }
 
+.plan-card__trial {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .plan-card__desc {
   font-size: 0.85rem;
   color: var(--text-muted);

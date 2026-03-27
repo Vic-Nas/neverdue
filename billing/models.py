@@ -6,6 +6,7 @@ from accounts.models import User
 class Subscription(models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
+        ('trialing', 'Trialing'),
         ('cancelled', 'Cancelled'),
         ('past_due', 'Past Due'),
     ]
@@ -19,4 +20,4 @@ class Subscription(models.Model):
 
     @property
     def is_pro(self):
-        return self.status == 'active'
+        return self.status in ('active', 'trialing')

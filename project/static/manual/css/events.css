@@ -193,6 +193,42 @@
   margin-bottom: 1.25rem;
 }
 
+/* ── Trial banner ── */
+.trial-banner {
+  margin-bottom: 1.5rem;
+  padding: 0.85rem 1rem;
+  background: var(--accent-muted);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.trial-banner__text {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.trial-banner__text strong {
+  font-weight: 600;
+}
+
+.trial-banner__link {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.trial-banner__link:hover {
+  color: var(--accent-light);
+}
+
 /* ── Responsive ── */
 @media (max-width: 480px) {
   .event-card {

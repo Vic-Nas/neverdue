@@ -5,13 +5,13 @@ from .resolver import resolve_category
 from dashboard.writer import write_event_to_calendar
 
 
-def process_text(user, text: str, sender: str = '', source_email_id: str = '') -> list:
+def process_text(user, text: str, sender: str = '', source_email_id: str = '') -> tuple[list, str]:
     """
     Full pipeline for plain text or email body.
-    Returns list of created Event objects.
+    Returns (created_events, notes) where notes is non-empty if something was skipped.
     """
     if not _check_and_increment_scans(user):
-        return []
+        return [], ''
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
@@ -19,26 +19,26 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
     try:
         events = extract_events(text, language=language, user_timezone=user_timezone)
     except ValueError:
-        return []
+        return [], ''
 
     print(f"EXTRACTED EVENTS: {events}")
-    return _save_events(user, events, sender, source_email_id)
+    return _save_events(user, events, sender, source_email_id), ''
 
 
-def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> list:
+def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> tuple[list, str]:
     """
     Full pipeline for image, PDF, or text file upload.
-    Returns list of created Event objects.
+    Returns (created_events, notes) where notes is non-empty if something was skipped.
 
     NOTE: The dashboard upload view now routes through process_email instead,
     so filename context is passed to the LLM consistently. This function is
     retained for any direct callers.
     """
     if not user.is_pro:
-        return []
+        return [], ''
 
     if not _check_and_increment_scans(user):
-        return []
+        return [], ''
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
@@ -50,34 +50,36 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
         try:
             events = extract_events(text, language=language, user_timezone=user_timezone)
         except ValueError:
-            return []
+            return [], ''
     else:
         try:
             events = extract_events_from_image(file_bytes, media_type, context=context, language=language, user_timezone=user_timezone)
         except ValueError:
-            return []
+            return [], ''
 
     print(f"EXTRACTED EVENTS: {events}")
-    return _save_events(user, events)
+    return _save_events(user, events), ''
 
 
-def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> list:
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> tuple[list, str]:
     """
     Full pipeline for an inbound email with optional attachments.
     Body and attachments are sent together in a single LLM call.
     Also used by process_uploaded_file (empty body, single attachment).
 
+    Returns (created_events, notes) where notes is non-empty if something was skipped.
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename] entries.
     """
     from .extractor import extract_events_from_email
     import base64
 
     if not _check_and_increment_scans(user):
-        return []
+        return [], ''
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
 
+    notes = ''
     # Decode b64 attachments to bytes, carrying the optional filename through.
     decoded_attachments = []
     for entry in (attachments or []):
@@ -88,6 +90,10 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         except Exception:
             continue
 
+    if decoded_attachments and not user.is_pro:
+        decoded_attachments = []
+        notes = 'Attachments ignored (Pro only)'
+
     try:
         events = extract_events_from_email(
             body=body or '',
@@ -96,10 +102,10 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             user_timezone=user_timezone,
         )
     except ValueError:
-        return []
+        return [], notes
 
     print(f"EXTRACTED EVENTS: {events}")
-    return _save_events(user, events, sender, source_email_id)
+    return _save_events(user, events, sender, source_email_id), notes
 
 
 def _check_and_increment_scans(user) -> bool:

@@ -94,6 +94,14 @@
     </div>
   </div>
 
+  {# Trial CTA banner for free users #}
+  {% if not request.user.is_pro %}
+  <div class="trial-banner">
+    <span class="trial-banner__text">✨ Try <strong>Pro</strong> free for 7 days</span>
+    <a href="{% url 'billing:plans' %}" class="trial-banner__link">Learn more →</a>
+  </div>
+  {% endif %}
+
   {# Scan usage bar (free users only) #}
   {% if scans_used is not None %}
   <div class="scan-banner">

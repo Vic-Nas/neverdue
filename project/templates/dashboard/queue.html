@@ -21,7 +21,8 @@
       <thead>
         <tr>
           <th>Source</th>
-          <th>Summary</th>
+          <th>From</th>
+          <th>Notes</th>
           <th>Status</th>
           <th>Duration</th>
           <th>Started</th>
@@ -72,7 +73,8 @@
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td>' + (SOURCE_LABELS[j.source] || j.source) + '</td>' +
-        '<td class="queue-summary">' + (j.summary || '—') + '</td>' +
+        '<td class="queue-from">' + (j.from_address || '—') + '</td>' +
+        '<td class="queue-notes">' + (j.notes || '') + '</td>' +
         '<td><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
         '<td>' + (j.status === 'done' || j.status === 'failed' ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
         '<td>' + fmt(j.created_at) + '</td>';
