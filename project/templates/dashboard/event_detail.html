@@ -1,6 +1,7 @@
 {# templates/dashboard/event_detail.html #}
 {% extends 'base.html' %}
 {% load static %}
+{% load tz_display %}
 {% block title %}{{ event.title }} — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
@@ -30,12 +31,12 @@
   <div class="detail-dates">
     <div class="detail-date">
       <span class="detail-date__label">Starts</span>
-      <span class="detail-date__value">{{ event.start|date:"D, d M Y" }} at {{ event.start|time:"H:i" }}</span>
+      <span class="detail-date__value">{{ event.start|in_user_tz:request.user|date:"D, d M Y" }} at {{ event.start|in_user_tz:request.user|time:"H:i" }}</span>
     </div>
     <div class="detail-date__sep">→</div>
     <div class="detail-date">
       <span class="detail-date__label">Ends</span>
-      <span class="detail-date__value">{{ event.end|date:"D, d M Y" }} at {{ event.end|time:"H:i" }}</span>
+      <span class="detail-date__value">{{ event.end|in_user_tz:request.user|date:"D, d M Y" }} at {{ event.end|in_user_tz:request.user|time:"H:i" }}</span>
     </div>
   </div>
 
