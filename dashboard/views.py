@@ -305,30 +305,42 @@ def category_edit(request, pk=None):
 
             if category:
                 category.name = name
-                category.color = color
                 category.reminders = reminders
-                
-                # Handle priority change and gcal_color_id
-                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
-                if gcal_color_id:
-                    category.gcal_color_id = gcal_color_id
-                elif category.priority != priority:
-                    # Priority changed → reset to default color of new priority
-                    from dashboard.writer import _priority_color_id
-                    category.gcal_color_id = _priority_color_id(request.user, priority)
-                
                 category.priority = priority
+                
+                # Map GCal color picker to both gcal_color_id and hex color
+                GCAL_COLOR_HEX = {
+                    '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
+                    '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
+                    '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
+                    '10': '#D50000', '11': '#616161',
+                }
+                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
+                category.gcal_color_id = gcal_color_id
+                category.color = GCAL_COLOR_HEX.get(gcal_color_id, '')
+                
                 category.save()
                 
                 # Async task to sync GCal colors — returns immediately
                 from dashboard.tasks import patch_category_colors
                 patch_category_colors.delay(request.user.pk, category.pk)
             else:
+                # Map GCal color picker to both gcal_color_id and hex color
+                GCAL_COLOR_HEX = {
+                    '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
+                    '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
+                    '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
+                    '10': '#D50000', '11': '#616161',
+                }
+                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
+                hex_color = GCAL_COLOR_HEX.get(gcal_color_id, '')
+                
                 category = Category.objects.create(
                     user=request.user,
                     name=name,
-                    color=color,
+                    color=hex_color,
                     priority=priority,
+                    gcal_color_id=gcal_color_id,
                     reminders=reminders,
                 )
 

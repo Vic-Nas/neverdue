@@ -130,3 +130,64 @@
 .btn-ghost--danger {
   color: var(--danger);
 }
+
+/* ──────────────────────────────────────────────────────────────── */
+/* Google Calendar color swatches */
+/* ──────────────────────────────────────────────────────────────── */
+
+.gcal-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.gcal-swatch {
+  position: relative;
+  cursor: pointer;
+}
+
+.gcal-swatch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.gcal-swatch span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.gcal-swatch input:checked + span {
+  border-color: var(--color-primary, #4f46e5);
+  outline: 2px solid var(--color-primary, #4f46e5);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px white;
+}
+
+.gcal-swatch--auto span {
+  background: var(--color-surface, #f3f4f6);
+  border-color: var(--color-border, #d1d5db);
+  color: var(--color-muted, #6b7280);
+}
+
+.gcal-swatch--auto input:checked + span {
+  background: var(--color-surface, #f3f4f6);
+  border-color: var(--color-primary, #4f46e5);
+}
+
+/* Label for optional field */
+.label-optional {
+  font-size: 0.85rem;
+  font-weight: normal;
+  color: var(--color-muted, #6b7280);
+}
