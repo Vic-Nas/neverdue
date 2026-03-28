@@ -80,7 +80,7 @@
         {% if job.from_address %}<span>From: <strong>{{ job.from_address }}</strong></span>{% endif %}
         <span>Status: <strong>{{ job.get_status_display }}</strong></span>
         <span>Started: <strong>{{ job.created_at|date:"M d, H:i" }}</strong></span>
-        {% if job.status == 'done' or job.status == 'failed' %}
+        {% if job.status == 'done' or job.status == 'failed' or job.status == 'needs_review' %}
         <span>Duration: <strong>{{ job.duration_seconds|floatformat:0 }}s</strong></span>
         {% endif %}
         {% if job.notes %}<span>Note: <strong>{{ job.notes }}</strong></span>{% endif %}
@@ -113,12 +113,12 @@
       {% endfor %}
     </div>
 
-    {# Resubmit all pending from this job with a prompt #}
+    {# Resubmit pending events with a correction prompt — POSTs to queue_job_reprocess #}
     <div class="reprocess-box">
-      <span class="reprocess-box__label">Re-process these events with a prompt</span>
+      <span class="reprocess-box__label">Fix and re-process these events</span>
       <p class="reprocess-box__hint">
-        All {{ pending_events|length }} pending event{{ pending_events|length|pluralize }} above will be deleted and re-extracted using your prompt.
-        They'll reappear as a new job in the queue.
+        All {{ pending_events|length }} pending event{{ pending_events|length|pluralize }} above will be
+        deleted and re-extracted using your prompt. This job will be updated in place.
       </p>
       <textarea id="reprocess-prompt" rows="3"
         placeholder="e.g. 'Weekly until April 25 2026' or 'These are one-time events, no recurrence'"></textarea>
@@ -171,7 +171,7 @@
 {% block extra_js %}
 {% if pending_events %}
 <script>
-const BULK_URL = "{% url 'dashboard:events_bulk_action' %}";
+const REPROCESS_URL = "{% url 'dashboard:queue_job_reprocess' pk=job.pk %}";
 const CSRF = "{{ csrf_token }}";
 const PENDING_IDS = [{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
 
@@ -187,14 +187,14 @@ document.getElementById('reprocess-btn').addEventListener('click', async functio
   status.textContent = '';
 
   try {
-    const res = await fetch(BULK_URL, {
+    const res = await fetch(REPROCESS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ action: 'reprocess', ids: PENDING_IDS, prompt }),
+      body: JSON.stringify({ event_ids: PENDING_IDS, prompt }),
     });
     const data = await res.json();
     if (data.ok) {
-      status.textContent = `${data.queued} event${data.queued !== 1 ? 's' : ''} queued.`;
+      status.textContent = 'Queued. Updating this job…';
       status.style.color = 'var(--color-success, #16a34a)';
       setTimeout(() => { window.location.href = "{% url 'dashboard:queue' %}"; }, 1200);
     } else {
