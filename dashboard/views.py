@@ -561,8 +561,8 @@ def queue_status(request):
         .values_list('scan_job_id', 'n')
     )
 
-    # Nav badge: total pending events across all jobs
-    attention_count = sum(pending_counts.values())
+    # Nav badge: number of jobs needing user attention, not number of pending events
+    attention_count = sum(1 for j in jobs if j.status == ScanJob.STATUS_NEEDS_REVIEW)
 
     jobs_data = [
         {
