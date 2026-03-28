@@ -118,9 +118,9 @@ def event_edit(request, pk=None):
                         messages.warning(request, 'Event saved but could not sync to Google Calendar.')
                     # Patch color to GCal if event has google_event_id
                     if event.google_event_id:
-                        from dashboard.gcal import patch_event_color
-                        color_to_apply = event.color if event.color else (str(event.category.gcal_color_id) if event.category else '')
-                        patch_event_color(request.user, event.google_event_id, color_to_apply)
+                        if event.color:
+                            from dashboard.gcal import patch_event_color
+                            patch_event_color(request.user, event.google_event_id, event.color)
             else:
                 event = Event.objects.create(
                     user=request.user,
