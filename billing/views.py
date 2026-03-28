@@ -32,6 +32,7 @@ def checkout(request):
             line_items=[{'price': settings.STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
             subscription_data={'trial_period_days': 7},
+            allow_promotion_codes=True,
             success_url=request.build_absolute_uri('/billing/success/'),
             cancel_url=request.build_absolute_uri('/billing/cancel/'),
         )
