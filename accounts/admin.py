@@ -73,7 +73,7 @@ class CustomUserAdmin(UserAdmin):
         input_cost = (obj.monthly_input_tokens / 1_000_000) * INPUT_COST_PER_MILLION
         output_cost = (obj.monthly_output_tokens / 1_000_000) * OUTPUT_COST_PER_MILLION
         total = input_cost + output_cost
-        return format_html('<span style="font-family: monospace;">${:.4f}</span>', total)
+        return format_html('<span style="font-family: monospace;">${}</span>', f'{total:.4f}')
 
 
 @admin.register(MonthlyUsage)
@@ -101,4 +101,4 @@ class MonthlyUsageAdmin(admin.ModelAdmin):
 
     @admin.display(description='Cost (USD)')
     def cost_display(self, obj):
-        return format_html('<span style="font-family: monospace;">${:.4f}</span>', obj.cost_usd)
+        return format_html('<span style="font-family: monospace;">${}</span>', f'{obj.cost_usd:.4f}')

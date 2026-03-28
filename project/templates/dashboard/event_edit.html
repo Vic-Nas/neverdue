@@ -145,7 +145,9 @@
     <div class="prompt-edit-row">
       <textarea id="prompt-input" rows="2"
         placeholder="e.g. 'This repeats weekly until May 9 2026'&#10;e.g. 'The time is wrong, it starts at 14:00 not 09:00'&#10;e.g. 'Split into two separate events, one per day'"></textarea>
-      <button type="button" class="btn-primary" id="prompt-submit-btn">Apply</button>
+      <button type="button" class="btn-primary" id="prompt-submit-btn"
+        data-prompt-url="{% url 'dashboard:event_prompt_edit' pk=event.pk %}"
+        data-dashboard-url="{% url 'dashboard:index' %}">Apply</button>
     </div>
   </div>
   {% endif %}
@@ -156,42 +158,6 @@
 {% block extra_js %}
 <script src="{% static 'js/forms.js' %}"></script>
 {% if event %}
-<script>
-const PROMPT_URL = "{% url 'dashboard:event_prompt_edit' pk=event.pk %}";
-const CSRF = "{{ csrf_token }}";
-
-document.getElementById('prompt-submit-btn').addEventListener('click', async () => {
-  const prompt = document.getElementById('prompt-input').value.trim();
-  if (!prompt) {
-    document.getElementById('prompt-input').focus();
-    return;
-  }
-
-  const btn = document.getElementById('prompt-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Queuing…';
-
-  try {
-    const res = await fetch(PROMPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-      body: JSON.stringify({prompt}),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      // Redirect to dashboard — event is gone, will reappear as pending
-      window.location.href = "{% url 'dashboard:index' %}";
-    } else {
-      alert('Error: ' + data.error);
-      btn.disabled = false;
-      btn.textContent = 'Apply';
-    }
-  } catch (e) {
-    alert('Network error. Please try again.');
-    btn.disabled = false;
-    btn.textContent = 'Apply';
-  }
-});
-</script>
+<script src="{% static 'js/event_edit.js' %}"></script>
 {% endif %}
 {% endblock %}
