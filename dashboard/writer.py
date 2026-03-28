@@ -27,6 +27,8 @@ def _priority_color_id(user, priority: int) -> str:
 def _resolve_color_id(user, category, event_color: str = '') -> str:
     if event_color:
         return str(event_color)
+    if category and category.gcal_color_id:
+        return category.gcal_color_id
     return _priority_color_id(user, category.priority if category else 1)
 
 
