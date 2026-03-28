@@ -143,6 +143,17 @@ def _get_or_create_uncategorized(user):
 
 
 def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> list:
+    if not events:
+        return []
+
+    # All-or-nothing: if any event is pending, flip the whole batch to pending.
+    # This keeps each job homogeneous so the job detail page can resubmit cleanly.
+    if any(e.get('status') == 'pending' for e in events):
+        for e in events:
+            if e.get('status') == 'active':
+                e['status'] = 'pending'
+                e['concern'] = e.get('concern') or 'Other events in this batch needed attention.'
+
     created = []
     for event_data in events:
         event_data['source_email_id'] = source_email_id
