@@ -18,7 +18,7 @@ Jobs are never duplicated, abandoned, or silently replaced.
 
 ## ScanJob lifecycle
 
-```
+```md
 queued → processing → done
                     → needs_review   (one or more events are pending; user must act)
                     → failed         (unhandled exception)
@@ -30,7 +30,7 @@ needs_review → processing            (user submits a reprocess prompt)
 ### Status definitions
 
 | Status | Meaning |
-|---|---|
+| --- | --- |
 | `queued` | Job created, not yet picked up by a worker |
 | `processing` | Worker is actively running |
 | `done` | All events created are active; nothing left to do |
@@ -49,7 +49,7 @@ needs_review → processing            (user submits a reprocess prompt)
 ## Event status
 
 | Status | Meaning |
-|---|---|
+| --- | --- |
 | `active` | Confirmed, written to calendar if GCal is connected |
 | `pending` | Needs user review — incomplete, ambiguous, or conflicting data |
 
@@ -112,12 +112,14 @@ When `_save_events` processes a pending event, it checks for conflicts against
 existing active events for the same user:
 
 **Conflict conditions (either triggers):**
+
 1. An active event exists with the same `source_email_id` — same email was already
    processed and produced active events.
 2. An active event exists with a matching title AND overlapping time window
    (within ±1 hour of the start time).
 
 **When a conflict is found:**
+
 - The new event remains `pending`.
 - The conflict details are **appended** to its `concern` field:
   `" Conflicts with existing event: '{title}' on {date} (id={pk})."`
@@ -125,6 +127,7 @@ existing active events for the same user:
   to cancel, replace, or merge.
 
 **What must never happen:**
+
 - A conflict silently overwrites an existing active event.
 - A conflict is detected but not surfaced to the user.
 - The presence of a conflict causes data to be dropped.
@@ -152,6 +155,7 @@ into duplicate events indefinitely.
 **The pipeline (`_save_events`) owns the terminal job status decision.**
 
 The task layer (`tasks.py`) is responsible for:
+
 - Creating the job
 - Setting `processing` when work begins
 - Setting `failed` on unhandled exceptions
@@ -167,7 +171,7 @@ before, after, or instead of what the pipeline actually produced.
 ## Source types
 
 | Source | Created by |
-|---|---|
+| --- | --- |
 | `email` | Inbound email webhook |
 | `upload` | Dashboard file upload, event_prompt_edit, or bulk reprocess |
 
@@ -176,6 +180,7 @@ There are exactly two sources. There is no `reprocess` source.
 ### Two kinds of reprocess — do not confuse them
 
 **needs_review fix** (`reprocess_events` task, called from `queue_job_reprocess` view):
+
 - User is on the job detail page reviewing pending events.
 - Submits a correction prompt to fix the extraction.
 - Mutates the original job — no new job is created.
@@ -184,6 +189,7 @@ There are exactly two sources. There is no `reprocess` source.
 
 **User-initiated re-extraction** (`process_text_as_upload` task, called from
 `event_prompt_edit` or `events_bulk_action` views):
+
 - User deletes one or more events from the dashboard and supplies a prompt.
 - Not a fix of a needs_review job — the user just wants different events.
 - Creates a new ScanJob with `source='upload'`.
