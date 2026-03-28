@@ -123,7 +123,10 @@
       <textarea id="reprocess-prompt" rows="3"
         placeholder="e.g. 'Weekly until April 25 2026' or 'These are one-time events, no recurrence'"></textarea>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button type="button" class="btn-primary" id="reprocess-btn">Re-process</button>
+        <button type="button" class="btn-primary" id="reprocess-btn"
+        data-reprocess-url="{% url 'dashboard:queue_job_reprocess' pk=job.pk %}"
+        data-queue-url="{% url 'dashboard:queue' %}"
+        data-pending-ids="[{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">Re-process</button>
         <span id="reprocess-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
       </div>
     </div>
@@ -170,46 +173,6 @@
 
 {% block extra_js %}
 {% if pending_events %}
-<script>
-const REPROCESS_URL = "{% url 'dashboard:queue_job_reprocess' pk=job.pk %}";
-const CSRF = "{{ csrf_token }}";
-const PENDING_IDS = [{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
-
-document.getElementById('reprocess-btn').addEventListener('click', async function () {
-  const prompt = document.getElementById('reprocess-prompt').value.trim();
-  const status = document.getElementById('reprocess-status');
-  if (!prompt) {
-    document.getElementById('reprocess-prompt').focus();
-    return;
-  }
-  this.disabled = true;
-  this.textContent = 'Queuing…';
-  status.textContent = '';
-
-  try {
-    const res = await fetch(REPROCESS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ event_ids: PENDING_IDS, prompt }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      status.textContent = 'Queued. Updating this job…';
-      status.style.color = 'var(--color-success, #16a34a)';
-      setTimeout(() => { window.location.href = "{% url 'dashboard:queue' %}"; }, 1200);
-    } else {
-      status.textContent = 'Error: ' + data.error;
-      status.style.color = '#ef4444';
-      this.disabled = false;
-      this.textContent = 'Re-process';
-    }
-  } catch (e) {
-    status.textContent = 'Network error.';
-    status.style.color = '#ef4444';
-    this.disabled = false;
-    this.textContent = 'Re-process';
-  }
-});
-</script>
+<script src="{% static 'js/queue_job_detail.js' %}"></script>
 {% endif %}
 {% endblock %}

@@ -229,28 +229,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-  const autoDelete = document.getElementById('auto_delete');
-  const retentionGroup = document.getElementById('retention-group');
-  const gcalGroup = document.getElementById('gcal-delete-group');
-
-  function toggleCleanupFields() {
-    const enabled = autoDelete.checked;
-    retentionGroup.style.opacity = enabled ? '1' : '0.4';
-    retentionGroup.style.pointerEvents = enabled ? '' : 'none';
-    gcalGroup.style.opacity = enabled ? '1' : '0.4';
-    gcalGroup.style.pointerEvents = enabled ? '' : 'none';
-  }
-
-  autoDelete.addEventListener('change', toggleCleanupFields);
-
-  // Swatch selection: toggle .selected class on label click
-  document.querySelectorAll('.gcal-swatches').forEach(group => {
-    group.addEventListener('change', e => {
-      group.querySelectorAll('.gcal-swatch').forEach(s => s.classList.remove('selected'));
-      const label = group.querySelector(`label[for="${e.target.id}"]`);
-      if (label) label.classList.add('selected');
-    });
-  });
-</script>
+<script src="{% static 'js/preferences.js' %}"></script>
 {% endblock %}
