@@ -1,3 +1,5 @@
+/* static/manual/css/queue.css */
+
 /* ── Queue page ── */
 .queue-page {
   max-width: 860px;
@@ -68,12 +70,23 @@
   background: var(--bg);
 }
 
+/* Clickable rows (terminal jobs with a detail page) */
+.queue-row--clickable {
+  cursor: pointer;
+}
+
+/* Source cell link — inherits row color, weight signals clickability */
+.queue-table a.queue-source-link {
+  color: inherit;
+  font-weight: 600;
+}
+
 /* Column widths */
 .queue-table th:nth-child(1),
 .queue-table td:nth-child(1) { width: 100px; }
 
 .queue-table th:nth-child(2),
-.queue-table td:nth-child(2) { width: auto; }           /* Summary — takes remaining space */
+.queue-table td:nth-child(2) { width: auto; }
 
 .queue-table th:nth-child(3),
 .queue-table td:nth-child(3) { width: 130px; }
@@ -84,13 +97,36 @@
 .queue-table th:nth-child(5),
 .queue-table td:nth-child(5) { width: 140px; white-space: nowrap; color: var(--text-muted); }
 
-.queue-summary {
+.queue-from {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-notes {
   color: var(--text-muted);
   font-size: 0.875rem;
   max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── Pending event count badge (inline in source cell) ── */
+.queue-pending-badge {
+  display: inline-block;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: 4px;
+  vertical-align: middle;
+  line-height: 1.5;
 }
 
 /* ── Status badges ── */
@@ -129,6 +165,12 @@
   animation: pulse-dot 1s ease-in-out infinite;
 }
 
+.status--needs-review {
+  background: #fef3c7;
+  color: #92400e;
+}
+.status--needs-review::before { background: #f59e0b; }
+
 .status--done {
   background: var(--accent-muted);
   color: var(--accent);
@@ -144,33 +186,4 @@
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.75); }
-}
-
-/* ── Queue nav badge ── */
-.topnav__link--queue {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.queue-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1;
-  animation: badge-pop 0.2s ease-out;
-}
-
-@keyframes badge-pop {
-  0%   { transform: scale(0.6); opacity: 0; }
-  70%  { transform: scale(1.15); }
-  100% { transform: scale(1); opacity: 1; }
 }

@@ -73,14 +73,11 @@
     jobs.forEach(function (j) {
       var tr = document.createElement('tr');
 
-      // A job is "terminal" (has a detail page worth visiting) when it's done,
-      // failed, or needs_review. Queued/processing rows are not yet clickable.
       var isTerminal = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
       var hasPending = j.pending_event_count > 0;
 
       var attentionBadge = hasPending
-        ? ' <span style="display:inline-block;background:#ef4444;color:#fff;border-radius:9px;font-size:0.7rem;font-weight:700;padding:1px 6px;margin-left:4px;">'
-          + j.pending_event_count + ' pending</span>'
+        ? '<span class="queue-pending-badge">' + j.pending_event_count + ' pending</span>'
         : '';
 
       var activeInfo = j.active_event_count > 0
@@ -91,7 +88,7 @@
 
       var sourceLabel = SOURCE_LABELS[j.source] || j.source;
       var sourceCell = isTerminal
-        ? '<a href="/dashboard/queue/' + j.id + '/" style="color:inherit;font-weight:600;">' + sourceLabel + '</a>'
+        ? '<a href="/dashboard/queue/' + j.id + '/" class="queue-source-link">' + sourceLabel + '</a>'
         : sourceLabel;
 
       var isDurationVisible = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
@@ -105,7 +102,7 @@
         '<td>' + fmt(j.created_at) + '</td>';
 
       if (isTerminal) {
-        tr.style.cursor = 'pointer';
+        tr.classList.add('queue-row--clickable');
         tr.addEventListener('click', function (e) {
           if (e.target.tagName !== 'A') {
             window.location.href = '/dashboard/queue/' + j.id + '/';
