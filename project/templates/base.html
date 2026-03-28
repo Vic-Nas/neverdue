@@ -11,30 +11,6 @@
   <link rel="stylesheet" href="{% static 'css/layout.css' %}">
   <link rel="stylesheet" href="{% static 'css/forms.css' %}">
   <link rel="stylesheet" href="{% static 'css/house_ads.css' %}">
-  <style>
-    .queue-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 18px;
-      height: 18px;
-      border-radius: 9px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 0 5px;
-      margin-left: 5px;
-      vertical-align: middle;
-      line-height: 1;
-    }
-    .queue-badge--processing {
-      background: #f97316;
-      color: #fff;
-    }
-    .queue-badge--attention {
-      background: #ef4444;
-      color: #fff;
-    }
-  </style>
   {% block extra_css %}{% endblock %}
 
   {% if ADSENSE_CLIENT_ID %}
@@ -43,10 +19,10 @@
 </head>
 <body>
 
-<nav class="topnav">
+<nav class="topnav" id="topnav">
   <a href="{% url 'dashboard:index' %}" class="topnav__logo">Never<span>Due</span></a>
 
-  <div class="topnav__links">
+  <div class="topnav__links" id="nav-links">
     {% if user.is_authenticated %}
     <a href="{% url 'dashboard:index' %}" class="topnav__link {% if request.resolver_match.url_name == 'index' %}topnav__link--active{% endif %}">Dashboard</a>
     <a href="{% url 'dashboard:categories' %}" class="topnav__link {% if 'categor' in request.resolver_match.url_name %}topnav__link--active{% endif %}">Categories</a>
@@ -75,6 +51,9 @@
       <a href="{% url 'accounts:preferences' %}" class="topnav__link">Preferences</a>
       <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
     {% endif %}
+    <button class="topnav__hamburger" id="nav-hamburger" aria-label="Toggle menu" aria-expanded="false" aria-controls="nav-links">
+      <span></span><span></span><span></span>
+    </button>
   </div>
 </nav>
 
@@ -186,6 +165,35 @@
 {% if user.is_authenticated %}
 <script>
 (function () {
+  // ── Mobile hamburger ──
+  var hamburger = document.getElementById('nav-hamburger');
+  var topnav = document.getElementById('topnav');
+  var navLinks = document.getElementById('nav-links');
+
+  if (hamburger) {
+    hamburger.addEventListener('click', function () {
+      var isOpen = topnav.classList.toggle('topnav--open');
+      hamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    // Close mobile menu on link click
+    navLinks.querySelectorAll('.topnav__link').forEach(function (link) {
+      link.addEventListener('click', function () {
+        topnav.classList.remove('topnav--open');
+        hamburger.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    // Close on outside click
+    document.addEventListener('click', function (e) {
+      if (!topnav.contains(e.target)) {
+        topnav.classList.remove('topnav--open');
+        hamburger.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // ── Queue badge polling ──
   var badgeProcessing = document.getElementById('queue-badge-processing');
   var badgeAttention = document.getElementById('queue-badge-attention');
   var pollInterval = null;
@@ -224,21 +232,17 @@
 
   function startPolling() {
     if (!pollInterval) {
-      poll(); // immediate first check
+      poll();
       pollInterval = setInterval(poll, POLL_MS);
     }
   }
 
-  // Always do one check on load to show badge if jobs are already running
   poll();
 
-  // Re-start polling whenever user submits a form (upload, reprocess, etc.)
   document.addEventListener('submit', function () {
-    setTimeout(startPolling, 1000); // slight delay so task is queued first
+    setTimeout(startPolling, 1000);
   });
 
-  // Also restart when fetch-based actions complete (bulk reprocess, prompt edit)
-  // by exposing a global hook other scripts can call
   window.neverdue = window.neverdue || {};
   window.neverdue.startQueuePolling = startPolling;
 })();

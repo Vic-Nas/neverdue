@@ -220,7 +220,10 @@ textarea {
   }
 }
 
-/* ── Queue badge (appears in nav) ── */
+/* ── Queue badge (appears in nav header) ──
+   Defined here — once — so page-specific stylesheets never override the variants.
+   queue.css must NOT redefine .queue-badge.
+*/
 .queue-badge {
   display: inline-flex;
   align-items: center;
@@ -229,12 +232,21 @@ textarea {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--accent);
   color: white;
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
+  margin-left: 4px;
+  vertical-align: middle;
   animation: badge-pop 0.2s ease-out;
+}
+
+.queue-badge--processing {
+  background: #f97316; /* orange — active jobs */
+}
+
+.queue-badge--attention {
+  background: #ef4444; /* red — needs review */
 }
 
 @keyframes badge-pop {
