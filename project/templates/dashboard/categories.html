@@ -56,9 +56,10 @@
       <div class="cat-card__rules">
         {% for rule in cat.rules.all %}
         <span class="cat-rule-tag">
-          {% if rule.sender %}from: {{ rule.sender }}{% endif %}
-          {% if rule.sender and rule.keyword %} · {% endif %}
-          {% if rule.keyword %}contains: {{ rule.keyword }}{% endif %}
+          {% if rule.rule_type == 'sender' %}from: {{ rule.pattern }}
+          {% elif rule.rule_type == 'keyword' %}contains: {{ rule.pattern }}
+          {% elif rule.rule_type == 'prompt' %}prompt injection
+          {% endif %}
         </span>
         {% endfor %}
       </div>

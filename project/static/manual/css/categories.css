@@ -181,7 +181,6 @@
 }
 
 .gcal-swatch--auto input:checked + span {
-  background: var(--color-surface, #f3f4f6);
+  background: var(--surface);
   border-color: var(--accent);
 }
-

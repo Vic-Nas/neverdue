@@ -83,25 +83,31 @@
     </div>
 
     {# ── Rules ── #}
+    {% if category %}
     <div class="form-section">
       <div class="form-section__header">
         <h3 class="form-section__title">Auto-assign rules</h3>
-        <button type="button" class="btn-ghost btn btn--sm" onclick="addRule()">+ Add rule</button>
+        <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn btn--sm">Manage rules →</a>
       </div>
-      <p class="form-hint form-hint--spaced">Emails matching these rules will be automatically assigned to this category.</p>
-      <div id="rules-list" class="rules-list">
-        {% if category %}
-          {% for rule in category.rules.all %}
-          <div class="rule-row">
-            <input type="text" name="rule_sender" value="{{ rule.pattern }}" placeholder="Sender (e.g. prof@uni.ca)">
-            <span class="rule-row__sep">or contains</span>
-            <input type="text" name="rule_keyword" value="" placeholder="Keyword (e.g. deadline)">
-            <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
-          </div>
-          {% endfor %}
-        {% endif %}
+      <p class="form-hint form-hint--spaced">Rules that automatically assign emails to this category. Manage them on the <a href="{% url 'dashboard:rules' %}">Rules page</a>.</p>
+      {% with rules=category.rules.all %}
+      {% if rules %}
+      <div class="cat-card__rules">
+        {% for rule in rules %}
+        <span class="cat-rule-tag">
+          {% if rule.rule_type == 'sender' %}from: {{ rule.pattern }}
+          {% elif rule.rule_type == 'keyword' %}contains: {{ rule.pattern }}
+          {% elif rule.rule_type == 'prompt' %}prompt injection
+          {% endif %}
+        </span>
+        {% endfor %}
       </div>
+      {% else %}
+      <p class="form-hint">No rules yet. <a href="{% url 'dashboard:rules' %}">Add a rule</a> to auto-assign emails to this category.</p>
+      {% endif %}
+      {% endwith %}
     </div>
+    {% endif %}
 
     <div class="form-actions">
       <button type="submit" class="btn-primary">{% if category %}Save changes{% else %}Create category{% endif %}</button>

@@ -198,3 +198,43 @@ There are exactly two sources. There is no `reprocess` source.
 
 If you see `reprocess_events` called without `job_pk`, or `process_text_as_upload`
 called from the job queue page, something violated this contract.
+
+---
+
+## Rule system
+
+Rules are owned by the user, not by categories. There are three types:
+
+### Rule types
+
+| Type | Purpose |
+| --- | --- |
+| `sender` | Match against the inbound email sender address |
+| `keyword` | Match against the event title + description (substring, case-insensitive) |
+| `prompt` | Inject custom instructions into the LLM prompt for matching emails |
+
+### Matching logic (`resolve_category` in `llm/resolver.py`)
+
+Rules are evaluated in this order for every extracted event:
+
+1. **Sender rules** — `rule.pattern` is tested as a case-insensitive substring of the sender address. First match wins.
+2. **Keyword rules** — `rule.pattern` is tested as a case-insensitive substring of `title + " " + description`. First match wins.
+3. **LLM hint** — if no rule matched, use `category_hint` from extraction to find or create a category.
+
+### Actions
+
+- `categorize` — assign the rule's linked `category` to the event.
+- `discard` — skip the event entirely; it is never saved.
+
+### Prompt rules
+
+A prompt rule with an empty `pattern` applies to all emails.
+A prompt rule with a non-empty `pattern` applies only when `pattern` is a substring of the sender address.
+Multiple matching prompt rules are concatenated (newline-joined) and injected before the extraction prompt.
+
+### What must never happen ever
+
+- A rule with `action='categorize'` and no `category` silently does nothing — it must be validated at save time.
+- Rules are matched in `created_at` order within each type. Order is deterministic.
+- Category deletion sets linked rules' `category` to NULL (`SET_NULL`) — the rule persists but becomes a no-op for categorize actions. The user should be warned or the rule cleaned up.
+- Rules are never created or deleted via the category edit form. They are managed exclusively via the `/rules/` page.
