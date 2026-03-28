@@ -19,12 +19,10 @@ def index(request):
 
         events = Event.objects.filter(user=request.user).order_by(order)
         active_events = events.filter(status='active')
-        pending_events = Event.objects.filter(user=request.user, status='pending').order_by('pending_expires_at', 'created_at')
         last_event = events.order_by('-created_at').first()
         ctx = {
             'events': events,
             'active_events': active_events,
-            'pending_events': pending_events,
             'last_event': last_event,
             'sort': sort,
         }
@@ -527,18 +525,31 @@ def queue(request):
 @login_required
 @require_GET
 def queue_status(request):
-    """
-    Returns the count of active (queued + processing) ScanJobs for the current user,
-    plus the jobs themselves for the queue page.
-    Used by the nav badge (polling) and the queue page.
-    """
     from emails.models import ScanJob
+    from dashboard.models import Event
 
-    jobs = ScanJob.objects.filter(
-        user=request.user,
-    ).order_by('-created_at')[:50]  # cap at 50 for the page view
+    jobs = ScanJob.objects.filter(user=request.user).order_by('-created_at')[:50]
 
     active_count = sum(1 for j in jobs if j.status in (ScanJob.STATUS_QUEUED, ScanJob.STATUS_PROCESSING))
+
+    # Count pending events per job in one query
+    from django.db.models import Count, Q
+    job_ids = [j.pk for j in jobs]
+    pending_counts = dict(
+        Event.objects.filter(scan_job_id__in=job_ids, status='pending')
+        .values('scan_job_id')
+        .annotate(n=Count('id'))
+        .values_list('scan_job_id', 'n')
+    )
+    active_event_counts = dict(
+        Event.objects.filter(scan_job_id__in=job_ids, status='active')
+        .values('scan_job_id')
+        .annotate(n=Count('id'))
+        .values_list('scan_job_id', 'n')
+    )
+
+    # Total pending events across all jobs (for nav badge)
+    attention_count = sum(pending_counts.values())
 
     jobs_data = [
         {
@@ -549,8 +560,32 @@ def queue_status(request):
             'notes': j.notes,
             'created_at': j.created_at.isoformat(),
             'duration_seconds': round(j.duration_seconds),
+            'pending_event_count': pending_counts.get(j.pk, 0),
+            'active_event_count': active_event_counts.get(j.pk, 0),
         }
         for j in jobs
     ]
 
-    return JsonResponse({'active_count': active_count, 'jobs': jobs_data})
+    return JsonResponse({'active_count': active_count, 'attention_count': attention_count, 'jobs': jobs_data})
+
+
+@login_required
+def queue_job_detail(request, pk):
+    """
+    Detail page for a single ScanJob.
+    Shows all events created by the job (active + pending).
+    Pending events can be resubmitted with a prompt (which deletes them and reprocesses).
+    """
+    from emails.models import ScanJob
+    try:
+        job = get_object_or_404(ScanJob, pk=pk, user=request.user)
+        events = Event.objects.filter(scan_job=job).select_related('category').order_by('status', 'start')
+        pending_events = [e for e in events if e.status == 'pending']
+        active_events = [e for e in events if e.status == 'active']
+        return render(request, 'dashboard/queue_job_detail.html', {
+            'job': job,
+            'pending_events': pending_events,
+            'active_events': active_events,
+        })
+    except Exception:
+        return HttpResponse('Job unavailable.', status=500)

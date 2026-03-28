@@ -11,6 +11,30 @@
   <link rel="stylesheet" href="{% static 'css/layout.css' %}">
   <link rel="stylesheet" href="{% static 'css/forms.css' %}">
   <link rel="stylesheet" href="{% static 'css/house_ads.css' %}">
+  <style>
+    .queue-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0 5px;
+      margin-left: 5px;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .queue-badge--processing {
+      background: #f97316;
+      color: #fff;
+    }
+    .queue-badge--attention {
+      background: #ef4444;
+      color: #fff;
+    }
+  </style>
   {% block extra_css %}{% endblock %}
 
   {% if ADSENSE_CLIENT_ID %}
@@ -34,7 +58,7 @@
     <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
     {% endif %}
     <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
-       (<span class="queue-badge" id="queue-badge" hidden></span>)
+      Queue<span class="queue-badge queue-badge--processing" id="queue-badge-processing" hidden></span><span class="queue-badge queue-badge--attention" id="queue-badge-attention" hidden></span>
     </a>
     {% endif %}
     <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
@@ -162,16 +186,23 @@
 {% if user.is_authenticated %}
 <script>
 (function () {
-  var badge = document.getElementById('queue-badge');
+  var badgeProcessing = document.getElementById('queue-badge-processing');
+  var badgeAttention = document.getElementById('queue-badge-attention');
   var pollInterval = null;
   var POLL_MS = 5000;
 
-  function updateBadge(count) {
-    if (count > 0) {
-      badge.textContent = count;
-      badge.hidden = false;
+  function updateBadges(activeCount, attentionCount) {
+    if (activeCount > 0) {
+      badgeProcessing.textContent = activeCount;
+      badgeProcessing.hidden = false;
     } else {
-      badge.hidden = true;
+      badgeProcessing.hidden = true;
+    }
+    if (attentionCount > 0) {
+      badgeAttention.textContent = attentionCount;
+      badgeAttention.hidden = false;
+    } else {
+      badgeAttention.hidden = true;
     }
   }
 
@@ -182,8 +213,7 @@
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (data) {
       if (!data) return;
-      updateBadge(data.active_count);
-      // Stop polling once queue drains; restart on next user action if needed
+      updateBadges(data.active_count, data.attention_count);
       if (data.active_count === 0 && pollInterval) {
         clearInterval(pollInterval);
         pollInterval = null;

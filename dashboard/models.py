@@ -108,6 +108,12 @@ class Event(models.Model):
     pending_concern = models.TextField(null=True, blank=True)
     color = models.CharField(max_length=20, blank=True, default='')  # GCal colorId, overrides category priority color
     gcal_link = models.URLField(blank=True, default='')
+    scan_job = models.ForeignKey(
+        'emails.ScanJob',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='events',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):

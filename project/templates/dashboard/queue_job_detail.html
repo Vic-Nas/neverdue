@@ -1,0 +1,215 @@
+{# templates/dashboard/queue_job_detail.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% load tz_display %}
+{% block title %}Job {{ job.pk }} — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/queue.css' %}">
+<style>
+  .job-detail { max-width: 800px; }
+  .job-detail__meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.875rem;
+    color: var(--color-muted, #6b7280);
+    margin-bottom: 24px;
+    align-items: center;
+  }
+  .job-detail__meta strong { color: var(--color-text, #111); }
+  .job-section { margin-bottom: 32px; }
+  .job-section__title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted, #6b7280);
+    margin-bottom: 12px;
+  }
+  .job-section__title--attention { color: #ef4444; }
+  .concern-text {
+    font-size: 0.8rem;
+    color: #ef4444;
+    margin-top: 2px;
+  }
+  .reprocess-box {
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .reprocess-box__label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .reprocess-box textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border, #e5e7eb);
+    font-size: 0.9rem;
+    resize: vertical;
+    font-family: inherit;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+  }
+  .reprocess-box__hint {
+    font-size: 0.8rem;
+    color: var(--color-muted, #6b7280);
+    margin-bottom: 12px;
+  }
+  .empty-section {
+    color: var(--color-muted, #6b7280);
+    font-size: 0.9rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page job-detail">
+
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">Job #{{ job.pk }}</h1>
+      <div class="job-detail__meta">
+        <span>Source: <strong>{{ job.get_source_display }}</strong></span>
+        {% if job.from_address %}<span>From: <strong>{{ job.from_address }}</strong></span>{% endif %}
+        <span>Status: <strong>{{ job.get_status_display }}</strong></span>
+        <span>Started: <strong>{{ job.created_at|date:"M d, H:i" }}</strong></span>
+        {% if job.status == 'done' or job.status == 'failed' %}
+        <span>Duration: <strong>{{ job.duration_seconds|floatformat:0 }}s</strong></span>
+        {% endif %}
+        {% if job.notes %}<span>Note: <strong>{{ job.notes }}</strong></span>{% endif %}
+      </div>
+    </div>
+    <a href="{% url 'dashboard:queue' %}" class="btn-ghost btn">← Queue</a>
+  </div>
+
+  {# ── Pending events — needs attention ── #}
+  {% if pending_events %}
+  <div class="job-section">
+    <div class="job-section__title job-section__title--attention">
+      ⚠ {{ pending_events|length }} event{{ pending_events|length|pluralize }} need{{ pending_events|length|pluralize:"s," }} attention
+    </div>
+    <div class="event-list" style="margin-bottom:20px;">
+      {% for event in pending_events %}
+      <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card">
+        <div class="event-card__date">
+          <span class="event-card__day">{{ event.start|in_user_tz:request.user|date:"d" }}</span>
+          <span class="event-card__month">{{ event.start|in_user_tz:request.user|date:"M" }}</span>
+        </div>
+        <div class="event-card__body">
+          <div class="event-card__title">{{ event.title }}</div>
+          {% if event.pending_concern %}
+          <div class="concern-text">{{ event.pending_concern }}</div>
+          {% endif %}
+        </div>
+        <div class="event-card__arrow">→</div>
+      </a>
+      {% endfor %}
+    </div>
+
+    {# Resubmit all pending from this job with a prompt #}
+    <div class="reprocess-box">
+      <span class="reprocess-box__label">Re-process these events with a prompt</span>
+      <p class="reprocess-box__hint">
+        All {{ pending_events|length }} pending event{{ pending_events|length|pluralize }} above will be deleted and re-extracted using your prompt.
+        They'll reappear as a new job in the queue.
+      </p>
+      <textarea id="reprocess-prompt" rows="3"
+        placeholder="e.g. 'Weekly until April 25 2026' or 'These are one-time events, no recurrence'"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="btn-primary" id="reprocess-btn">Re-process</button>
+        <span id="reprocess-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Active events created by this job ── #}
+  <div class="job-section">
+    <div class="job-section__title">
+      {{ active_events|length }} active event{{ active_events|length|pluralize }} created
+    </div>
+    {% if active_events %}
+    <div class="event-list">
+      {% for event in active_events %}
+      <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card">
+        <div class="event-card__date">
+          <span class="event-card__day">{{ event.start|in_user_tz:request.user|date:"d" }}</span>
+          <span class="event-card__month">{{ event.start|in_user_tz:request.user|date:"M" }}</span>
+        </div>
+        <div class="event-card__body">
+          <div class="event-card__title">{{ event.title }}</div>
+          <div class="event-card__meta">
+            {{ event.start|in_user_tz:request.user|time:"H:i" }} → {{ event.end|in_user_tz:request.user|time:"H:i" }}
+            {% if event.category %}
+              <span class="event-card__sep">·</span>
+              <span class="category-badge"
+                {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}>
+                {{ event.category.name }}
+              </span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="event-card__arrow">→</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-section">No active events were created by this job.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if pending_events %}
+<script>
+const BULK_URL = "{% url 'dashboard:events_bulk_action' %}";
+const CSRF = "{{ csrf_token }}";
+const PENDING_IDS = [{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
+
+document.getElementById('reprocess-btn').addEventListener('click', async function () {
+  const prompt = document.getElementById('reprocess-prompt').value.trim();
+  const status = document.getElementById('reprocess-status');
+  if (!prompt) {
+    document.getElementById('reprocess-prompt').focus();
+    return;
+  }
+  this.disabled = true;
+  this.textContent = 'Queuing…';
+  status.textContent = '';
+
+  try {
+    const res = await fetch(BULK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ action: 'reprocess', ids: PENDING_IDS, prompt }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = `${data.queued} event${data.queued !== 1 ? 's' : ''} queued.`;
+      status.style.color = 'var(--color-success, #16a34a)';
+      setTimeout(() => { window.location.href = "{% url 'dashboard:queue' %}"; }, 1200);
+    } else {
+      status.textContent = 'Error: ' + data.error;
+      status.style.color = '#ef4444';
+      this.disabled = false;
+      this.textContent = 'Re-process';
+    }
+  } catch (e) {
+    status.textContent = 'Network error.';
+    status.style.color = '#ef4444';
+    this.disabled = false;
+    this.textContent = 'Re-process';
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

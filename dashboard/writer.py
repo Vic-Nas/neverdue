@@ -60,7 +60,7 @@ def _build_gcal_body(event) -> dict:
     return body
 
 
-def write_event_to_calendar(user, event_data: dict, category: Category | None = None) -> Event | None:
+def write_event_to_calendar(user, event_data: dict, category: Category | None = None, scan_job=None) -> Event | None:
     """
     Write a single event to the DB and optionally Google Calendar.
     Pending events are saved to DB only — not pushed to Google Calendar.
@@ -112,6 +112,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
                 status='pending',
                 pending_concern=event_data.get('concern', ''),
                 pending_expires_at=expires_at,
+                scan_job=scan_job,
             )
             logger.info("Pending event saved | user=%s | event_id=%s | title=%r | concern=%r",
                         user.pk, event.pk, event.title, event.pending_concern)
@@ -195,6 +196,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
         source_email_id=event_data.get('source_email_id'),
         status='active',
         gcal_link=google_event.get('htmlLink', ''),
+        scan_job=scan_job,
     )
 
     logger.info("Event created | user=%s | event_id=%s | title=%r | start=%s", user.pk, event.pk, event.title, event.start)
