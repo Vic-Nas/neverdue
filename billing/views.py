@@ -124,6 +124,8 @@ def webhook(request):
                              'customer.subscription.updated',
                              'customer.subscription.deleted'):
             _sync_subscription(event['data']['object'])
+        elif event['type'] == 'checkout.session.completed':
+            _handle_checkout_completed(event['data']['object'])
     except Exception:
         logger.exception('webhook handler failed for event=%s', event['type'])
         return HttpResponse(status=500)
@@ -142,6 +144,41 @@ def _get_or_create_customer(user):
 def _create_stripe_customer(user):
     customer = stripe.Customer.create(email=user.email, name=user.username)
     return customer.id
+
+
+def _handle_checkout_completed(session):
+    """
+    After checkout, if a promotion code was applied during a trial checkout,
+    Stripe does not carry the discount through to the subscription automatically.
+    We read session['discounts'] and attach them to the subscription explicitly.
+    """
+    subscription_id = session.get('subscription')
+    discounts = session.get('discounts') or []
+
+    if not subscription_id or not discounts:
+        return
+
+    sub_discounts = []
+    for d in discounts:
+        if d.get('promotion_code'):
+            sub_discounts.append({'promotion_code': d['promotion_code']})
+        elif d.get('coupon'):
+            sub_discounts.append({'coupon': d['coupon']})
+
+    if not sub_discounts:
+        return
+
+    try:
+        stripe.Subscription.modify(subscription_id, discounts=sub_discounts)
+        logger.info(
+            '_handle_checkout_completed: applied discounts %s to subscription=%s',
+            sub_discounts, subscription_id,
+        )
+    except stripe.error.StripeError:
+        logger.exception(
+            '_handle_checkout_completed: failed to apply discounts to subscription=%s',
+            subscription_id,
+        )
 
 
 def _sync_subscription(stripe_sub):
