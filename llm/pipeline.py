@@ -9,6 +9,35 @@ from dashboard.writer import write_event_to_calendar
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# NOTE — required change in extractor.py
+# ---------------------------------------------------------------------------
+# Each extract_* function must return a tuple (events, input_tokens, output_tokens)
+# instead of just events. Example for extract_events:
+#
+#   def extract_events(text, language, user_timezone):
+#       response = client.messages.create(...)
+#       events = _parse_response(response)
+#       return events, response.usage.input_tokens, response.usage.output_tokens
+#
+# Same pattern for extract_events_from_email and extract_events_from_image.
+# ---------------------------------------------------------------------------
+
+
+def _fire_usage(user, input_tokens: int, output_tokens: int) -> None:
+    """
+    Async-fire token usage tracking. Non-blocking — never raises.
+    Skips silently if tokens are zero (e.g. early-exit paths).
+    """
+    if not input_tokens and not output_tokens:
+        return
+    try:
+        from emails.tasks import track_llm_usage
+        track_llm_usage.delay(user.pk, input_tokens, output_tokens)
+    except Exception as exc:
+        # Tracking must never break the pipeline.
+        logger.warning("_fire_usage: failed to enqueue for user=%s: %s", user.pk, exc)
+
 
 # ---------------------------------------------------------------------------
 # Public entry points
@@ -28,11 +57,12 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     user_timezone = getattr(user, 'timezone', 'UTC')
 
     try:
-        events = extract_events(text, language=language, user_timezone=user_timezone)
+        events, input_tokens, output_tokens = extract_events(text, language=language, user_timezone=user_timezone)
     except ValueError as exc:
         logger.warning("process_text: extraction failed for user=%s: %s", user.pk, exc)
         return [], ''
 
+    _fire_usage(user, input_tokens, output_tokens)
     logger.info("process_text: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return created, ''
@@ -70,7 +100,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         notes = 'Attachments ignored — Pro plan required.'
 
     try:
-        events = extract_events_from_email(
+        events, input_tokens, output_tokens = extract_events_from_email(
             body=body or '',
             attachments=decoded_attachments,
             language=language,
@@ -80,6 +110,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         logger.warning("process_email: extraction failed for user=%s: %s", user.pk, exc)
         return [], notes
 
+    _fire_usage(user, input_tokens, output_tokens)
     logger.info("process_email: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return created, notes
@@ -108,17 +139,20 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
         if context:
             text = f"{text}\n\nUser context: {context}"
         try:
-            events = extract_events(text, language=language, user_timezone=user_timezone)
+            events, input_tokens, output_tokens = extract_events(text, language=language, user_timezone=user_timezone)
         except ValueError as exc:
             logger.warning("process_file: extraction failed for user=%s: %s", user.pk, exc)
             return [], ''
     else:
         try:
-            events = extract_events_from_image(file_bytes, media_type, context=context, language=language, user_timezone=user_timezone)
+            events, input_tokens, output_tokens = extract_events_from_image(
+                file_bytes, media_type, context=context, language=language, user_timezone=user_timezone,
+            )
         except ValueError as exc:
             logger.warning("process_file: extraction failed for user=%s: %s", user.pk, exc)
             return [], ''
 
+    _fire_usage(user, input_tokens, output_tokens)
     logger.info("process_file: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events)
     return created, ''

@@ -3,7 +3,6 @@ import logging
 
 from celery import shared_task
 from django.utils import timezone
-from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +96,32 @@ def _set_notes(job: 'ScanJob | None', notes: str) -> None:
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
+
+@shared_task
+def track_llm_usage(user_id: int, input_tokens: int, output_tokens: int) -> None:
+    """
+    Atomically increment the current-month LLM token counters for a user.
+
+    Called by pipeline.py after every successful Anthropic API response.
+    Uses F() expressions so concurrent workers never race and overwrite each other.
+    Fires async (delay) so the HTTP or Celery worker that triggered it is not blocked.
+    """
+    from django.db.models import F
+    from accounts.models import User
+
+    try:
+        User.objects.filter(pk=user_id).update(
+            monthly_input_tokens=F('monthly_input_tokens') + input_tokens,
+            monthly_output_tokens=F('monthly_output_tokens') + output_tokens,
+        )
+        logger.debug(
+            "track_llm_usage: user=%s +%s in +%s out",
+            user_id, input_tokens, output_tokens,
+        )
+    except Exception as exc:
+        # Non-fatal — never let tracking failure break the pipeline.
+        logger.warning("track_llm_usage: failed user=%s: %s", user_id, exc)
+
 
 @shared_task
 def process_inbound_email(user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
@@ -344,15 +369,39 @@ def process_text_as_upload(user_id: int, text: str):
 @shared_task
 def reset_monthly_scans():
     """
-    Reset monthly scan counters for all users at the start of each month.
+    Snapshot current-month token usage into MonthlyUsage, then reset all
+    monthly counters for users whose scan_reset_date is in a prior month.
     Scheduled via Celery Beat on the 1st of each month.
     """
-    from accounts.models import User
+    from accounts.models import MonthlyUsage, User
 
     today = timezone.now().date()
-    updated = User.objects.filter(
-        scan_reset_date__month__lt=today.month
-    ).update(monthly_scans=0, scan_reset_date=today)
+    # last day of the previous month = first day of this month minus one day
+    last_month = today.replace(day=1) - timezone.timedelta(days=1)
+
+    users_to_reset = User.objects.filter(scan_reset_date__month__lt=today.month)
+
+    for user in users_to_reset:
+        MonthlyUsage.objects.update_or_create(
+            user=user,
+            year=last_month.year,
+            month=last_month.month,
+            defaults={
+                'input_tokens': user.monthly_input_tokens,
+                'output_tokens': user.monthly_output_tokens,
+                # Snapshot the pricing constants at reset time so historical
+                # cost calculations remain accurate if rates change later.
+                'input_cost_per_million': '3.0000',
+                'output_cost_per_million': '15.0000',
+            },
+        )
+
+    updated = users_to_reset.update(
+        monthly_scans=0,
+        monthly_input_tokens=0,
+        monthly_output_tokens=0,
+        scan_reset_date=today,
+    )
     logger.info("reset_monthly_scans: reset %s user(s)", updated)
 
 
@@ -364,7 +413,7 @@ def cleanup_events():
          Pending events are never in GCal — no GCal cleanup needed.
       2. For users with auto_delete_past_events enabled, delete active events
          past their retention window, respecting GCal preferences.
-      3. Delete done/needs_review/failed ScanJobs older than 1 day.
+      3. Delete done/failed ScanJobs older than 1 day.
     """
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal

@@ -146,7 +146,7 @@ def _today_in_tz(tz: zoneinfo.ZoneInfo | dt_timezone) -> str:
     return datetime.now(tz=tz).date().isoformat()
 
 
-def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC') -> list[dict]:
+def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC') -> tuple[list[dict], int, int]:
     tz = _get_tz(user_timezone)
     today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
@@ -167,7 +167,8 @@ def extract_events(text: str, language: str = 'English', user_timezone: str = 'U
         ]
     )
 
-    return _parse_and_validate(message, tz)
+    events = _parse_and_validate(message, tz)
+    return events, message.usage.input_tokens, message.usage.output_tokens
 
 
 def extract_events_from_image(
@@ -176,7 +177,7 @@ def extract_events_from_image(
     context: str = '',
     language: str = 'English',
     user_timezone: str = 'UTC',
-) -> list[dict]:
+) -> tuple[list[dict], int, int]:
     import base64
     encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
 
@@ -212,7 +213,8 @@ def extract_events_from_image(
         ]
     )
 
-    return _parse_and_validate(message, tz)
+    events = _parse_and_validate(message, tz)
+    return events, message.usage.input_tokens, message.usage.output_tokens
 
 
 def extract_events_from_email(
@@ -220,7 +222,7 @@ def extract_events_from_email(
     attachments: list[tuple[bytes, str, str]],
     language: str = 'English',
     user_timezone: str = 'UTC',
-) -> list[dict]:
+) -> tuple[list[dict], int, int]:
     """
     Extract calendar events from an email body + attachments using a two-step approach:
     1. Extract events from each attachment independently (dates from images are ground truth)
@@ -235,6 +237,8 @@ def extract_events_from_email(
     # ── Step 1: extract from each attachment independently ──
     attachment_events: list[dict] = []
     non_visual_attachments: list[tuple[bytes, str, str]] = []
+    total_input_tokens = 0
+    total_output_tokens = 0
 
     for file_bytes, media_type, filename in attachments:
         if media_type in ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'):
@@ -260,6 +264,8 @@ def extract_events_from_email(
                     messages=[{'role': 'user', 'content': content}]
                 )
                 attachment_events.extend(_parse_and_validate(message, tz))
+                total_input_tokens += message.usage.input_tokens
+                total_output_tokens += message.usage.output_tokens
             except (ValueError, Exception):
                 pass
         else:
@@ -267,7 +273,7 @@ def extract_events_from_email(
 
     # If no body and no non-visual attachments, skip reconciliation
     if not body and not non_visual_attachments:
-        return attachment_events
+        return attachment_events, total_input_tokens, total_output_tokens
 
     # ── Step 2: reconcile with body and non-visual attachments ──
     recon_content = []
@@ -311,10 +317,13 @@ def extract_events_from_email(
             system=recon_system,
             messages=[{'role': 'user', 'content': recon_content}]
         )
-        return _parse_and_validate(message, tz)
+        events = _parse_and_validate(message, tz)
+        total_input_tokens += message.usage.input_tokens
+        total_output_tokens += message.usage.output_tokens
+        return events, total_input_tokens, total_output_tokens
     except (ValueError, Exception):
         # Reconciliation failed — return what we have from attachments
-        return attachment_events
+        return attachment_events, total_input_tokens, total_output_tokens
 
 
 def _parse_and_validate(message, tz) -> list[dict]:
