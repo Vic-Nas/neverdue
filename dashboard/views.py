@@ -10,6 +10,9 @@ from django.views.decorators.http import require_GET
 from .models import Category, Event, Rule
 from .ical import build_ics
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 @login_required
 def index(request):
@@ -32,12 +35,8 @@ def index(request):
             ctx['scans_total'] = 30
             ctx['scans_pct'] = min(int((scans_used / 30) * 100), 100)
         return render(request, 'dashboard/index.html', ctx)
-    except Exception as e:
-        import traceback
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Dashboard error: {e}")
-        logger.error(traceback.format_exc())
+    except Exception:
+        logger.exception("Dashboard error for user=%s", request.user.pk)
         return HttpResponse('Dashboard unavailable.', status=500)
 
 
@@ -75,7 +74,6 @@ def event_edit(request, pk=None):
                 messages.error(request, 'Invalid date format.')
                 return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
 
-            # Convert from user's timezone to UTC for storage
             user_tz = zoneinfo.ZoneInfo(request.user.timezone or 'UTC')
             if start_dt.tzinfo is None:
                 start_dt = start_dt.replace(tzinfo=user_tz)
@@ -114,11 +112,9 @@ def event_edit(request, pk=None):
                     event.save()
                     if not update_event_in_gcal(request.user, event):
                         messages.warning(request, 'Event saved but could not sync to Google Calendar.')
-                    # Patch color to GCal if event has google_event_id
-                    if event.google_event_id:
-                        if event.color:
-                            from dashboard.gcal import patch_event_color
-                            patch_event_color(request.user, event.google_event_id, event.color)
+                    if event.google_event_id and event.color:
+                        from dashboard.gcal import patch_event_color
+                        patch_event_color(request.user, event.google_event_id, event.color)
             else:
                 event = Event.objects.create(
                     user=request.user,
@@ -141,11 +137,9 @@ def event_edit(request, pk=None):
                     messages.warning(request, 'Event saved but could not sync to Google Calendar.')
             return redirect('dashboard:event_detail', pk=event.pk)
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
-    except Exception as e:
-        import traceback
-        import logging
-        logging.getLogger(__name__).error(traceback.format_exc())
-        return HttpResponse(f'Could not save event: {e}', status=500)
+    except Exception:
+        logger.exception("event_edit error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Could not save event.', status=500)
 
 
 @login_required
@@ -153,18 +147,7 @@ def event_delete(request, pk):
     try:
         event = get_object_or_404(Event, pk=pk, user=request.user)
         if request.method == 'POST':
-            if event.google_event_id:
-                try:
-                    from accounts.utils import get_valid_token
-                    import requests as http
-                    token = get_valid_token(request.user)
-                    http.delete(
-                        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                        headers={'Authorization': f'Bearer {token}'},
-                    )
-                except Exception:
-                    pass
-            event.delete()
+            event.delete()  # pre_delete signal handles GCal removal
             return redirect('dashboard:index')
         return render(request, 'dashboard/event_delete.html', {'event': event})
     except Exception:
@@ -174,14 +157,16 @@ def event_delete(request, pk):
 @login_required
 def event_prompt_edit(request, pk):
     """
-    POST: take the current event's full context + user prompt,
-    delete the event, queue re-extraction. User is redirected immediately.
-    The event will reappear as pending once the worker finishes.
+    User-initiated re-extraction for a single event.
+
+    The event is deleted (signal handles GCal) and its full data is assembled
+    with the user's prompt into a new upload job. This is NOT a fix of a
+    needs_review job — it is a fresh user-initiated extraction that produces
+    a new ScanJob with source='upload'.
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
-        import json as _json
         data = _json.loads(request.body)
         prompt = data.get('prompt', '').strip()
         if not prompt:
@@ -189,6 +174,7 @@ def event_prompt_edit(request, pk):
 
         event = get_object_or_404(Event, pk=pk, user=request.user)
 
+        # Assemble full context from the event's existing data
         lines = [
             f"Title: {event.title}",
             f"Start: {event.start.isoformat()}",
@@ -205,34 +191,29 @@ def event_prompt_edit(request, pk):
         lines.append(f"\nUser instruction: {prompt}")
         full_text = "\n".join(lines)
 
-        if event.google_event_id:
-            try:
-                from accounts.utils import get_valid_token
-                import requests as http
-                token = get_valid_token(request.user)
-                http.delete(
-                    f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                    headers={'Authorization': f'Bearer {token}'},
-                    timeout=10,
-                )
-            except Exception:
-                pass
+        # Delete the event — pre_delete signal handles GCal removal
         event.delete()
 
-        from emails.tasks import reprocess_events
-        reprocess_events.delay(request.user.pk, [], full_text)
+        # Queue as a new upload job (user-initiated, not a needs_review fix)
+        from emails.tasks import process_text_as_upload
+        process_text_as_upload.delay(request.user.pk, full_text)
 
         return JsonResponse({'ok': True})
-
     except Exception:
+        logger.exception("event_prompt_edit error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
 
 
 @login_required
 def events_bulk_action(request):
     """
-    POST endpoint for bulk delete or bulk reprocess with a prompt.
-    Body: { "action": "delete"|"reprocess", "ids": [1,2,3], "prompt": "..." }
+    Bulk delete or bulk user-initiated re-extraction.
+
+    action='delete'     — delete selected events (signal handles GCal).
+    action='reprocess'  — assemble all selected events' data + prompt into
+                          one new upload job. Events are deleted first.
+                          This is a user-initiated extraction, NOT a
+                          needs_review fix — it produces a new ScanJob.
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
@@ -245,37 +226,87 @@ def events_bulk_action(request):
         if not ids:
             return JsonResponse({'ok': False, 'error': 'No events selected'})
 
-        owned_ids = list(Event.objects.filter(pk__in=ids, user=request.user).values_list('pk', flat=True))
-        if not owned_ids:
+        events = list(Event.objects.filter(pk__in=ids, user=request.user).select_related('category'))
+        if not events:
             return JsonResponse({'ok': False, 'error': 'No matching events'})
 
         if action == 'delete':
-            events = Event.objects.filter(pk__in=owned_ids)
             for event in events:
-                if event.google_event_id:
-                    try:
-                        from accounts.utils import get_valid_token
-                        import requests as http
-                        token = get_valid_token(request.user)
-                        http.delete(
-                            f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-                            headers={'Authorization': f'Bearer {token}'},
-                            timeout=10,
-                        )
-                    except Exception:
-                        pass
-            events.delete()
-            return JsonResponse({'ok': True, 'deleted': len(owned_ids)})
+                event.delete()  # pre_delete signal handles GCal removal
+            return JsonResponse({'ok': True, 'deleted': len(events)})
 
         elif action == 'reprocess':
             if not prompt:
                 return JsonResponse({'ok': False, 'error': 'Prompt required for reprocess'})
-            from emails.tasks import reprocess_events
-            reprocess_events.delay(request.user.pk, owned_ids, prompt)
-            return JsonResponse({'ok': True, 'queued': len(owned_ids)})
+
+            # Assemble all events' data into one text block
+            blocks = []
+            for event in events:
+                lines = [
+                    f"Title: {event.title}",
+                    f"Start: {event.start.isoformat()}",
+                    f"End: {event.end.isoformat()}",
+                ]
+                if event.description:
+                    lines.append(f"Notes: {event.description}")
+                if event.recurrence_freq:
+                    lines.append(f"Recurrence: {event.recurrence_freq}")
+                    if event.recurrence_until:
+                        lines.append(f"Recurrence until: {event.recurrence_until}")
+                if event.category:
+                    lines.append(f"Category: {event.category.name}")
+                blocks.append("\n".join(lines))
+
+            full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
+
+            # Delete events — pre_delete signal handles GCal removal
+            for event in events:
+                event.delete()
+
+            # Queue as a new upload job (user-initiated)
+            from emails.tasks import process_text_as_upload
+            process_text_as_upload.delay(request.user.pk, full_text)
+
+            return JsonResponse({'ok': True, 'queued': len(events)})
 
         return JsonResponse({'ok': False, 'error': 'Unknown action'})
     except Exception:
+        logger.exception("events_bulk_action error for user=%s", request.user.pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def queue_job_reprocess(request, pk):
+    """
+    POST endpoint called from the job detail page when the user submits
+    a correction prompt for a needs_review job.
+
+    This is the ONLY entry point that calls reprocess_events — it always
+    passes job_pk so the original job is mutated, never a new one created.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        from emails.models import ScanJob
+        from emails.tasks import reprocess_events
+
+        data = _json.loads(request.body)
+        prompt = data.get('prompt', '').strip()
+        event_ids = [int(i) for i in data.get('event_ids', [])]
+
+        job = get_object_or_404(ScanJob, pk=pk, user=request.user)
+
+        if job.status != ScanJob.STATUS_NEEDS_REVIEW:
+            return JsonResponse({'ok': False, 'error': 'Job is not awaiting review'}, status=400)
+
+        if not event_ids:
+            # Default to all pending events on this job
+            event_ids = list(job.events.filter(status='pending').values_list('pk', flat=True))
+
+        reprocess_events.delay(request.user.pk, event_ids, prompt, job_pk=job.pk)
+        return JsonResponse({'ok': True})
+    except Exception:
+        logger.exception("queue_job_reprocess error for user=%s job=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
 
 
@@ -304,43 +335,29 @@ def category_edit(request, pk=None):
         category = get_object_or_404(Category, pk=pk, user=request.user) if pk else None
         if request.method == 'POST':
             name = request.POST.get('name', '').strip()
-            color = request.POST.get('color', '').strip()
             priority = int(request.POST.get('priority', 1))
             reminders_raw = request.POST.getlist('reminders')
             reminders = [{'minutes': int(m)} for m in reminders_raw if m.isdigit()]
+
+            GCAL_COLOR_HEX = {
+                '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
+                '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
+                '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
+                '10': '#D50000', '11': '#616161',
+            }
+            gcal_color_id = request.POST.get('gcal_color_id', '').strip()
+            hex_color = GCAL_COLOR_HEX.get(gcal_color_id, '')
 
             if category:
                 category.name = name
                 category.reminders = reminders
                 category.priority = priority
-                
-                # Map GCal color picker to both gcal_color_id and hex color
-                GCAL_COLOR_HEX = {
-                    '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
-                    '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
-                    '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
-                    '10': '#D50000', '11': '#616161',
-                }
-                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
                 category.gcal_color_id = gcal_color_id
-                category.color = GCAL_COLOR_HEX.get(gcal_color_id, '')
-                
+                category.color = hex_color
                 category.save()
-                
-                # Async task to sync GCal colors — returns immediately
                 from dashboard.tasks import patch_category_colors
                 patch_category_colors.delay(request.user.pk, category.pk)
             else:
-                # Map GCal color picker to both gcal_color_id and hex color
-                GCAL_COLOR_HEX = {
-                    '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
-                    '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
-                    '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
-                    '10': '#D50000', '11': '#616161',
-                }
-                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
-                hex_color = GCAL_COLOR_HEX.get(gcal_color_id, '')
-                
                 category = Category.objects.create(
                     user=request.user,
                     name=name,
@@ -353,7 +370,6 @@ def category_edit(request, pk=None):
             category.rules.all().delete()
             senders = request.POST.getlist('rule_sender')
             keywords = request.POST.getlist('rule_keyword')
-
             for sender, keyword in zip(senders, keywords):
                 sender = sender.strip()
                 keyword = keyword.strip()
@@ -372,10 +388,9 @@ def category_edit(request, pk=None):
 
             return redirect('dashboard:categories')
         return render(request, 'dashboard/category_edit.html', {'category': category})
-    except Exception as e:
-        import traceback, logging
-        logging.getLogger(__name__).error(traceback.format_exc())
-        return HttpResponse(f'Could not save category: {e}', status=500)
+    except Exception:
+        logger.exception("category_edit error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Could not save category.', status=500)
 
 
 @login_required
@@ -509,7 +524,6 @@ def export_events(request):
         return HttpResponse('No active events found for the given IDs.', status=404)
 
     ics_bytes = build_ics(events)
-
     response = HttpResponse(ics_bytes, content_type='text/calendar; charset=utf-8')
     response['Content-Disposition'] = 'attachment; filename="neverdue-events.ics"'
     return response
@@ -527,13 +541,12 @@ def queue(request):
 def queue_status(request):
     from emails.models import ScanJob
     from dashboard.models import Event
+    from django.db.models import Count
 
     jobs = ScanJob.objects.filter(user=request.user).order_by('-created_at')[:50]
 
     active_count = sum(1 for j in jobs if j.status in (ScanJob.STATUS_QUEUED, ScanJob.STATUS_PROCESSING))
 
-    # Count pending events per job in one query
-    from django.db.models import Count, Q
     job_ids = [j.pk for j in jobs]
     pending_counts = dict(
         Event.objects.filter(scan_job_id__in=job_ids, status='pending')
@@ -548,7 +561,7 @@ def queue_status(request):
         .values_list('scan_job_id', 'n')
     )
 
-    # Total pending events across all jobs (for nav badge)
+    # Nav badge: total pending events across all jobs
     attention_count = sum(pending_counts.values())
 
     jobs_data = [
@@ -574,7 +587,7 @@ def queue_job_detail(request, pk):
     """
     Detail page for a single ScanJob.
     Shows all events created by the job (active + pending).
-    Pending events can be resubmitted with a prompt (which deletes them and reprocesses).
+    Reprocess is submitted via queue_job_reprocess, not here.
     """
     from emails.models import ScanJob
     try:

@@ -7,174 +7,315 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def _create_job(user_id: int, source: str, from_address: str = '') -> int | None:
-    """Create a ScanJob in queued state. Returns job pk or None on failure."""
+# ---------------------------------------------------------------------------
+# Internal job helpers
+# The task layer owns: queued → processing, and → failed on exception.
+# The pipeline (_save_events) owns: → done and → needs_review.
+# ---------------------------------------------------------------------------
+
+def _create_job(user_id: int, source: str, from_address: str = '') -> 'ScanJob | None':
+    """
+    Create a ScanJob in queued state. Returns the job instance or None on failure.
+    source must be 'email' or 'upload' — never 'reprocess'.
+    """
     try:
         from emails.models import ScanJob
         from accounts.models import User
+        if source not in (ScanJob.SOURCE_EMAIL, ScanJob.SOURCE_UPLOAD):
+            logger.error("_create_job: invalid source=%r — must be 'email' or 'upload'", source)
+            return None
         user = User.objects.get(pk=user_id)
-        job = ScanJob.objects.create(
+        return ScanJob.objects.create(
             user=user,
             status=ScanJob.STATUS_QUEUED,
             source=source,
             from_address=from_address,
         )
-        return job.pk
     except Exception as exc:
         logger.warning("_create_job: failed for user=%s: %s", user_id, exc)
         return None
 
 
-def _set_job_status(job_pk: int | None, status: str) -> None:
-    """Update a ScanJob's status. Silently ignores missing jobs."""
-    if job_pk is None:
+def _set_processing(job: 'ScanJob | None') -> None:
+    """Transition a job to processing. Silently ignores missing jobs."""
+    if job is None:
         return
     try:
         from emails.models import ScanJob
-        ScanJob.objects.filter(pk=job_pk).update(status=status, updated_at=timezone.now())
+        ScanJob.objects.filter(pk=job.pk).update(
+            status=ScanJob.STATUS_PROCESSING,
+            updated_at=timezone.now(),
+        )
     except Exception as exc:
-        logger.warning("_set_job_status: failed pk=%s status=%s: %s", job_pk, status, exc)
+        logger.warning("_set_processing: failed pk=%s: %s", job.pk, exc)
 
 
-def _set_job_notes(job_pk: int | None, notes: str) -> None:
-    """Update a ScanJob's notes field. Silently ignores missing jobs."""
-    if job_pk is None:
+def _set_failed(job: 'ScanJob | None') -> None:
+    """Transition a job to failed. Silently ignores missing jobs."""
+    if job is None:
         return
     try:
         from emails.models import ScanJob
-        ScanJob.objects.filter(pk=job_pk).update(notes=notes[:255])
+        ScanJob.objects.filter(pk=job.pk).update(
+            status=ScanJob.STATUS_FAILED,
+            updated_at=timezone.now(),
+        )
     except Exception as exc:
-        logger.warning("_set_job_notes: failed pk=%s: %s", job_pk, exc)
+        logger.warning("_set_failed: failed pk=%s: %s", job.pk, exc)
 
+
+def _set_done(job: 'ScanJob | None') -> None:
+    """
+    Transition a job directly to done (no events created, not an error).
+    Use only for early-exit paths (duplicate email, empty prompt).
+    Never call this after the pipeline has run — _save_events owns that.
+    """
+    if job is None:
+        return
+    try:
+        from emails.models import ScanJob
+        ScanJob.objects.filter(pk=job.pk).update(
+            status=ScanJob.STATUS_DONE,
+            updated_at=timezone.now(),
+        )
+    except Exception as exc:
+        logger.warning("_set_done: failed pk=%s: %s", job.pk, exc)
+
+
+def _set_notes(job: 'ScanJob | None', notes: str) -> None:
+    """Update a job's notes field. Silently ignores missing jobs."""
+    if job is None:
+        return
+    try:
+        from emails.models import ScanJob
+        ScanJob.objects.filter(pk=job.pk).update(notes=notes[:255])
+    except Exception as exc:
+        logger.warning("_set_notes: failed pk=%s: %s", job.pk, exc)
+
+
+# ---------------------------------------------------------------------------
+# Tasks
+# ---------------------------------------------------------------------------
 
 @shared_task
 def process_inbound_email(user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
     """
     Process a single inbound email through the LLM pipeline.
-    Body and attachments are sent together in a single LLM call.
-    Runs asynchronously so the Resend webhook returns immediately.
-    attachments: list of [base64_string, media_type] or [base64_string, media_type, filename] entries.
+
+    One email → one ScanJob, always.
+    The pipeline (_save_events) decides the terminal status (done / needs_review).
+    This task only sets processing and failed.
+
+    attachments: list of [base64_string, media_type] or [base64_string, media_type, filename].
     """
     from accounts.models import User
-    from llm.pipeline import process_email
     from dashboard.models import Event
-
-    job_pk = _create_job(user_id, source='email', from_address=sender or '')
+    from llm.pipeline import process_email
 
     logger.info("TASK START user=%s message_id=%s body_len=%s", user_id, message_id, len(body) if body else 0)
+
+    job = _create_job(user_id, source='email', from_address=sender or '')
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
-        logger.warning("User pk=%s not found — aborting task", user_id)
-        _set_job_status(job_pk, 'failed')
+        logger.warning("process_inbound_email: User pk=%s not found — aborting", user_id)
+        _set_failed(job)
         return
 
+    # Duplicate guard: if this message_id already produced active events, skip.
+    # This guard relies on source_email_id being preserved through reprocess — see pipeline.py.
     if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
-        logger.info("Duplicate message_id=%s for user=%s — skipping", message_id, user_id)
-        _set_job_status(job_pk, 'done')
+        logger.info("process_inbound_email: duplicate message_id=%s for user=%s — skipping", message_id, user_id)
+        _set_notes(job, 'Email already processed — skipped.')
+        _set_done(job)
         return
 
-    _set_job_status(job_pk, 'processing')
+    _set_processing(job)
     try:
-        from emails.models import ScanJob as _ScanJob
-        scan_job = _ScanJob.objects.filter(pk=job_pk).first()
-        created, notes = process_email(user, body, attachments, sender=sender, source_email_id=message_id, scan_job=scan_job)
+        created, notes = process_email(
+            user, body, attachments,
+            sender=sender,
+            source_email_id=message_id,
+            scan_job=job,
+        )
         if notes:
-            _set_job_notes(job_pk, notes)
-        _set_job_status(job_pk, 'done')
+            _set_notes(job, notes)
+        elif not created:
+            _set_notes(job, 'No events found in this email.')
+        logger.info("process_inbound_email: done user=%s events=%s", user_id, len(created))
     except Exception as exc:
-        logger.error("process_inbound_email: failed for user=%s: %s", user_id, exc)
-        _set_job_status(job_pk, 'failed')
+        logger.error("process_inbound_email: failed user=%s: %s", user_id, exc, exc_info=True)
+        _set_failed(job)
         raise
 
 
 @shared_task
 def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = ''):
     """
-    Process a file uploaded via the dashboard upload form.
+    Process a file uploaded via the dashboard.
+
     Routes through process_email (empty body, single attachment) so the unified
     pipeline and filename-context feature are used consistently.
 
-    file_b64:  base64-encoded file contents
-    filename:  original filename — passed as a context hint to the LLM when informative
-    context:   optional user context string, sent as the email body
+    file_b64:  base64-encoded file contents.
+    filename:  original filename — passed as context hint to the LLM.
+    context:   optional user text, sent as the email body alongside the file.
     """
     from accounts.models import User
     from llm.pipeline import process_email
 
-    job_pk = _create_job(user_id, source='upload')
+    logger.info(
+        "UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
+        user_id, media_type, filename, len(context) if context else 0,
+    )
 
-    logger.info("UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
-                user_id, media_type, filename, len(context) if context else 0)
+    job = _create_job(user_id, source='upload')
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("process_uploaded_file: User pk=%s not found — aborting", user_id)
-        _set_job_status(job_pk, 'failed')
+        _set_failed(job)
         return
 
-    # Single attachment tuple: [base64_string, media_type, filename]
     attachments = [[file_b64, media_type, filename]]
-
-    # User context travels as the body so the LLM sees it alongside the file.
     body = context or ''
 
-    _set_job_status(job_pk, 'processing')
+    _set_processing(job)
     try:
-        from emails.models import ScanJob as _ScanJob
-        scan_job = _ScanJob.objects.filter(pk=job_pk).first()
-        created, notes = process_email(user, body, attachments, scan_job=scan_job)
+        created, notes = process_email(
+            user, body, attachments,
+            scan_job=job,
+        )
         if notes:
-            _set_job_notes(job_pk, notes)
-        _set_job_status(job_pk, 'done')
-        logger.info("UPLOAD TASK DONE user=%s events_created=%s", user_id, len(created))
+            _set_notes(job, notes)
+        elif not created:
+            _set_notes(job, 'No events found in this file.')
+        logger.info("UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
     except Exception as exc:
-        logger.error("process_uploaded_file: failed for user=%s: %s", user_id, exc)
-        _set_job_status(job_pk, 'failed')
+        logger.error("process_uploaded_file: failed user=%s: %s", user_id, exc, exc_info=True)
+        _set_failed(job)
         raise
 
 
 @shared_task
-def reprocess_events(user_id: int, event_ids: list, prompt: str):
+def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = None):
     """
-    Delete selected events (and from GCal), then re-extract using the prompt text.
-    GCal deletion is handled automatically by the pre_delete signal on Event.
+    Reprocess a needs_review job after the user supplies a correction prompt.
+
+    Contract:
+    - NEVER creates a new ScanJob. The original job is mutated.
+    - Reads source_email_id from the pending events BEFORE deleting them.
+    - Deletes the pending events.
+    - Re-extracts using the user's prompt, preserving source_email_id.
+    - The pipeline (_save_events) sets the terminal job status.
+
+    job_pk must be the pk of the original ScanJob the user is reviewing.
+    If job_pk is missing (legacy call), logs an error and aborts — do not
+    silently create a new job.
     """
     from accounts.models import User
     from dashboard.models import Event
+    from emails.models import ScanJob
     from llm.pipeline import process_text
 
-    job_pk = _create_job(user_id, source='reprocess')
+    logger.info("REPROCESS TASK START user=%s event_ids=%s job_pk=%s", user_id, event_ids, job_pk)
 
-    logger.info("REPROCESS TASK START user=%s event_ids=%s", user_id, event_ids)
+    if job_pk is None:
+        logger.error(
+            "reprocess_events: job_pk not provided for user=%s — aborting. "
+            "The caller must pass the original job pk.",
+            user_id,
+        )
+        return
+
+    try:
+        job = ScanJob.objects.get(pk=job_pk, user_id=user_id)
+    except ScanJob.DoesNotExist:
+        logger.error("reprocess_events: ScanJob pk=%s not found for user=%s — aborting", job_pk, user_id)
+        return
 
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("reprocess_events: User pk=%s not found — aborting", user_id)
-        _set_job_status(job_pk, 'failed')
+        _set_failed(job)
         return
 
-    events = Event.objects.filter(pk__in=event_ids, user=user)
-    deleted_count, _ = events.delete()
-    logger.info("reprocess_events: deleted %s event(s) for user=%s", deleted_count, user_id)
+    # Preserve source_email_id BEFORE deleting events — the pipeline needs it
+    # to stamp new events so the duplicate guard keeps working.
+    events_qs = Event.objects.filter(pk__in=event_ids, user=user)
+    source_email_id = (
+        events_qs.exclude(source_email_id='')
+                 .exclude(source_email_id__isnull=True)
+                 .values_list('source_email_id', flat=True)
+                 .first()
+    ) or ''
 
-    if prompt.strip():
-        _set_job_status(job_pk, 'processing')
-        try:
-            from emails.models import ScanJob as _ScanJob
-            scan_job = _ScanJob.objects.filter(pk=job_pk).first()
-            created, _ = process_text(user, prompt, scan_job=scan_job)
-            _set_job_status(job_pk, 'done')
-            logger.info("reprocess_events: created %s new event(s) for user=%s", len(created), user_id)
-        except Exception as exc:
-            logger.error("reprocess_events: failed for user=%s: %s", user_id, exc)
-            _set_job_status(job_pk, 'failed')
-            raise
-    else:
-        _set_job_status(job_pk, 'done')
+    deleted_count, _ = events_qs.delete()
+    logger.info("reprocess_events: deleted %s pending event(s) for user=%s", deleted_count, user_id)
+
+    if not prompt.strip():
+        # User submitted no prompt — nothing to reprocess, job is closed.
+        logger.info("reprocess_events: empty prompt — marking job=%s done", job_pk)
+        _set_done(job)
+        return
+
+    _set_processing(job)
+    try:
+        created, _ = process_text(
+            user,
+            prompt,
+            source_email_id=source_email_id,
+            scan_job=job,
+        )
+        # Terminal status (done / needs_review) is set by _save_events inside process_text.
+        logger.info("reprocess_events: created %s new event(s) for user=%s job=%s", len(created), user_id, job_pk)
+    except Exception as exc:
+        logger.error("reprocess_events: failed user=%s job=%s: %s", user_id, job_pk, exc, exc_info=True)
+        _set_failed(job)
+        raise
+
+
+@shared_task
+def process_text_as_upload(user_id: int, text: str):
+    """
+    User-initiated re-extraction from event_prompt_edit or bulk reprocess.
+
+    The user deleted one or more events from the dashboard and supplied a
+    correction prompt. This creates a new upload job — it is NOT a fix of a
+    needs_review job and does NOT reuse any existing job.
+
+    The assembled text already contains the original event data plus the
+    user's instruction, built by the view before dispatch.
+    """
+    from accounts.models import User
+    from llm.pipeline import process_text
+
+    logger.info("MANUAL UPLOAD TASK START user=%s text_len=%s", user_id, len(text))
+
+    job = _create_job(user_id, source='upload')
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.warning("process_text_as_upload: User pk=%s not found — aborting", user_id)
+        _set_failed(job)
+        return
+
+    _set_processing(job)
+    try:
+        created, notes = process_text(user, text, scan_job=job)
+        if notes:
+            _set_notes(job, notes)
+        elif not created:
+            _set_notes(job, 'No events found.')
+        logger.info("MANUAL UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
+    except Exception as exc:
+        logger.error("process_text_as_upload: failed user=%s: %s", user_id, exc, exc_info=True)
+        _set_failed(job)
+        raise
 
 
 @shared_task
@@ -196,18 +337,11 @@ def reset_monthly_scans():
 def cleanup_events():
     """
     Daily cleanup task:
-    1. Delete expired pending events (pending_expires_at <= today).
-    2. For users with auto_delete_past_events enabled, delete active events
-       whose end date is older than their retention setting.
-    3. Delete completed (done/failed) ScanJobs older than 1 day.
-
-    Pending events are never in GCal — no cleanup needed there.
-
-    For past active events: respects delete_from_gcal_on_cleanup preference.
-    - If True:  call delete_from_gcal() directly, then delete the row.
-                _skip_gcal_delete=True is set so the signal doesn't double-delete.
-    - If False: set _skip_gcal_delete=True so the signal skips GCal,
-                then delete the row (leaves event in GCal as user intended).
+      1. Delete expired pending events (pending_expires_at <= today).
+         Pending events are never in GCal — no GCal cleanup needed.
+      2. For users with auto_delete_past_events enabled, delete active events
+         past their retention window, respecting GCal preferences.
+      3. Delete done/needs_review/failed ScanJobs older than 1 day.
     """
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal
@@ -216,34 +350,31 @@ def cleanup_events():
 
     today = timezone.now().date()
 
-    # 1. Delete expired pending events (never in GCal, signal skips them automatically)
-    expired_pending = Event.objects.filter(
-        status='pending',
-        pending_expires_at__lte=today,
-    )
+    # 1. Expired pending events
+    expired_pending = Event.objects.filter(status='pending', pending_expires_at__lte=today)
     count = expired_pending.count()
     expired_pending.delete()
     if count:
         logger.info("cleanup_events: deleted %s expired pending event(s)", count)
 
-    # 2. Auto-delete past active events for opted-in users
-    users = User.objects.filter(auto_delete_past_events=True)
-    for user in users:
+    # 2. Past active events for opted-in users
+    for user in User.objects.filter(auto_delete_past_events=True):
         cutoff = timezone.now() - timezone.timedelta(days=user.past_event_retention_days)
-        old_events = Event.objects.filter(user=user, status='active', end__lt=cutoff)
-
-        for event in old_events:
+        for event in Event.objects.filter(user=user, status='active', end__lt=cutoff):
             event._skip_gcal_delete = True
             if user.delete_from_gcal_on_cleanup and event.google_event_id:
                 delete_from_gcal(user, event.google_event_id)
             event.delete()
-            logger.info("cleanup_events: deleted event_id=%s for user=%s (gcal_removed=%s)",
-                        event.pk, user.pk, user.delete_from_gcal_on_cleanup)
+            logger.info(
+                "cleanup_events: deleted event_id=%s for user=%s (gcal_removed=%s)",
+                event.pk, user.pk, user.delete_from_gcal_on_cleanup,
+            )
 
-    # 3. Delete done/failed ScanJobs older than 1 day
+    # 3. Old completed/failed jobs (needs_review jobs are kept — user hasn't acted yet)
     job_cutoff = timezone.now() - timezone.timedelta(days=1)
+    terminal_statuses = [ScanJob.STATUS_DONE, ScanJob.STATUS_FAILED]
     deleted_jobs, _ = ScanJob.objects.filter(
-        status__in=[ScanJob.STATUS_DONE, ScanJob.STATUS_FAILED],
+        status__in=terminal_statuses,
         updated_at__lt=job_cutoff,
     ).delete()
     if deleted_jobs:
