@@ -243,30 +243,52 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
         _set_failed(job)
         return
 
-    # Preserve source_email_id BEFORE deleting events — the pipeline needs it
-    # to stamp new events so the duplicate guard keeps working.
-    events_qs = Event.objects.filter(pk__in=event_ids, user=user)
-    source_email_id = (
-        events_qs.exclude(source_email_id='')
-                 .exclude(source_email_id__isnull=True)
-                 .values_list('source_email_id', flat=True)
-                 .first()
-    ) or ''
+    # Preserve event data AND source_email_id BEFORE deleting.
+    # The LLM needs the original event data — the prompt alone is just a correction
+    # instruction, not enough to reconstruct events from scratch.
+    events_qs = Event.objects.filter(pk__in=event_ids, user=user).select_related('category')
+    events_list = list(events_qs)
 
-    deleted_count, _ = events_qs.delete()
-    logger.info("reprocess_events: deleted %s pending event(s) for user=%s", deleted_count, user_id)
+    source_email_id = next(
+        (e.source_email_id for e in events_list if e.source_email_id),
+        ''
+    )
+
+    # Serialize event data into text the LLM can read
+    blocks = []
+    for e in events_list:
+        lines = [
+            f"Title: {e.title}",
+            f"Start: {e.start.isoformat()}",
+            f"End: {e.end.isoformat()}",
+        ]
+        if e.description:
+            lines.append(f"Notes: {e.description}")
+        if e.recurrence_freq:
+            lines.append(f"Recurrence: {e.recurrence_freq}")
+            if e.recurrence_until:
+                lines.append(f"Recurrence until: {e.recurrence_until}")
+        if e.category:
+            lines.append(f"Category: {e.category.name}")
+        if e.pending_concern:
+            lines.append(f"Previous concern: {e.pending_concern}")
+        blocks.append("\n".join(lines))
+
+    events_qs.delete()
+    logger.info("reprocess_events: deleted %s pending event(s) for user=%s", len(events_list), user_id)
 
     if not prompt.strip():
-        # User submitted no prompt — nothing to reprocess, job is closed.
         logger.info("reprocess_events: empty prompt — marking job=%s done", job_pk)
         _set_done(job)
         return
+
+    full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
 
     _set_processing(job)
     try:
         created, _ = process_text(
             user,
-            prompt,
+            full_text,
             source_email_id=source_email_id,
             scan_job=job,
         )
