@@ -83,7 +83,7 @@ def write_event_to_calendar(user, event_data: dict, category: Category | None = 
 
     # Hard dedup: same user + start + end already exists → skip
     if start and end:
-        if Event.objects.filter(user=user, start=start, end=end).exists():
+        if Event.objects.filter(user=user, start=start, end=end, status='active').exists():
             logger.info("Duplicate event skipped | user=%s | start=%s | end=%s", user.pk, start, end)
             return None
 
