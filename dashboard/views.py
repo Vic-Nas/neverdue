@@ -362,30 +362,6 @@ def category_edit(request, pk=None):
                     reminders=reminders,
                 )
 
-            category.rules.filter(
-                rule_type__in=[Rule.TYPE_SENDER, Rule.TYPE_KEYWORD]
-            ).delete()
-            for sender in request.POST.getlist('rule_sender'):
-                sender = sender.strip()
-                if sender:
-                    Rule.objects.create(
-                        user=request.user,
-                        rule_type=Rule.TYPE_SENDER,
-                        pattern=sender,
-                        action=Rule.ACTION_CATEGORIZE,
-                        category=category,
-                    )
-            for keyword in request.POST.getlist('rule_keyword'):
-                keyword = keyword.strip()
-                if keyword:
-                    Rule.objects.create(
-                        user=request.user,
-                        rule_type=Rule.TYPE_KEYWORD,
-                        pattern=keyword,
-                        action=Rule.ACTION_CATEGORIZE,
-                        category=category,
-                    )
-
             return redirect('dashboard:categories')
         return render(request, 'dashboard/category_edit.html', {'category': category})
     except Exception:
