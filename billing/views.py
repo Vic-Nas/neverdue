@@ -119,10 +119,14 @@ def webhook(request):
     except (ValueError, stripe.error.SignatureVerificationError):
         return HttpResponse(status=400)
 
-    if event['type'] in ('customer.subscription.created',
-                         'customer.subscription.updated',
-                         'customer.subscription.deleted'):
-        _sync_subscription(event['data']['object'])
+    try:
+        if event['type'] in ('customer.subscription.created',
+                             'customer.subscription.updated',
+                             'customer.subscription.deleted'):
+            _sync_subscription(event['data']['object'])
+    except Exception:
+        logger.exception('webhook handler failed for event=%s', event['type'])
+        return HttpResponse(status=500)
 
     return HttpResponse(status=200)
 
@@ -155,4 +159,12 @@ def _sync_subscription(stripe_sub):
     period_end = stripe_sub.get('current_period_end')
     if period_end:
         sub.current_period_end = datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
-    sub.save()
+    
+    try:
+        sub.save()
+        logger.info('_sync_subscription: synced customer=%s subscription=%s status=%s',
+                    stripe_sub['customer'], stripe_sub['id'], stripe_sub['status'])
+    except Exception:
+        logger.exception('_sync_subscription: save failed for customer=%s subscription=%s',
+                         stripe_sub['customer'], stripe_sub['id'])
+        raise
