@@ -156,9 +156,40 @@ def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
     return False
 
 
+def stop_gcal_watch(user, token: str) -> None:
+    """
+    Stop an existing GCal push notification channel.
+    Called before registering a new one so Google stops firing the old channel_id.
+    Failures are logged but never raised — stopping is best-effort.
+    """
+    if not user.gcal_channel_id or not user.gcal_channel_resource_id:
+        return
+    try:
+        response = requests.post(
+            'https://www.googleapis.com/calendar/v3/channels/stop',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json={
+                'id': user.gcal_channel_id,
+                'resourceId': user.gcal_channel_resource_id,
+            },
+            timeout=10,
+        )
+        if response.status_code == 204:
+            logger.info("stop_gcal_watch: stopped channel=%s user=%s",
+                        user.gcal_channel_id, user.pk)
+        else:
+            # 404 means it already expired — that's fine
+            logger.warning("stop_gcal_watch: status=%s channel=%s user=%s",
+                           response.status_code, user.gcal_channel_id, user.pk)
+    except Exception as exc:
+        logger.warning("stop_gcal_watch: request failed user=%s: %s", user.pk, exc)
+
+
 def register_gcal_watch(user) -> bool:
     """
     Register a push notification channel for the user's primary calendar.
+    Stops the previous channel first so Google doesn't keep firing the old
+    channel_id after renewal.
     Stores channel_id, resource_id, and expiration on the user.
     Safe to call on login or channel renewal.
     """
@@ -172,6 +203,9 @@ def register_gcal_watch(user) -> bool:
     except Exception as exc:
         logger.warning("register_gcal_watch: token failed user=%s: %s", user.pk, exc)
         return False
+
+    # Stop the old channel before registering a new one
+    stop_gcal_watch(user, token)
 
     channel_id = str(uuid.uuid4())
     webhook_path = reverse('dashboard:gcal_webhook')
