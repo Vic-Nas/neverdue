@@ -34,23 +34,44 @@ class Category(models.Model):
 
 
 class Rule(models.Model):
+    TYPE_SENDER = 'sender'
+    TYPE_KEYWORD = 'keyword'
+    TYPE_PROMPT = 'prompt'
+
+    RULE_TYPES = [
+        (TYPE_SENDER, 'Sender'),
+        (TYPE_KEYWORD, 'Keyword'),
+        (TYPE_PROMPT, 'Prompt injection'),
+    ]
+
+    ACTION_CATEGORIZE = 'categorize'
+    ACTION_DISCARD = 'discard'
+
     ACTION_CHOICES = [
-        ('categorize', 'Categorize'),
-        ('allow', 'Allow'),
-        ('block', 'Block'),
+        (ACTION_CATEGORIZE, 'Categorize'),
+        (ACTION_DISCARD, 'Discard'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rules')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rules', null=True, blank=True)
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='categorize')
-    pattern = models.CharField(max_length=255)  # email, domain, glob, or regex
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPES, default=TYPE_KEYWORD)
+    # sender/keyword: pattern to match; prompt: optional sender scope (empty = always inject)
+    pattern = models.CharField(max_length=255, blank=True)
+    # sender/keyword: what to do on match
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, blank=True)
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='rules'
+    )
+    # prompt: the instruction text to inject into the LLM prompt
+    prompt_text = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['user', 'pattern']
+        ordering = ['rule_type', 'created_at']
 
     def __str__(self):
-        return f'{self.action}:{self.pattern}'
+        if self.rule_type == self.TYPE_PROMPT:
+            return f'prompt: {self.prompt_text[:50]}'
+        return f'{self.rule_type}:{self.pattern} → {self.action}'
 
 
 class FilterRule(models.Model):

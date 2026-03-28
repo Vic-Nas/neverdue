@@ -7,8 +7,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
-from .models import Category, Event, Rule
+from .models import Category, Event, FilterRule, Rule
 from .ical import build_ics
+from accounts.views import GCAL_COLOR_HEX
 
 import logging
 logger = logging.getLogger(__name__)
@@ -339,12 +340,6 @@ def category_edit(request, pk=None):
             reminders_raw = request.POST.getlist('reminders')
             reminders = [{'minutes': int(m)} for m in reminders_raw if m.isdigit()]
 
-            GCAL_COLOR_HEX = {
-                '1': '#7986CB', '2': '#33B679', '3': '#8E24AA',
-                '4': '#E67C73', '5': '#F6BF26', '6': '#F4511E',
-                '7': '#039BE5', '8': '#3F51B5', '9': '#0B8043',
-                '10': '#D50000', '11': '#616161',
-            }
             gcal_color_id = request.POST.get('gcal_color_id', '').strip()
             hex_color = GCAL_COLOR_HEX.get(gcal_color_id, '')
 
@@ -367,23 +362,28 @@ def category_edit(request, pk=None):
                     reminders=reminders,
                 )
 
-            category.rules.all().delete()
-            senders = request.POST.getlist('rule_sender')
-            keywords = request.POST.getlist('rule_keyword')
-            for sender, keyword in zip(senders, keywords):
+            category.rules.filter(
+                rule_type__in=[Rule.TYPE_SENDER, Rule.TYPE_KEYWORD]
+            ).delete()
+            for sender in request.POST.getlist('rule_sender'):
                 sender = sender.strip()
-                keyword = keyword.strip()
                 if sender:
-                    Rule.objects.get_or_create(
+                    Rule.objects.create(
                         user=request.user,
+                        rule_type=Rule.TYPE_SENDER,
                         pattern=sender,
-                        defaults={'action': 'categorize', 'category': category},
+                        action=Rule.ACTION_CATEGORIZE,
+                        category=category,
                     )
+            for keyword in request.POST.getlist('rule_keyword'):
+                keyword = keyword.strip()
                 if keyword:
-                    Rule.objects.get_or_create(
+                    Rule.objects.create(
                         user=request.user,
+                        rule_type=Rule.TYPE_KEYWORD,
                         pattern=keyword,
-                        defaults={'action': 'categorize', 'category': category},
+                        action=Rule.ACTION_CATEGORIZE,
+                        category=category,
                     )
 
             return redirect('dashboard:categories')
@@ -408,7 +408,6 @@ def category_delete(request, pk):
 @login_required
 def email_sources(request):
     try:
-        from .models import FilterRule
         filter_rules = FilterRule.objects.filter(user=request.user).order_by('action', 'pattern')
         return render(request, 'dashboard/email_sources.html', {'filter_rules': filter_rules})
     except Exception:
@@ -420,7 +419,6 @@ def filter_rule_add(request):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
-        from .models import FilterRule
         data = _json.loads(request.body)
         action = data.get('action')
         pattern = data.get('pattern', '').strip().lower()
@@ -448,7 +446,6 @@ def filter_rule_delete(request, pk):
     if request.method != 'POST':
         return JsonResponse({'ok': False}, status=405)
     try:
-        from .models import FilterRule
         FilterRule.objects.filter(pk=pk, user=request.user).delete()
         return JsonResponse({'ok': True})
     except Exception:
@@ -602,3 +599,78 @@ def queue_job_detail(request, pk):
         })
     except Exception:
         return HttpResponse('Job unavailable.', status=500)
+
+
+@login_required
+def rules(request):
+    try:
+        user_rules = Rule.objects.filter(user=request.user).select_related('category').order_by('rule_type', 'created_at')
+        categories = Category.objects.filter(user=request.user).order_by('name')
+        return render(request, 'dashboard/rules.html', {
+            'rules': user_rules,
+            'categories': categories,
+        })
+    except Exception:
+        return HttpResponse('Rules unavailable.', status=500)
+
+
+@login_required
+def rule_add(request):
+    import json as _rule_json
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = _rule_json.loads(request.body)
+        rule_type = data.get('rule_type', '').strip()
+
+        if rule_type not in (Rule.TYPE_SENDER, Rule.TYPE_KEYWORD, Rule.TYPE_PROMPT):
+            return JsonResponse({'ok': False, 'error': 'Invalid rule type'})
+
+        if rule_type == Rule.TYPE_PROMPT:
+            prompt_text = data.get('prompt_text', '').strip()
+            if not prompt_text:
+                return JsonResponse({'ok': False, 'error': 'Prompt text required'})
+            pattern = data.get('pattern', '').strip()
+            rule = Rule.objects.create(
+                user=request.user,
+                rule_type=Rule.TYPE_PROMPT,
+                pattern=pattern,
+                prompt_text=prompt_text,
+            )
+            return JsonResponse({'ok': True, 'id': rule.pk})
+
+        pattern = data.get('pattern', '').strip()
+        action = data.get('action', '').strip()
+        if not pattern:
+            return JsonResponse({'ok': False, 'error': 'Pattern required'})
+        if action not in (Rule.ACTION_CATEGORIZE, Rule.ACTION_DISCARD):
+            return JsonResponse({'ok': False, 'error': 'Invalid action'})
+
+        category = None
+        if action == Rule.ACTION_CATEGORIZE:
+            category_id = data.get('category_id')
+            if category_id:
+                category = get_object_or_404(Category, pk=category_id, user=request.user)
+
+        rule = Rule.objects.create(
+            user=request.user,
+            rule_type=rule_type,
+            pattern=pattern,
+            action=action,
+            category=category,
+        )
+        return JsonResponse({'ok': True, 'id': rule.pk})
+    except Exception:
+        logger.exception("rule_add error for user=%s", request.user.pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def rule_delete(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False}, status=405)
+    try:
+        Rule.objects.filter(pk=pk, user=request.user).delete()
+        return JsonResponse({'ok': True})
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)

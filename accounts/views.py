@@ -39,6 +39,9 @@ GCAL_COLORS = [
 
 VALID_PRIORITY_COLOR_IDS = {c['id'] for c in GCAL_COLORS}
 
+# String-keyed hex lookup for category_edit view
+GCAL_COLOR_HEX = {str(c['id']): c['hex'].upper() for c in GCAL_COLORS}
+
 
 def login(request):
     if request.user.is_authenticated:

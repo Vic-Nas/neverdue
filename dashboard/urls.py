@@ -27,6 +27,9 @@ urlpatterns = [
     path('sources/', views.email_sources, name='email_sources'),
     path('sources/add/', views.filter_rule_add, name='filter_rule_add'),
     path('sources/<int:pk>/delete/', views.filter_rule_delete, name='filter_rule_delete'),
+    path('rules/', views.rules, name='rules'),
+    path('rules/add/', views.rule_add, name='rule_add'),
+    path('rules/<int:pk>/delete/', views.rule_delete, name='rule_delete'),
     path('upload/', views.upload, name='upload'),
     path('gcal/webhook/', webhook.gcal_webhook, name='gcal_webhook'),
 ]

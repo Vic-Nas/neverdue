@@ -70,6 +70,7 @@
 
 /* ── Optional label suffix ── */
 .label-optional {
+  font-size: 0.85rem;
   color: var(--text-muted);
   font-weight: 400;
 }

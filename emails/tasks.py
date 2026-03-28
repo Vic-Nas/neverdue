@@ -272,7 +272,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
     # Preserve event data AND source_email_id BEFORE deleting.
     # The LLM needs the original event data — the prompt alone is just a correction
     # instruction, not enough to reconstruct events from scratch.
-    events_qs = Event.objects.filter(pk__in=event_ids, user=user).select_related('category')
+    events_qs = Event.objects.filter(pk__in=event_ids, user=user, status='pending').select_related('category')
     events_list = list(events_qs)
 
     source_email_id = next(
