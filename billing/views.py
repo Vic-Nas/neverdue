@@ -119,9 +119,9 @@ def webhook(request):
     except (ValueError, stripe.error.SignatureVerificationError):
         return HttpResponse(status=400)
 
-    if event['type'] == 'customer.subscription.updated':
-        _sync_subscription(event['data']['object'])
-    elif event['type'] == 'customer.subscription.deleted':
+    if event['type'] in ('customer.subscription.created',
+                         'customer.subscription.updated',
+                         'customer.subscription.deleted'):
         _sync_subscription(event['data']['object'])
 
     return HttpResponse(status=200)
@@ -142,8 +142,17 @@ def _create_stripe_customer(user):
 
 def _sync_subscription(stripe_sub):
     try:
-        sub = Subscription.objects.get(stripe_subscription_id=stripe_sub['id'])
-        sub.status = stripe_sub['status']
-        sub.save()
+        sub = Subscription.objects.get(stripe_customer_id=stripe_sub['customer'])
     except Subscription.DoesNotExist:
-        pass
+        logger.warning('_sync_subscription: no subscription for customer=%s', stripe_sub['customer'])
+        return
+
+    from django.utils import timezone
+    from datetime import datetime, timezone as dt_timezone
+
+    sub.stripe_subscription_id = stripe_sub['id']
+    sub.status = stripe_sub['status']
+    period_end = stripe_sub.get('current_period_end')
+    if period_end:
+        sub.current_period_end = datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
+    sub.save()
