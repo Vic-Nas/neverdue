@@ -299,6 +299,7 @@ def category_edit(request, pk=None):
         if request.method == 'POST':
             name = request.POST.get('name', '').strip()
             color = request.POST.get('color', '').strip()
+            priority = int(request.POST.get('priority', 1))
             reminders_raw = request.POST.getlist('reminders')
             reminders = [{'minutes': int(m)} for m in reminders_raw if m.isdigit()]
 
@@ -306,16 +307,28 @@ def category_edit(request, pk=None):
                 category.name = name
                 category.color = color
                 category.reminders = reminders
+                
+                # Handle priority change and gcal_color_id
+                gcal_color_id = request.POST.get('gcal_color_id', '').strip()
+                if gcal_color_id:
+                    category.gcal_color_id = gcal_color_id
+                elif category.priority != priority:
+                    # Priority changed → reset to default color of new priority
+                    from dashboard.writer import _priority_color_id
+                    category.gcal_color_id = _priority_color_id(request.user, priority)
+                
+                category.priority = priority
                 category.save()
                 
                 # Async task to sync GCal colors — returns immediately
-                from emails.tasks import patch_category_colors
+                from dashboard.tasks import patch_category_colors
                 patch_category_colors.delay(request.user.pk, category.pk)
             else:
                 category = Category.objects.create(
                     user=request.user,
                     name=name,
                     color=color,
+                    priority=priority,
                     reminders=reminders,
                 )
 

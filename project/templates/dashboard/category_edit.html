@@ -46,6 +46,73 @@
       </div>
     </div>
 
+    {# ── Google Calendar color ── #}
+    <div class="form-section">
+      <h3 class="form-section__title">Google Calendar color</h3>
+      <p class="form-hint form-hint--spaced">Choose a color for events in this category on Google Calendar. Leave empty to use your priority default.</p>
+      <div class="gcal-colors">
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="" {% if not category or not category.gcal_color_id %}checked{% endif %}>
+          <span class="gcal-color-label">Auto (Priority)</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="1" {% if category.gcal_color_id == '1' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #7986CB;" title="Lavender"></span>
+          <span class="gcal-color-label">Lavender</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="2" {% if category.gcal_color_id == '2' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #33B679;" title="Sage"></span>
+          <span class="gcal-color-label">Sage</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="3" {% if category.gcal_color_id == '3' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #8E24AA;" title="Grape"></span>
+          <span class="gcal-color-label">Grape</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="4" {% if category.gcal_color_id == '4' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #E67C73;" title="Flamingo"></span>
+          <span class="gcal-color-label">Flamingo</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="5" {% if category.gcal_color_id == '5' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #F6BF26;" title="Banana"></span>
+          <span class="gcal-color-label">Banana</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="6" {% if category.gcal_color_id == '6' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #F4511E;" title="Tangerine"></span>
+          <span class="gcal-color-label">Tangerine</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="7" {% if category.gcal_color_id == '7' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #039BE5;" title="Peacock"></span>
+          <span class="gcal-color-label">Peacock</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="8" {% if category.gcal_color_id == '8' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #3F51B5;" title="Blueberry"></span>
+          <span class="gcal-color-label">Blueberry</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="9" {% if category.gcal_color_id == '9' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #0B8043;" title="Basil"></span>
+          <span class="gcal-color-label">Basil</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="10" {% if category.gcal_color_id == '10' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #D50000;" title="Tomato"></span>
+          <span class="gcal-color-label">Tomato</span>
+        </label>
+        <label class="gcal-color-option">
+          <input type="radio" name="gcal_color_id" value="11" {% if category.gcal_color_id == '11' %}checked{% endif %}>
+          <span class="gcal-color-swatch" style="background-color: #616161;" title="Graphite"></span>
+          <span class="gcal-color-label">Graphite</span>
+        </label>
+      </div>
+    </div>
+
     {# ── Reminders ── #}
     <div class="form-section">
       <div class="form-section__header">

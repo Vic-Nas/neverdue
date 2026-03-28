@@ -16,6 +16,7 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=7, null=True, blank=True)  # hex color for UI display
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=1)
+    gcal_color_id = models.CharField(max_length=2, blank=True, default='')  # GCal color palette ID
     reminders = models.JSONField(default=list)  # e.g. [{"minutes": 10080}, {"minutes": 60}]
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -24,6 +25,12 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.gcal_color_id and self.user_id:
+            from dashboard.writer import _priority_color_id
+            self.gcal_color_id = _priority_color_id(self.user, self.priority)
+        super().save(*args, **kwargs)
 
 
 class Rule(models.Model):
