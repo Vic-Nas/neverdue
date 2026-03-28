@@ -95,11 +95,11 @@
 
       tr.innerHTML =
         '<td>' + sourceCell + attentionBadge + '</td>' +
-        '<td class="queue-from">' + (j.from_address || '—') + '</td>' +
-        '<td class="queue-notes">' + notesCell + '</td>' +
-        '<td><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
-        '<td>' + (isDurationVisible ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
-        '<td>' + fmt(j.created_at) + '</td>';
+        '<td class="queue-from" data-label="From">' + (j.from_address || '—') + '</td>' +
+        '<td class="queue-notes" data-label="Notes">' + notesCell + '</td>' +
+        '<td data-label="Status"><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
+        '<td data-label="Duration">' + (isDurationVisible ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
+        '<td data-label="Started">' + fmt(j.created_at) + '</td>';
 
       if (isTerminal) {
         tr.classList.add('queue-row--clickable');
