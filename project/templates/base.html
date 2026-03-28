@@ -43,7 +43,7 @@
   <div class="topnav__actions">
     {% if user.is_authenticated %}
       {% if user.is_pro %}
-        <span class="topnav__pro">Pro</span>
+    <a href="{% url 'billing:portal' %}" class="topnav__pro">Pro ↗</a>
       {% else %}
         <a href="{% url 'billing:plans' %}" class="topnav__upgrade">Upgrade</a>
       {% endif %}
