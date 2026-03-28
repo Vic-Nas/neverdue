@@ -85,6 +85,28 @@
       <textarea id="description" name="description" rows="3" placeholder="Any extra context…">{{ event.description|default:'' }}</textarea>
     </div>
 
+    {# ── GCal color override ── #}
+    <div class="form-group">
+      <label>Google Calendar color <span class="label-optional">(optional — overrides category color)</span></label>
+      <div class="gcal-swatches">
+        <label class="gcal-swatch gcal-swatch--auto" title="Use category color">
+          <input type="radio" name="color" value="" {% if not event.color %}checked{% endif %}>
+          <span>Auto</span>
+        </label>
+        <label class="gcal-swatch" title="Lavender"><input type="radio" name="color" value="1" {% if event.color == '1' %}checked{% endif %}><span style="background:#7986CB"></span></label>
+        <label class="gcal-swatch" title="Sage"><input type="radio" name="color" value="2" {% if event.color == '2' %}checked{% endif %}><span style="background:#33B679"></span></label>
+        <label class="gcal-swatch" title="Grape"><input type="radio" name="color" value="3" {% if event.color == '3' %}checked{% endif %}><span style="background:#8E24AA"></span></label>
+        <label class="gcal-swatch" title="Flamingo"><input type="radio" name="color" value="4" {% if event.color == '4' %}checked{% endif %}><span style="background:#E67C73"></span></label>
+        <label class="gcal-swatch" title="Banana"><input type="radio" name="color" value="5" {% if event.color == '5' %}checked{% endif %}><span style="background:#F6BF26"></span></label>
+        <label class="gcal-swatch" title="Tangerine"><input type="radio" name="color" value="6" {% if event.color == '6' %}checked{% endif %}><span style="background:#F4511E"></span></label>
+        <label class="gcal-swatch" title="Peacock"><input type="radio" name="color" value="7" {% if event.color == '7' %}checked{% endif %}><span style="background:#039BE5"></span></label>
+        <label class="gcal-swatch" title="Blueberry"><input type="radio" name="color" value="8" {% if event.color == '8' %}checked{% endif %}><span style="background:#3F51B5"></span></label>
+        <label class="gcal-swatch" title="Basil"><input type="radio" name="color" value="9" {% if event.color == '9' %}checked{% endif %}><span style="background:#0B8043"></span></label>
+        <label class="gcal-swatch" title="Tomato"><input type="radio" name="color" value="10" {% if event.color == '10' %}checked{% endif %}><span style="background:#D50000"></span></label>
+        <label class="gcal-swatch" title="Graphite"><input type="radio" name="color" value="11" {% if event.color == '11' %}checked{% endif %}><span style="background:#616161"></span></label>
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label for="recurrence_freq">Repeats <span class="label-optional">(optional)</span></label>
