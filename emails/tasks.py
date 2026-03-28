@@ -243,3 +243,38 @@ def cleanup_events():
     ).delete()
     if deleted_jobs:
         logger.info("cleanup_events: deleted %s old ScanJob(s)", deleted_jobs)
+
+
+@shared_task
+def patch_category_colors(user_id: int, category_id: int) -> None:
+    """
+    Asynchronously patch GCal event colors for a category.
+    Called after category color change to sync colors to Google Calendar.
+    Runs in Celery worker so the HTTP view returns immediately.
+    """
+    from accounts.models import User
+    from dashboard.models import Category
+    from dashboard.gcal import patch_event_color
+    from dashboard.writer import _resolve_color_id
+
+    try:
+        user = User.objects.get(pk=user_id)
+        category = Category.objects.get(pk=category_id)
+    except (User.DoesNotExist, Category.DoesNotExist) as exc:
+        logger.warning("patch_category_colors: lookup failed user=%s category=%s: %s",
+                      user_id, category_id, exc)
+        return
+
+    # Find events to patch: active, no local color, has google_event_id
+    events_to_patch = category.events.filter(
+        status='active', color=''
+    ).exclude(google_event_id='').exclude(google_event_id__isnull=True)
+
+    color_id = _resolve_color_id(user, category)
+    count = 0
+    for event in events_to_patch:
+        if patch_event_color(user, event.google_event_id, color_id):
+            count += 1
+
+    logger.info("patch_category_colors: patched %s event(s) for category=%s user=%s",
+                count, category_id, user_id)
