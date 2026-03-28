@@ -146,25 +146,24 @@ def _today_in_tz(tz: zoneinfo.ZoneInfo | dt_timezone) -> str:
     return datetime.now(tz=tz).date().isoformat()
 
 
-def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC') -> tuple[list[dict], int, int]:
+def extract_events(text: str, language: str = 'English', user_timezone: str = 'UTC', user_instructions: str = '') -> tuple[list[dict], int, int]:
     tz = _get_tz(user_timezone)
     today = _today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+
+    user_content = (
+        f"Today's date: {today}\n"
+        f"User's timezone: {user_timezone}\n"
+    )
+    if user_instructions:
+        user_content += f"\nUser instructions (follow strictly):\n{user_instructions}\n"
+    user_content += f"\nExtract all calendar events from this content:\n\n{text}"
 
     message = client.messages.create(
         model=settings.LLM_MODEL,
         max_tokens=2000,
         system=system,
-        messages=[
-            {
-                'role': 'user',
-                'content': (
-                    f"Today's date: {today}\n"
-                    f"User's timezone: {user_timezone}\n\n"
-                    f"Extract all calendar events from this content:\n\n{text}"
-                )
-            }
-        ]
+        messages=[{'role': 'user', 'content': user_content}]
     )
 
     events = _parse_and_validate(message, tz)
@@ -177,6 +176,7 @@ def extract_events_from_image(
     context: str = '',
     language: str = 'English',
     user_timezone: str = 'UTC',
+    user_instructions: str = '',
 ) -> tuple[list[dict], int, int]:
     import base64
     encoded = base64.standard_b64encode(file_bytes).decode('utf-8')
@@ -197,6 +197,8 @@ def extract_events_from_image(
     )
     if context:
         user_text += f'\n\nUser context (follow strictly): {context}'
+    if user_instructions:
+        user_text += f'\n\nUser instructions (follow strictly): {user_instructions}'
 
     message = client.messages.create(
         model=settings.LLM_MODEL,
@@ -222,6 +224,7 @@ def extract_events_from_email(
     attachments: list[tuple[bytes, str, str]],
     language: str = 'English',
     user_timezone: str = 'UTC',
+    user_instructions: str = '',
 ) -> tuple[list[dict], int, int]:
     """
     Extract calendar events from an email body + attachments using a two-step approach:
@@ -292,6 +295,8 @@ def extract_events_from_email(
         f"Today's date: {today}\n"
         f"User's timezone: {user_timezone}\n\n"
     )
+    if user_instructions:
+        recon_text += f"\nUser instructions (follow strictly):\n{user_instructions}\n"
     if attachment_events:
         recon_text += (
             f"Events already extracted from attachments (dates and times are ground truth):\n"
@@ -397,6 +402,8 @@ def _validate_event(event: dict, tz) -> dict | None:
         status = 'active'
 
     concern = event.get('concern', '').strip() if status == 'pending' else ''
+    if status == 'pending' and not concern:
+        concern = 'Needs review.'
     expires_at = event.get('expires_at', '').strip() if status == 'pending' else ''
 
     if expires_at:

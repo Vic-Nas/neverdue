@@ -4,7 +4,7 @@ import logging
 from django.utils import timezone
 
 from .extractor import extract_events, extract_events_from_image, extract_events_from_email
-from .resolver import resolve_category
+from .resolver import resolve_category, collect_prompt_injections, DISCARD
 from dashboard.writer import write_event_to_calendar
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,12 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
 
+    user_instructions = collect_prompt_injections(user, sender)
     try:
-        events, input_tokens, output_tokens = extract_events(text, language=language, user_timezone=user_timezone)
+        events, input_tokens, output_tokens = extract_events(
+            text, language=language, user_timezone=user_timezone,
+            user_instructions=user_instructions,
+        )
     except ValueError as exc:
         logger.warning("process_text: extraction failed for user=%s: %s", user.pk, exc)
         return [], ''
@@ -99,12 +103,14 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         decoded_attachments = []
         notes = 'Attachments ignored — Pro plan required.'
 
+    user_instructions = collect_prompt_injections(user, sender)
     try:
         events, input_tokens, output_tokens = extract_events_from_email(
             body=body or '',
             attachments=decoded_attachments,
             language=language,
             user_timezone=user_timezone,
+            user_instructions=user_instructions,
         )
     except ValueError as exc:
         logger.warning("process_email: extraction failed for user=%s: %s", user.pk, exc)
@@ -311,6 +317,9 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     created = []
     for event_data in events:
         category = resolve_category(user, event_data, sender)
+        if category is DISCARD:
+            logger.info("_save_events: event discarded by rule: %s", event_data.get('title'))
+            continue
         if category is None:
             category = _get_or_create_uncategorized(user)
         event = write_event_to_calendar(user, event_data, category, scan_job=scan_job)

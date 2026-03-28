@@ -257,6 +257,7 @@
   line-height: 1;
   font-family: 'Instrument Serif', serif;
   pointer-events: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 

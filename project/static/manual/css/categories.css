@@ -168,26 +168,20 @@
 }
 
 .gcal-swatch input:checked + span {
-  border-color: var(--color-primary, #4f46e5);
-  outline: 2px solid var(--color-primary, #4f46e5);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   box-shadow: 0 0 0 1px white;
 }
 
 .gcal-swatch--auto span {
-  background: var(--color-surface, #f3f4f6);
-  border-color: var(--color-border, #d1d5db);
-  color: var(--color-muted, #6b7280);
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
 .gcal-swatch--auto input:checked + span {
   background: var(--color-surface, #f3f4f6);
-  border-color: var(--color-primary, #4f46e5);
+  border-color: var(--accent);
 }
 
-/* Label for optional field */
-.label-optional {
-  font-size: 0.85rem;
-  font-weight: normal;
-  color: var(--color-muted, #6b7280);
-}
