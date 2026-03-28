@@ -66,6 +66,7 @@ def event_edit(request, pk=None):
             category = get_object_or_404(Category, pk=category_id, user=request.user) if category_id else None
             recurrence_freq = request.POST.get('recurrence_freq') or None
             recurrence_until = request.POST.get('recurrence_until') or None
+            color = request.POST.get('color', '')
 
             from django.utils.dateparse import parse_datetime
             start_dt = parse_datetime(start)
@@ -97,6 +98,7 @@ def event_edit(request, pk=None):
                 event.category = category
                 event.recurrence_freq = recurrence_freq
                 event.recurrence_until = recurrence_until or None
+                event.color = color
 
                 if was_pending:
                     event.status = 'active'
@@ -114,6 +116,11 @@ def event_edit(request, pk=None):
                     event.save()
                     if not update_event_in_gcal(request.user, event):
                         messages.warning(request, 'Event saved but could not sync to Google Calendar.')
+                    # Patch color to GCal if event has google_event_id
+                    if event.google_event_id:
+                        from dashboard.gcal import patch_event_color
+                        color_to_apply = event.color if event.color else (str(event.category.gcal_color_id) if event.category else '')
+                        patch_event_color(request.user, event.google_event_id, color_to_apply)
             else:
                 event = Event.objects.create(
                     user=request.user,
@@ -124,6 +131,7 @@ def event_edit(request, pk=None):
                     category=category,
                     recurrence_freq=recurrence_freq,
                     recurrence_until=recurrence_until or None,
+                    color=color,
                 )
                 result = push_event_to_gcal(request.user, event)
                 if result:
