@@ -1,5 +1,5 @@
 (function () {
-  var CSRF = document.querySelector('meta[name="csrf-token"]').content;
+  var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   var pageEl = document.querySelector('.page[data-rule-add-url]');
   var ADD_URL = pageEl ? pageEl.dataset.ruleAddUrl : '';
   var DELETE_URL_TPL = pageEl ? pageEl.dataset.ruleDeleteUrlTpl : '';
