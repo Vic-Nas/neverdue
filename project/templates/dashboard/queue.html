@@ -71,12 +71,31 @@
     tbody.innerHTML = '';
     jobs.forEach(function (j) {
       var tr = document.createElement('tr');
+      var isDone = j.status === 'done' || j.status === 'failed';
+      var hasPending = j.pending_event_count > 0;
+
+      var attentionBadge = hasPending
+        ? ' <span style="display:inline-block;background:#ef4444;color:#fff;border-radius:9px;font-size:0.7rem;font-weight:700;padding:1px 6px;margin-left:4px;">' + j.pending_event_count + ' needs attention</span>'
+        : '';
+      var activeInfo = j.active_event_count > 0
+        ? j.active_event_count + ' event' + (j.active_event_count !== 1 ? 's' : '') + ' created'
+        : (isDone && !hasPending ? 'No events' : '');
+
+      var notesCell = j.notes || activeInfo
+        ? (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + activeInfo
+        : '';
+
+      var sourceCell = SOURCE_LABELS[j.source] || j.source;
+      if (isDone) {
+        sourceCell = '<a href="/dashboard/queue/' + j.id + '/" style="color:inherit;font-weight:600;">' + sourceCell + '</a>';
+      }
+
       tr.innerHTML =
-        '<td>' + (SOURCE_LABELS[j.source] || j.source) + '</td>' +
+        '<td>' + sourceCell + attentionBadge + '</td>' +
         '<td class="queue-from">' + (j.from_address || '—') + '</td>' +
-        '<td class="queue-notes">' + (j.notes || '') + '</td>' +
+        '<td class="queue-notes">' + notesCell + '</td>' +
         '<td><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
-        '<td>' + (j.status === 'done' || j.status === 'failed' ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
+        '<td>' + (isDone ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
         '<td>' + fmt(j.created_at) + '</td>';
       tbody.appendChild(tr);
     });

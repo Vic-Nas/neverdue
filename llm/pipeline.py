@@ -5,7 +5,7 @@ from .resolver import resolve_category
 from dashboard.writer import write_event_to_calendar
 
 
-def process_text(user, text: str, sender: str = '', source_email_id: str = '') -> tuple[list, str]:
+def process_text(user, text: str, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, str]:
     """
     Full pipeline for plain text or email body.
     Returns (created_events, notes) where notes is non-empty if something was skipped.
@@ -22,7 +22,7 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
         return [], ''
 
     print(f"EXTRACTED EVENTS: {events}")
-    return _save_events(user, events, sender, source_email_id), ''
+    return _save_events(user, events, sender, source_email_id, scan_job=scan_job), ''
 
 
 def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> tuple[list, str]:
@@ -61,7 +61,7 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
     return _save_events(user, events), ''
 
 
-def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> tuple[list, str]:
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, str]:
     """
     Full pipeline for an inbound email with optional attachments.
     Body and attachments are sent together in a single LLM call.
@@ -105,7 +105,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         return [], notes
 
     print(f"EXTRACTED EVENTS: {events}")
-    return _save_events(user, events, sender, source_email_id), notes
+    return _save_events(user, events, sender, source_email_id, scan_job=scan_job), notes
 
 
 def _check_and_increment_scans(user) -> bool:
@@ -142,14 +142,14 @@ def _get_or_create_uncategorized(user):
     return category
 
 
-def _save_events(user, events: list, sender: str = '', source_email_id: str = '') -> list:
+def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> list:
     created = []
     for event_data in events:
         event_data['source_email_id'] = source_email_id
         category = resolve_category(user, event_data, sender)
         if category is None:
             category = _get_or_create_uncategorized(user)
-        event = write_event_to_calendar(user, event_data, category)
+        event = write_event_to_calendar(user, event_data, category, scan_job=scan_job)
         if event:
             created.append(event)
     return created

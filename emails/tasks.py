@@ -77,7 +77,9 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
 
     _set_job_status(job_pk, 'processing')
     try:
-        created, notes = process_email(user, body, attachments, sender=sender, source_email_id=message_id)
+        from emails.models import ScanJob as _ScanJob
+        scan_job = _ScanJob.objects.filter(pk=job_pk).first()
+        created, notes = process_email(user, body, attachments, sender=sender, source_email_id=message_id, scan_job=scan_job)
         if notes:
             _set_job_notes(job_pk, notes)
         _set_job_status(job_pk, 'done')
@@ -101,8 +103,7 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
     from accounts.models import User
     from llm.pipeline import process_email
 
-    from_address = f"{user.username}@user.neverdue.ca" if user else ''
-    job_pk = _create_job(user_id, source='upload', from_address=from_address)
+    job_pk = _create_job(user_id, source='upload')
 
     logger.info("UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
                 user_id, media_type, filename, len(context) if context else 0)
@@ -122,7 +123,9 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
 
     _set_job_status(job_pk, 'processing')
     try:
-        created, notes = process_email(user, body, attachments)
+        from emails.models import ScanJob as _ScanJob
+        scan_job = _ScanJob.objects.filter(pk=job_pk).first()
+        created, notes = process_email(user, body, attachments, scan_job=scan_job)
         if notes:
             _set_job_notes(job_pk, notes)
         _set_job_status(job_pk, 'done')
@@ -161,7 +164,9 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str):
     if prompt.strip():
         _set_job_status(job_pk, 'processing')
         try:
-            created, _ = process_text(user, prompt)
+            from emails.models import ScanJob as _ScanJob
+            scan_job = _ScanJob.objects.filter(pk=job_pk).first()
+            created, _ = process_text(user, prompt, scan_job=scan_job)
             _set_job_status(job_pk, 'done')
             logger.info("reprocess_events: created %s new event(s) for user=%s", len(created), user_id)
         except Exception as exc:

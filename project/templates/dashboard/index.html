@@ -26,9 +26,7 @@
 
   body.selecting .event-card__checkbox { display: block; }
   body.selecting .event-card__date { margin-left: 32px; }
-  body.selecting .event-card { cursor: default; }
-  body.selecting .event-card:not(.event-card--pending) { pointer-events: none; }
-  body.selecting .event-card__checkbox { pointer-events: all; }
+  body.selecting .event-card { cursor: pointer; }
 
   .event-card--selected { background: var(--color-primary-subtle, #eef2ff); }
 
@@ -123,35 +121,7 @@
   <p class="scan-last">Last event added {{ last_event.created_at|timesince }} ago</p>
   {% endif %}
 
-  {# ── Pending / needs attention ── #}
-  {% if pending_events %}
-  <div class="pending-banner">
-    <div class="pending-banner__header">
-      <span class="pending-banner__icon">⚠</span>
-      <span class="pending-banner__title">{{ pending_events|length }} event{{ pending_events|length|pluralize }} need{{ pending_events|length|pluralize:"s," }} attention</span>
-    </div>
-    <div class="event-list event-list--pending">
-      {% for event in pending_events %}
-      <div class="event-card event-card--pending" data-id="{{ event.pk }}">
-        <input type="checkbox" class="event-card__checkbox" value="{{ event.pk }}">
-        <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card__inner" style="display:contents">
-          <div class="event-card__date">
-            <span class="event-card__day">{{ event.start|in_user_tz:request.user|date:"d" }}</span>
-            <span class="event-card__month">{{ event.start|in_user_tz:request.user|date:"M" }}</span>
-          </div>
-          <div class="event-card__body">
-            <div class="event-card__title">{{ event.title }}</div>
-            <div class="event-card__concern">{{ event.pending_concern }}</div>
-          </div>
-          <div class="event-card__arrow">→</div>
-        </a>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  {# ── Bulk action bar ── #}
+  {# ── Bulk action bar (above sort + list) ── #}
   <div class="bulk-bar" id="bulk-bar">
     <span class="bulk-bar__count"><span id="selected-count">0</span> selected</span>
     <div class="bulk-bar__actions">
@@ -265,8 +235,8 @@ function updateBulkBar() {
   selectedCountEl.textContent = count;
   bulkBar.classList.toggle('visible', count > 0);
   selectAllBtn.textContent = count === getCheckboxes().length ? 'Deselect all' : 'Select all';
-  
-  // Update export button href
+
+  // Export only shown when something is selected (all active on dashboard now)
   const exportBtn = document.getElementById('export-btn');
   if (count > 0) {
     exportBtn.style.display = 'inline-block';
@@ -297,14 +267,17 @@ if (selectToggle) {
   });
 }
 
-// Clicking an event card in select mode checks its box
+// Clicking an event card in select mode checks its box instead of navigating
 document.querySelectorAll('.event-card').forEach(card => {
   card.addEventListener('click', e => {
     if (!selecting) return;
     e.preventDefault();
     const cb = card.querySelector('.event-card__checkbox');
-    if (cb) { cb.checked = !cb.checked; updateBulkBar(); }
-    card.classList.toggle('event-card--selected', cb && cb.checked);
+    if (cb) {
+      cb.checked = !cb.checked;
+      card.classList.toggle('event-card--selected', cb.checked);
+      updateBulkBar();
+    }
   });
 });
 
