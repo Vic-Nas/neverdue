@@ -156,7 +156,10 @@ def _sync_subscription(stripe_sub):
 
     sub.stripe_subscription_id = stripe_sub['id']
     sub.status = stripe_sub['status']
-    period_end = stripe_sub['current_period_end']
+    try:
+        period_end = stripe_sub['items']['data'][0]['current_period_end']
+    except (KeyError, IndexError):
+        period_end = None
     if period_end:
         sub.current_period_end = datetime.fromtimestamp(period_end, tz=dt_timezone.utc)
     
