@@ -187,3 +187,143 @@
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.75); }
 }
+
+/* ── Responsive: tablet — hide less-critical columns ── */
+@media (max-width: 700px) {
+  .queue-page__title {
+    font-size: 1.4rem;
+  }
+
+  /* Hide "From" and "Duration" columns on tablet */
+  .queue-table th:nth-child(2),
+  .queue-table td:nth-child(2),
+  .queue-table th:nth-child(5),
+  .queue-table td:nth-child(5) {
+    display: none;
+  }
+
+  .queue-table th,
+  .queue-table td {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* ── Responsive: mobile — card layout ── */
+@media (max-width: 480px) {
+  .queue-page {
+    padding-bottom: 2rem;
+  }
+
+  .queue-page__title {
+    font-size: 1.25rem;
+  }
+
+  /* Switch table to block/card layout */
+  .queue-table,
+  .queue-table thead,
+  .queue-table tbody,
+  .queue-table th,
+  .queue-table td,
+  .queue-table tr {
+    display: block;
+  }
+
+  /* Hide the header row visually */
+  .queue-table thead tr {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+
+  /* Each row becomes a card */
+  .queue-table tbody tr {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 0.75rem;
+    padding: 1rem 1.1rem;
+    border-bottom: none;
+  }
+
+  .queue-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Remove the wrapping table styles since rows are now cards */
+  .queue-table {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  /* All cells become full-width block elements */
+  .queue-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    border-bottom: none;
+    font-size: 0.875rem;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  /* Add a label before each cell using data-label attributes */
+  .queue-table td::before {
+    content: attr(data-label);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-right: 0.75rem;
+  }
+
+  /* First cell (Source + badge) is the card title — no label, larger text */
+  .queue-table td:nth-child(1) {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    justify-content: flex-start;
+    gap: 0.4rem;
+  }
+
+  .queue-table td:nth-child(1)::before {
+    display: none;
+  }
+
+  /* From / Notes / Status / Duration / Started */
+  .queue-table td:nth-child(2)::before { content: 'From'; }
+  .queue-table td:nth-child(3)::before { content: 'Notes'; }
+  .queue-table td:nth-child(4)::before { content: 'Status'; }
+  .queue-table td:nth-child(5)::before { content: 'Duration'; color: var(--text-muted); }
+  .queue-table td:nth-child(6)::before { content: 'Started'; }
+
+  /* Re-show columns hidden at tablet breakpoint */
+  .queue-table td:nth-child(2),
+  .queue-table td:nth-child(5) {
+    display: flex;
+  }
+
+  /* Muted text cells */
+  .queue-from,
+  .queue-notes {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    font-size: 0.875rem;
+  }
+
+  /* Hide empty cells to keep cards tidy */
+  .queue-table td:empty {
+    display: none;
+  }
+}
