@@ -145,7 +145,14 @@ def event_prompt_edit(request, pk):
         full_text = "\n".join(lines) + f"\n\nUser instruction: {prompt}"
 
         event.delete()
-        process_text_as_upload.delay(request.user.pk, full_text)
+        # Create job BEFORE queueing task to prevent duplicate jobs on retry
+        from emails.models import ScanJob
+        job = ScanJob.objects.create(
+            user=request.user,
+            source=ScanJob.SOURCE_UPLOAD,
+            status=ScanJob.STATUS_QUEUED,
+        )
+        process_text_as_upload.delay(job.id, request.user.pk, full_text)
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("event_prompt_edit error for user=%s pk=%s", request.user.pk, pk)
@@ -192,7 +199,14 @@ def events_bulk_action(request):
         full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
 
         events.delete()
-        process_text_as_upload.delay(request.user.pk, full_text)
+        # Create job BEFORE queueing task to prevent duplicate jobs on retry
+        from emails.models import ScanJob
+        job = ScanJob.objects.create(
+            user=request.user,
+            source=ScanJob.SOURCE_UPLOAD,
+            status=ScanJob.STATUS_QUEUED,
+        )
+        process_text_as_upload.delay(job.id, request.user.pk, full_text)
         return JsonResponse({'ok': True, 'queued': len(blocks)})
     except Exception:
         logger.exception("events_bulk_action error for user=%s", request.user.pk)
@@ -389,6 +403,7 @@ def upload(request):
         import base64
         if request.method == 'POST':
             from emails.tasks import process_uploaded_file
+            from emails.models import ScanJob
             uploaded = request.FILES.get('file')
             context = request.POST.get('context', '').strip()
             if not uploaded:
@@ -397,7 +412,13 @@ def upload(request):
             file_bytes = uploaded.read()
             file_b64 = base64.b64encode(file_bytes).decode('utf-8')
             filename = uploaded.name or ''
-            process_uploaded_file.delay(request.user.pk, file_b64, content_type, context, filename)
+            # Create job BEFORE queueing task to prevent duplicate jobs on retry
+            job = ScanJob.objects.create(
+                user=request.user,
+                source=ScanJob.SOURCE_UPLOAD,
+                status=ScanJob.STATUS_QUEUED,
+            )
+            process_uploaded_file.delay(job.id, request.user.pk, file_b64, content_type, context, filename)
             return JsonResponse({'ok': True})
         return render(request, 'dashboard/upload.html')
     except Exception:
