@@ -21,10 +21,13 @@ Jobs are never duplicated, abandoned, or silently replaced.
 ```md
 queued → processing → done
                     → needs_review   (one or more events are pending; user must act)
-                    → failed         (unhandled exception)
+                    → failed         (unhandled exception, scan limit, or plan restriction)
 
 needs_review → processing            (user submits a reprocess prompt)
              → done                  (user explicitly cancels with no prompt)
+
+failed → queued                      (manual retry by user or admin, or auto-retry on
+                                      quota reset / plan upgrade)
 ```
 
 ### Status definitions
@@ -35,7 +38,7 @@ needs_review → processing            (user submits a reprocess prompt)
 | `processing` | Worker is actively running |
 | `done` | All events created are active; nothing left to do |
 | `needs_review` | One or more events are `pending`; user must review and resubmit |
-| `failed` | An unhandled exception aborted the job |
+| `failed` | Job could not be completed — see `failure_reason` for why |
 
 ### What must never happen
 
@@ -43,6 +46,49 @@ needs_review → processing            (user submits a reprocess prompt)
 - A job is marked `done` with zero events and no note explaining why.
 - A reprocess creates a new ScanJob. There is one job per source input.
 - Two jobs race to write events for the same source.
+- A failed job is silently deleted before the user has seen it.
+
+---
+
+## Failure reasons
+
+Every failed job must have a `failure_reason` code. This enables the admin to
+filter and bulk-retry by root cause, and shows the user a meaningful message.
+
+| Code | Meaning | Retried automatically |
+| --- | --- | --- |
+| `llm_error` | Anthropic API failure — rate limit, outage, credits exhausted | No — manual retry by user or admin |
+| `scan_limit` | Monthly scan quota reached | Yes — on month reset (`reset_monthly_scans`) and on plan upgrade |
+| `pro_required` | Attachment-only email received on free plan | Yes — on plan upgrade (`retry_jobs_after_plan_upgrade`) |
+| `internal_error` | Unhandled exception — bug or infra failure | No — manual retry after fix; grouped by `failure_signature` in admin |
+
+`failure_signature` stores a short exception identifier (class + first line of message,
+e.g. `"AnthropicError: 529 overloaded"`) so `internal_error` jobs can be grouped by
+root cause in the admin and bulk-retried when a fix is deployed.
+
+### What must never happen
+
+- A job is marked `failed` without a `failure_reason`.
+- A `scan_limit` or `pro_required` job is marked `done` — they are failures, not successes.
+- A `failed` job is auto-deleted by `cleanup_events`. Only `done` jobs are cleaned up.
+
+---
+
+## Free user — attachment behaviour
+
+Free users may forward emails that contain attachments.
+
+- If the email has a **usable body** (non-empty text): process the body only.
+  Set a note: `"Attachments ignored — upgrade to Pro to include them."` Job → `done`.
+- If the email is **attachment-only** (no usable body): the job cannot be processed
+  without the attachment. Mark the job `failed` with `failure_reason=pro_required`.
+  The job stays visible in the queue with a message to upgrade.
+  When the user upgrades, `retry_jobs_after_plan_upgrade` re-enqueues the job automatically.
+
+**What must never happen:**
+
+- An attachment is silently stripped with no user-visible consequence.
+- An attachment-only email for a free user is marked `done` with zero events and no explanation.
 
 ---
 
@@ -90,10 +136,11 @@ If something is unclear, mark it pending and explain why.
 3. User writes a correction prompt (e.g. "repeat yearly until 2030-01-01").
 4. Frontend calls `reprocess_events.delay(user_id, event_ids, prompt, job_pk=job.pk)`.
 5. Worker sets job status → `processing`.
-6. Worker reads `source_email_id` from the pending events **before** deleting them.
-7. Worker deletes the pending events.
-8. Worker calls `process_text(user, prompt, source_email_id=preserved_id, scan_job=job)`.
-9. `_save_events` writes new events linked to the **same** job.
+6. Worker reads and serializes event data (including `source_email_id`) from the
+   pending events **before** doing anything else.
+7. Worker calls `process_text(user, prompt, source_email_id=preserved_id, scan_job=job)`.
+8. `_save_events` writes new events linked to the **same** job.
+9. **Only after a successful LLM response**, worker deletes the pending events.
 10. If all new events are active → job → `done`.
 11. If any new events are pending → job → `needs_review` (user acts again).
 
@@ -102,6 +149,8 @@ If something is unclear, mark it pending and explain why.
 - `source_email_id` is lost. Future identical emails would bypass dedup.
 - A new ScanJob is created. The original job is the permanent record.
 - The original job ends up with zero events and no explanation.
+- Pending events are deleted before the LLM call succeeds — if the LLM fails,
+  events must remain intact so the job is still recoverable.
 - Job status is set to `done` by the task — the pipeline owns that decision.
 
 ---
@@ -152,19 +201,57 @@ into duplicate events indefinitely.
 
 ## Job status ownership
 
-**The pipeline (`_save_events`) owns the terminal job status decision.**
+**The pipeline (`_save_events`) owns the terminal job status decision for normal runs.**
 
 The task layer (`tasks.py`) is responsible for:
 
 - Creating the job
 - Setting `processing` when work begins
-- Setting `failed` on unhandled exceptions
+- Setting `failed` (with a reason) on exceptions or plan/quota blocks
+
+The pipeline (`pipeline.py`) is responsible for:
+
+- Setting `done` or `needs_review` based on what was actually created
+- Setting `failed` with `reason=scan_limit` or `reason=pro_required` on quota/plan blocks
 
 The task layer must NOT set `done` or `needs_review` — those are set by
-`_save_events` based on what was actually created.
+`_save_events` based on what was actually produced.
 
 This single rule eliminates the class of bugs where a task marks a job `done`
 before, after, or instead of what the pipeline actually produced.
+
+---
+
+## Stale job recovery
+
+A worker crash mid-task leaves a job stuck at `processing` forever with no
+terminal status set. The `recover_stale_jobs` periodic task (runs every 10 minutes)
+resets any job that has been in `processing` for longer than 10 minutes back to
+`queued` so it can be re-enqueued.
+
+---
+
+## Job retention and cleanup
+
+- `done` jobs are deleted after 1 day by `cleanup_events`.
+- `failed` jobs are **never auto-deleted**. They remain visible in the user's queue
+  until they are retried (automatically or manually) and complete, or until the admin
+  dismisses them.
+- `needs_review` jobs are kept until the user acts on them.
+
+---
+
+## Retry contract
+
+| Trigger | Jobs retried |
+| --- | --- |
+| `reset_monthly_scans` (1st of month) | All `failed` jobs with `reason=scan_limit` |
+| `retry_jobs_after_plan_upgrade(user_id)` | All `failed` jobs for that user with `reason=scan_limit` or `reason=pro_required` |
+| Admin bulk action | Any selected `failed` jobs via `_reenqueue_jobs` |
+| User "Retry job" button | Single `failed` job with `reason=llm_error` or `reason=internal_error` |
+
+A retry resets the job to `queued` and dispatches the appropriate task.
+`failure_reason` and `failure_signature` are cleared on retry.
 
 ---
 

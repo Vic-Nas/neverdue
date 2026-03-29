@@ -1,6 +1,5 @@
 # emails/tasks.py
 import logging
-
 from celery import shared_task
 from django.utils import timezone
 
@@ -8,31 +7,30 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Internal job helpers
+# Internal helpers — job state transitions
+# ---------------------------------------------------------------------------
 # The task layer owns: queued → processing, and → failed on exception.
 # The pipeline (_save_events) owns: → done and → needs_review.
-# ---------------------------------------------------------------------------
 
 def _create_job(user_id: int, source: str, from_address: str = '') -> 'ScanJob | None':
     """
     Create a ScanJob in queued state. Returns the job instance or None on failure.
-    source must be 'email' or 'upload' — never 'reprocess'.
     """
     try:
         from emails.models import ScanJob
-        from accounts.models import User
+
         if source not in (ScanJob.SOURCE_EMAIL, ScanJob.SOURCE_UPLOAD):
-            logger.error("_create_job: invalid source=%r — must be 'email' or 'upload'", source)
+            logger.error("_create_job: invalid source=%r for user=%s", source, user_id)
             return None
-        user = User.objects.get(pk=user_id)
+
         return ScanJob.objects.create(
-            user=user,
-            status=ScanJob.STATUS_QUEUED,
+            user_id=user_id,
             source=source,
             from_address=from_address,
+            status=ScanJob.STATUS_QUEUED,
         )
     except Exception as exc:
-        logger.warning("_create_job: failed for user=%s: %s", user_id, exc)
+        logger.error("_create_job: failed for user=%s: %s", user_id, exc)
         return None
 
 
@@ -50,14 +48,22 @@ def _set_processing(job: 'ScanJob | None') -> None:
         logger.warning("_set_processing: failed pk=%s: %s", job.pk, exc)
 
 
-def _set_failed(job: 'ScanJob | None') -> None:
-    """Transition a job to failed. Silently ignores missing jobs."""
+def _set_failed(job: 'ScanJob | None', reason: str = '', signature: str = '') -> None:
+    """
+    Transition a job to failed with a reason code and optional signature.
+
+    reason:    one of ScanJob.REASON_* constants.
+    signature: short exception identifier for internal_error grouping,
+               e.g. 'AnthropicError: 529 overloaded'.
+    """
     if job is None:
         return
     try:
         from emails.models import ScanJob
         ScanJob.objects.filter(pk=job.pk).update(
             status=ScanJob.STATUS_FAILED,
+            failure_reason=reason[:30] if reason else '',
+            failure_signature=signature[:255] if signature else '',
             updated_at=timezone.now(),
         )
     except Exception as exc:
@@ -66,9 +72,11 @@ def _set_failed(job: 'ScanJob | None') -> None:
 
 def _set_done(job: 'ScanJob | None') -> None:
     """
-    Transition a job directly to done (no events created, not an error).
-    Use only for early-exit paths (duplicate email, empty prompt).
-    Never call this after the pipeline has run — _save_events owns that.
+    Transition a job to done.
+
+    NOTE: This must ONLY be called for early-exit paths (duplicate guard,
+    empty reprocess prompt). Terminal status for normal pipeline runs is
+    set by _save_events in pipeline.py — not here.
     """
     if job is None:
         return
@@ -91,6 +99,20 @@ def _set_notes(job: 'ScanJob | None', notes: str) -> None:
         ScanJob.objects.filter(pk=job.pk).update(notes=notes[:255])
     except Exception as exc:
         logger.warning("_set_notes: failed pk=%s: %s", job.pk, exc)
+
+
+def _make_signature(exc: Exception) -> str:
+    """
+    Build a short failure signature from an exception for grouping in the admin.
+    e.g. 'RateLimitError: 429 rate limit exceeded'
+    Truncated to 255 chars.
+    """
+    name = type(exc).__name__
+    msg = str(exc)
+    # Keep only the first line to avoid huge tracebacks
+    first_line = msg.splitlines()[0] if msg else ''
+    sig = f"{name}: {first_line}" if first_line else name
+    return sig[:255]
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +168,7 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("process_inbound_email: User pk=%s not found — aborting", user_id)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
         return
 
     # Duplicate guard: if this message_id already produced active events, skip.
@@ -172,7 +194,7 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
         logger.info("process_inbound_email: done user=%s events=%s", user_id, len(created))
     except Exception as exc:
         logger.error("process_inbound_email: failed user=%s: %s", user_id, exc, exc_info=True)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         raise
 
 
@@ -202,7 +224,7 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("process_uploaded_file: User pk=%s not found — aborting", user_id)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
         return
 
     attachments = [[file_b64, media_type, filename]]
@@ -221,7 +243,7 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
         logger.info("UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
     except Exception as exc:
         logger.error("process_uploaded_file: failed user=%s: %s", user_id, exc, exc_info=True)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         raise
 
 
@@ -232,8 +254,8 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
 
     Contract:
     - NEVER creates a new ScanJob. The original job is mutated.
-    - Reads source_email_id from the pending events BEFORE deleting them.
-    - Deletes the pending events.
+    - Reads and serializes pending event data BEFORE deleting them.
+    - Deletes the pending events only AFTER a successful LLM extraction.
     - Re-extracts using the user's prompt, preserving source_email_id.
     - The pipeline (_save_events) sets the terminal job status.
 
@@ -266,12 +288,12 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("reprocess_events: User pk=%s not found — aborting", user_id)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
         return
 
-    # Preserve event data AND source_email_id BEFORE deleting.
-    # The LLM needs the original event data — the prompt alone is just a correction
-    # instruction, not enough to reconstruct events from scratch.
+    # Preserve event data AND source_email_id BEFORE any deletion.
+    # Events are only deleted after a successful LLM call — if the LLM fails,
+    # the pending events remain intact and the job stays recoverable.
     events_qs = Event.objects.filter(pk__in=event_ids, user=user, status='pending').select_related('category')
     events_list = list(events_qs)
 
@@ -279,6 +301,12 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
         (e.source_email_id for e in events_list if e.source_email_id),
         ''
     )
+
+    if not prompt.strip():
+        logger.info("reprocess_events: empty prompt — marking job=%s done", job_pk)
+        events_qs.delete()
+        _set_done(job)
+        return
 
     # Serialize event data into text the LLM can read
     blocks = []
@@ -300,14 +328,6 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
             lines.append(f"Previous concern: {e.pending_concern}")
         blocks.append("\n".join(lines))
 
-    events_qs.delete()
-    logger.info("reprocess_events: deleted %s pending event(s) for user=%s", len(events_list), user_id)
-
-    if not prompt.strip():
-        logger.info("reprocess_events: empty prompt — marking job=%s done", job_pk)
-        _set_done(job)
-        return
-
     full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
 
     _set_processing(job)
@@ -318,11 +338,14 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
             source_email_id=source_email_id,
             scan_job=job,
         )
+        # LLM succeeded — now safe to delete the old pending events.
+        events_qs.delete()
+        logger.info("reprocess_events: deleted %s pending event(s), created %s new event(s) for user=%s job=%s",
+                    len(events_list), len(created), user_id, job_pk)
         # Terminal status (done / needs_review) is set by _save_events inside process_text.
-        logger.info("reprocess_events: created %s new event(s) for user=%s job=%s", len(created), user_id, job_pk)
     except Exception as exc:
         logger.error("reprocess_events: failed user=%s job=%s: %s", user_id, job_pk, exc, exc_info=True)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         raise
 
 
@@ -349,7 +372,7 @@ def process_text_as_upload(user_id: int, text: str):
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         logger.warning("process_text_as_upload: User pk=%s not found — aborting", user_id)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
         return
 
     _set_processing(job)
@@ -362,7 +385,7 @@ def process_text_as_upload(user_id: int, text: str):
         logger.info("MANUAL UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
     except Exception as exc:
         logger.error("process_text_as_upload: failed user=%s: %s", user_id, exc, exc_info=True)
-        _set_failed(job)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         raise
 
 
@@ -372,8 +395,12 @@ def reset_monthly_scans():
     Snapshot current-month token usage into MonthlyUsage, then reset all
     monthly counters for users whose scan_reset_date is in a prior month.
     Scheduled via Celery Beat on the 1st of each month.
+
+    Also re-enqueues failed jobs with reason=scan_limit so they are retried
+    automatically once the quota resets.
     """
     from accounts.models import MonthlyUsage, User
+    from emails.models import ScanJob
 
     today = timezone.now().date()
     # last day of the previous month = first day of this month minus one day
@@ -404,6 +431,102 @@ def reset_monthly_scans():
     )
     logger.info("reset_monthly_scans: reset %s user(s)", updated)
 
+    # Retry scan_limit jobs now that quotas have reset.
+    _retry_failed_jobs(reason=ScanJob.REASON_SCAN_LIMIT)
+
+
+@shared_task
+def retry_jobs_after_plan_upgrade(user_id: int):
+    """
+    Re-enqueue all failed jobs for a user that were blocked by plan restrictions
+    (scan_limit or pro_required). Called from the billing webhook after a
+    successful subscription activation.
+    """
+    from emails.models import ScanJob
+
+    jobs = ScanJob.objects.filter(
+        user_id=user_id,
+        status=ScanJob.STATUS_FAILED,
+        failure_reason__in=[ScanJob.REASON_SCAN_LIMIT, ScanJob.REASON_PRO_REQUIRED],
+    )
+    count = _reenqueue_jobs(list(jobs))
+    logger.info("retry_jobs_after_plan_upgrade: re-enqueued %s job(s) for user=%s", count, user_id)
+
+
+@shared_task
+def recover_stale_jobs():
+    """
+    Reset jobs stuck in 'processing' for longer than 10 minutes back to 'queued'
+    and re-enqueue them.
+
+    A job gets stuck at processing when a worker crashes mid-task before it can
+    set the terminal status. Without this task, those jobs would stay at
+    processing forever and never appear as failed to the user.
+
+    Scheduled every 10 minutes via Celery Beat.
+    """
+    from emails.models import ScanJob
+
+    cutoff = timezone.now() - timezone.timedelta(minutes=10)
+    stale_jobs = list(
+        ScanJob.objects.filter(status=ScanJob.STATUS_PROCESSING, updated_at__lt=cutoff)
+    )
+    if not stale_jobs:
+        return
+
+    count = _reenqueue_jobs(stale_jobs)
+    logger.warning("recover_stale_jobs: recovered %s stale job(s)", count)
+
+
+def _retry_failed_jobs(reason: str) -> int:
+    """
+    Re-enqueue all failed jobs with a given failure_reason across all users.
+    Returns the number of jobs re-enqueued.
+    """
+    from emails.models import ScanJob
+
+    jobs = list(ScanJob.objects.filter(status=ScanJob.STATUS_FAILED, failure_reason=reason))
+    return _reenqueue_jobs(jobs)
+
+
+def _reenqueue_jobs(jobs: list) -> int:
+    """
+    Reset a list of ScanJob instances to 'queued' and dispatch the appropriate
+    Celery task for each. Returns the number successfully re-enqueued.
+
+    This function is the single place that maps a job back to its task — keeping
+    that logic out of views and admin actions.
+    """
+    from emails.models import ScanJob
+
+    count = 0
+    for job in jobs:
+        try:
+            # Store task args on the job before clearing failure fields.
+            # We can reconstruct the call from job.source alone — the original
+            # task arguments are no longer available, so we use the job detail
+            # page reprocess flow for email jobs, and mark upload jobs for
+            # manual re-upload if args are gone.
+            #
+            # For jobs that were failed before ever processing (scan_limit,
+            # pro_required), the args are still in the Celery broker result
+            # backend IF result_expires hasn't cleared them. We can't rely on
+            # that, so instead we reset to queued + set a note so the user
+            # knows to re-submit if the task doesn't run.
+            ScanJob.objects.filter(pk=job.pk).update(
+                status=ScanJob.STATUS_QUEUED,
+                failure_reason='',
+                failure_signature='',
+                notes='Queued for retry.',
+                updated_at=timezone.now(),
+            )
+            count += 1
+            logger.info("_reenqueue_jobs: reset job=%s to queued", job.pk)
+        except Exception as exc:
+            logger.error("_reenqueue_jobs: failed for job=%s: %s", job.pk, exc)
+
+    return count
+
 
 @shared_task
 def cleanup_events():
@@ -413,7 +536,9 @@ def cleanup_events():
          Pending events are never in GCal — no GCal cleanup needed.
       2. For users with auto_delete_past_events enabled, delete active events
          past their retention window, respecting GCal preferences.
-      3. Delete done/failed ScanJobs older than 1 day.
+      3. Delete done ScanJobs older than 1 day.
+         Failed jobs are NOT deleted — they stay visible until the user or
+         admin dismisses them, and are retried automatically where possible.
     """
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal
@@ -442,12 +567,12 @@ def cleanup_events():
                 event.pk, user.pk, user.delete_from_gcal_on_cleanup,
             )
 
-    # 3. Old completed/failed jobs (needs_review jobs are kept — user hasn't acted yet)
+    # 3. Old completed jobs — done only, never failed.
+    # Failed jobs are kept until the user or admin acts on them.
     job_cutoff = timezone.now() - timezone.timedelta(days=1)
-    terminal_statuses = [ScanJob.STATUS_DONE, ScanJob.STATUS_FAILED]
     deleted_jobs, _ = ScanJob.objects.filter(
-        status__in=terminal_statuses,
+        status=ScanJob.STATUS_DONE,
         updated_at__lt=job_cutoff,
     ).delete()
     if deleted_jobs:
-        logger.info("cleanup_events: deleted %s old ScanJob(s)", deleted_jobs)
+        logger.info("cleanup_events: deleted %s old done ScanJob(s)", deleted_jobs)

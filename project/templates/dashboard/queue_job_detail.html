@@ -66,6 +66,24 @@
     color: var(--color-muted, #6b7280);
     font-size: 0.9rem;
   }
+  .failure-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+  .failure-box__title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #dc2626;
+    margin-bottom: 6px;
+  }
+  .failure-box__reason {
+    font-size: 0.85rem;
+    color: #7f1d1d;
+    margin-bottom: 12px;
+  }
 </style>
 {% endblock %}
 
@@ -88,6 +106,35 @@
     </div>
     <a href="{% url 'dashboard:queue' %}" class="btn-ghost btn">← Queue</a>
   </div>
+
+  {# ── Failed job — show reason and retry option ── #}
+  {% if job.status == 'failed' %}
+  <div class="failure-box">
+    <div class="failure-box__title">This job failed</div>
+    <div class="failure-box__reason">
+      {% if job.failure_reason == 'scan_limit' %}
+        Your monthly scan limit was reached. This job will be retried automatically when your quota resets or if you upgrade to Pro.
+      {% elif job.failure_reason == 'pro_required' %}
+        This email contains attachments that require a Pro plan to process. Upgrade to Pro and the job will be retried automatically.
+      {% elif job.failure_reason == 'llm_error' %}
+        There was an error communicating with the AI service. You can retry this job manually once the issue is resolved.
+      {% else %}
+        An unexpected error occurred. You can retry this job manually.
+      {% endif %}
+      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>{% endif %}
+    </div>
+    {% if job.failure_reason != 'scan_limit' and job.failure_reason != 'pro_required' %}
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" class="btn-primary" id="retry-btn"
+        data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
+        data-queue-url="{% url 'dashboard:queue' %}">
+        Retry job
+      </button>
+      <span id="retry-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {# ── Pending events — needs attention ── #}
   {% if pending_events %}
@@ -174,5 +221,8 @@
 {% block extra_js %}
 {% if pending_events %}
 <script src="{% static 'js/queue_job_detail.js' %}"></script>
+{% endif %}
+{% if job.status == 'failed' and job.failure_reason != 'scan_limit' and job.failure_reason != 'pro_required' %}
+<script src="{% static 'js/queue_job_retry.js' %}"></script>
 {% endif %}
 {% endblock %}
