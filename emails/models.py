@@ -85,3 +85,42 @@ class ScanJob(models.Model):
     @property
     def active_events(self):
         return self.events.filter(status='active')
+
+
+class JobAttemptLog(models.Model):
+    """
+    Immutable log of every job execution attempt.
+    Used for metrics that must survive job retry/success transitions.
+    
+    Each attempt (initial + retries) creates a row.
+    Metrics queries this table instead of querying ScanJob.status,
+    so failure history isn't lost when jobs are retried and succeed.
+    """
+    STATUS_DONE = 'done'
+    STATUS_FAILED = 'failed'
+    
+    STATUS_CHOICES = [
+        (STATUS_DONE, 'Done'),
+        (STATUS_FAILED, 'Failed'),
+    ]
+    
+    job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name='attempt_logs')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    failure_reason = models.CharField(
+        max_length=30, 
+        choices=ScanJob.FAILURE_REASON_CHOICES, 
+        blank=True, 
+        default='',
+        help_text='Only populated if status=failed'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status', 'failure_reason']),
+        ]
+    
+    def __str__(self):
+        return f'JobAttemptLog(job={self.job_id} status={self.status} reason={self.failure_reason})'

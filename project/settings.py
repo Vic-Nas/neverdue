@@ -111,6 +111,18 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'emails.tasks.reset_monthly_scans',
         'schedule': crontab(day_of_month=1, hour=0, minute=0),
     },
+    'recover-stale-jobs': {
+        'task': 'emails.tasks.recover_stale_jobs',
+        'schedule': crontab(minute='*/10'),  # Every 10 minutes
+    },
+    'cleanup-events': {
+        'task': 'emails.tasks.cleanup_events',
+        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
+    },
+    'cleanup-job-attempt-logs': {
+        'task': 'emails.tasks.cleanup_job_attempt_logs',
+        'schedule': crontab(hour=3, minute=0),  # Daily at 3 AM
+    },
 }
 
 # Google OAuth
