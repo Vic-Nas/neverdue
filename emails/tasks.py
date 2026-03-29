@@ -146,13 +146,13 @@ def track_llm_usage(user_id: int, input_tokens: int, output_tokens: int) -> None
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
-def process_inbound_email(self, user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
+def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
     """
     Process a single inbound email through the LLM pipeline.
 
-    One email → one ScanJob, always.
+    One email → one ScanJob, always. Job is created by webhook BEFORE task is queued.
     The pipeline (_save_events) decides the terminal status (done / needs_review).
-    This task only sets processing and failed.
+    This task only sets processing and failed states on the existing job.
 
     Retry Configuration:
     - Retries up to 5 times on ANY exception
@@ -160,16 +160,25 @@ def process_inbound_email(self, user_id: int, body: str, sender: str, message_id
     - Exponential backoff: 60s, 120s, 240s, 480s, 960s
     - acks_late=True: Task marked complete only after successful processing
 
+    job_id: Pre-created ScanJob.pk (created by webhook before task is queued)
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename].
     """
     from accounts.models import User
     from dashboard.models import Event
     from llm.pipeline import process_email
+    from emails.models import ScanJob
     import json
 
-    logger.info("TASK START user=%s message_id=%s body_len=%s", user_id, message_id, len(body) if body else 0)
+    logger.info("TASK START job_id=%s user=%s message_id=%s body_len=%s", job_id, user_id, message_id, len(body) if body else 0)
 
-    # Store task args for potential replay on retry
+    # Retrieve the job created by webhook
+    try:
+        job = ScanJob.objects.get(pk=job_id)
+    except ScanJob.DoesNotExist:
+        logger.error("process_inbound_email: Job pk=%s not found — aborting", job_id)
+        return
+
+    # Store task args for potential manual replay
     task_args = {
         'user_id': user_id,
         'body': body,
@@ -177,16 +186,11 @@ def process_inbound_email(self, user_id: int, body: str, sender: str, message_id
         'message_id': message_id,
         'attachments': attachments,
     }
-    
-    job = _create_job(user_id, source='email', from_address=sender or '')
-    
-    if job:
-        try:
-            import json
-            job.task_args = json.dumps(task_args)
-            job.save(update_fields=['task_args'])
-        except Exception as exc:
-            logger.warning("process_inbound_email: failed to store task_args: %s", exc)
+    try:
+        job.task_args = json.dumps(task_args)
+        job.save(update_fields=['task_args'])
+    except Exception as exc:
+        logger.warning("process_inbound_email: failed to store task_args: %s", exc)
 
     try:
         user = User.objects.get(pk=user_id)
