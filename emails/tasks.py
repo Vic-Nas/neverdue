@@ -227,7 +227,7 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
-def process_uploaded_file(self, user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = ''):
+def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = ''):
     """
     Process a file uploaded via the dashboard.
 
@@ -248,9 +248,17 @@ def process_uploaded_file(self, user_id: int, file_b64: str, media_type: str, co
     import json
 
     logger.info(
-        "UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
-        user_id, media_type, filename, len(context) if context else 0,
+        "UPLOAD TASK START job_id=%s user=%s media_type=%s filename=%r context_len=%s",
+        job_id, user_id, media_type, filename, len(context) if context else 0,
     )
+
+    # Retrieve the job created by dashboard view
+    from emails.models import ScanJob
+    try:
+        job = ScanJob.objects.get(pk=job_id)
+    except ScanJob.DoesNotExist:
+        logger.error("process_uploaded_file: Job pk=%s not found — aborting", job_id)
+        return
 
     # Store task args for potential replay on retry
     task_args = {
@@ -260,15 +268,11 @@ def process_uploaded_file(self, user_id: int, file_b64: str, media_type: str, co
         'context': context,
         'filename': filename,
     }
-
-    job = _create_job(user_id, source='upload')
-    
-    if job:
-        try:
-            job.task_args = json.dumps(task_args)
-            job.save(update_fields=['task_args'])
-        except Exception as exc:
-            logger.warning("process_uploaded_file: failed to store task_args: %s", exc)
+    try:
+        job.task_args = json.dumps(task_args)
+        job.save(update_fields=['task_args'])
+    except Exception as exc:
+        logger.warning("process_uploaded_file: failed to store task_args: %s", exc)
 
     try:
         user = User.objects.get(pk=user_id)
@@ -405,7 +409,7 @@ def reprocess_events(self, user_id: int, event_ids: list, prompt: str, job_pk: i
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
-def process_text_as_upload(self, user_id: int, text: str):
+def process_text_as_upload(self, job_id: int, user_id: int, text: str):
     """
     User-initiated re-extraction from event_prompt_edit or bulk reprocess.
 
@@ -423,10 +427,16 @@ def process_text_as_upload(self, user_id: int, text: str):
     """
     from accounts.models import User
     from llm.pipeline import process_text
+    from emails.models import ScanJob
 
-    logger.info("MANUAL UPLOAD TASK START user=%s text_len=%s", user_id, len(text))
+    logger.info("MANUAL UPLOAD TASK START job_id=%s user=%s text_len=%s", job_id, user_id, len(text))
 
-    job = _create_job(user_id, source='upload')
+    # Retrieve the job created by dashboard view
+    try:
+        job = ScanJob.objects.get(pk=job_id)
+    except ScanJob.DoesNotExist:
+        logger.error("process_text_as_upload: Job pk=%s not found — aborting", job_id)
+        return
 
     try:
         user = User.objects.get(pk=user_id)
