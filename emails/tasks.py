@@ -471,7 +471,6 @@ def reset_monthly_scans():
 
 
 @shared_task
-@shared_task
 def retry_jobs_after_plan_upgrade(user_id: int):
     """
     Re-enqueue all failed jobs for a user that were blocked by plan restrictions
