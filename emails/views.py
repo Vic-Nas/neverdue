@@ -55,9 +55,18 @@ def inbound(request):
     attachments = extract_attachments(payload)
 
     from .tasks import process_inbound_email
+    from .models import ScanJob
+    
+    # Create the job ONCE before queuing the task. On retries, the task will use this job_id.
     try:
-        process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
-        logger.info("Email queued for processing: user=%s sender=%s message_id=%s", user.id, sender, source_email_id)
+        job = ScanJob.objects.create(
+            user=user,
+            source=ScanJob.SOURCE_EMAIL,
+            from_address=sender or '',
+            status=ScanJob.STATUS_QUEUED,
+        )
+        process_inbound_email.delay(job.id, user.id, body, sender, source_email_id, attachments or None)
+        logger.info("Email queued for processing: user=%s sender=%s message_id=%s job_id=%s", user.id, sender, source_email_id, job.id)
     except Exception as exc:
         logger.error("Failed to queue email task: user=%s sender=%s: %s", user.id, sender, exc, exc_info=True)
         # Still return 200 to avoid Resend retries, but log for manual recovery
