@@ -78,13 +78,19 @@ def staff_dashboard(request):
     monthly_cost_labels = [f"{r['year']}-{r['month']:02d}" for r in hist]
     monthly_cost_values = [_cost(r['inp'] or 0, r['out'] or 0) for r in hist]
 
-    # ── 30-day per-day breakdown ────────────────────────────────────────────
+    # ── 30-day attempt breakdown by status and failure_reason ──────────────
+    # Query JobAttemptLog instead of ScanJob.status='failed' for accurate metrics.
+    # ScanJob.status only shows final state; when a job is retried and succeeds,
+    # its failure disappears. JobAttemptLog records every attempt permanently.
+    from emails.models import JobAttemptLog
+    
     cutoff     = now - datetime.timedelta(days=29)
     date_range = _date_range(30)
     date_strs  = [d.isoformat() for d in date_range]
 
-    daily_qs = (
-        ScanJob.objects
+    # Query attempts grouped by attempt date, status, and failure reason
+    attempt_qs = (
+        JobAttemptLog.objects
         .filter(created_at__gte=cutoff)
         .extra(select={'day': 'DATE(created_at)'})
         .values('day', 'status', 'failure_reason')
@@ -94,7 +100,7 @@ def staff_dashboard(request):
 
     by_day_status = {d: {} for d in date_strs}
     by_day_reason = {d: {} for d in date_strs}
-    for row in daily_qs:
+    for row in attempt_qs:
         d = str(row['day'])
         if d not in by_day_status:
             continue
@@ -106,13 +112,11 @@ def staff_dashboard(request):
 
     chart_labels = [d[5:] for d in date_strs]  # MM-DD
 
-    # Chart 1 — stacked bar: volume by status
+    # Chart 1 — stacked bar: attempt volume by status
+    # Shows all attempts (including retries), not final job states.
     status_series = [
-        {'name': 'Done',         'status': ScanJob.STATUS_DONE,         'color': '#16a34a'},
-        {'name': 'Needs review', 'status': ScanJob.STATUS_NEEDS_REVIEW, 'color': '#d97706'},
-        {'name': 'Failed',       'status': ScanJob.STATUS_FAILED,       'color': '#dc2626'},
-        {'name': 'Processing',   'status': ScanJob.STATUS_PROCESSING,   'color': '#2563eb'},
-        {'name': 'Queued',       'status': ScanJob.STATUS_QUEUED,       'color': '#9ca3af'},
+        {'name': 'Done',   'status': 'done',   'color': '#16a34a'},
+        {'name': 'Failed', 'status': 'failed', 'color': '#dc2626'},
     ]
     volume_datasets = [
         {
@@ -124,8 +128,9 @@ def staff_dashboard(request):
     ]
 
     # Chart 2 — failure rate % (line) + total volume (bar, dual axis)
+    # Now based on JobAttemptLog, so it counts ALL attempts even if later retried and fixed.
     daily_totals  = [sum(by_day_status[d].values()) for d in date_strs]
-    daily_failed  = [by_day_status[d].get(ScanJob.STATUS_FAILED, 0) for d in date_strs]
+    daily_failed  = [by_day_status[d].get('failed', 0) for d in date_strs]
     failure_rates = [
         round(f / t * 100, 1) if t else 0
         for f, t in zip(daily_failed, daily_totals)
