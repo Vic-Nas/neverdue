@@ -28,6 +28,10 @@ Thumbs.db
 
 # Temp files
 tmp/
+
+# Database backups (contain secrets)
+db_backup*.json
+*.json
 temp/
 *.tmp
 *.temp
