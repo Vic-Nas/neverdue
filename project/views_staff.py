@@ -210,3 +210,51 @@ def staff_retry_single(request, pk):
         return JsonResponse({'ok': True, 'count': count})
     messages.success(request, f'Job {pk} re-enqueued.')
     return redirect('staff_dashboard')
+
+
+@staff_required
+@require_POST
+def staff_delete_single(request, pk):
+    job = get_object_or_404(ScanJob, pk=pk)
+    job.delete()
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True})
+    messages.success(request, f'Job {pk} deleted.')
+    return redirect('staff_dashboard')
+
+
+@staff_required
+@require_POST
+def staff_bulk_retry(request):
+    if request.content_type == 'application/json':
+        import json
+        data = json.loads(request.body)
+        pks = data.get('pks', [])
+    else:
+        pks = request.POST.getlist('pks')
+    
+    jobs = list(ScanJob.objects.filter(pk__in=pks, status=ScanJob.STATUS_FAILED))
+    count = _reenqueue_jobs(jobs)
+    
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'count': count})
+    messages.success(request, f'Re-enqueued {count} job(s).')
+    return redirect('staff_dashboard')
+
+
+@staff_required
+@require_POST
+def staff_bulk_delete(request):
+    if request.content_type == 'application/json':
+        import json
+        data = json.loads(request.body)
+        pks = data.get('pks', [])
+    else:
+        pks = request.POST.getlist('pks')
+    
+    count, _ = ScanJob.objects.filter(pk__in=pks).delete()
+    
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'count': count})
+    messages.success(request, f'Deleted {count} job(s).')
+    return redirect('staff_dashboard')

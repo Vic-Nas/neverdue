@@ -14,10 +14,12 @@
 }
 
 /* ── Stat cards ── */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .65rem; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .65rem; }
+@media (max-width: 640px) { .stat-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: .5rem; } }
 .stat { background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; padding: .85rem 1rem; }
 .stat__label { font-size: .7rem; color: var(--color-text-muted, #6b7280); text-transform: uppercase; letter-spacing: .05em; }
 .stat__value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; margin-top: .15rem; }
+@media (max-width: 640px) { .stat__value { font-size: 1.4rem; } }
 .stat--warn  .stat__value { color: #dc2626; }
 .stat--amber .stat__value { color: #d97706; }
 .stat__sub   { font-size: .72rem; color: #9ca3af; margin-top: .1rem; }
@@ -25,6 +27,7 @@
 /* ── Chart grid ── */
 .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
 .chart-grid--wide { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .chart-grid { grid-template-columns: 1fr; } }
 .chart-box {
   background: var(--color-surface, #fff);
@@ -34,9 +37,11 @@
 .chart-box__title { font-size: .75rem; font-weight: 600; color: var(--color-text-muted, #6b7280); margin-bottom: .5rem; }
 .chart-box canvas, .chart-box .echarts-target { width: 100% !important; }
 
-/* ── Tables ── */
+/* ── Tables & responsive ── */
 .card { background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; overflow: hidden; }
+.table-wrapper { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+@media (max-width: 768px) { .data-table { font-size: .75rem; } }
 .data-table th {
   text-align: left; padding: .4rem .7rem; font-size: .68rem;
   text-transform: uppercase; letter-spacing: .06em;
@@ -44,9 +49,22 @@
   border-bottom: 1px solid var(--color-border, #e5e7eb);
   background: var(--color-surface-alt, #f9fafb);
 }
+@media (max-width: 768px) { .data-table th { padding: .3rem .4rem; } }
 .data-table td { padding: .42rem .7rem; border-bottom: 1px solid var(--color-border, #e5e7eb); vertical-align: middle; }
+@media (max-width: 768px) { .data-table td { padding: .35rem .4rem; } }
 .data-table tbody tr:last-child td { border-bottom: none; }
 .data-table tbody tr:hover { background: var(--color-surface-alt, #f9fafb); }
+
+/* ── Checkboxes ── */
+.data-table input[type="checkbox"] { cursor: pointer; margin: 0; }
+.bulk-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .65rem; padding: .65rem; background: #f3f4f6; border-radius: 6px; display: none; }
+.bulk-actions.active { display: flex; }
+.bulk-actions-info { font-size: .75rem; color: #4b5563; flex-grow: 1; line-height: 1.4; }
+.bulk-action-btn { font-size: .75rem; padding: .3rem .65rem; border-radius: 4px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; }
+.bulk-action-btn:hover { background: #f9fafb; }
+.bulk-action-btn--delete { border-color: #dc2626; color: #dc2626; background: #fff; }
+.bulk-action-btn--delete:hover { background: #fee2e2; }
+.bulk-action-btn--danger { border-color: #dc2626; color: #dc2626; }
 
 /* ── Badges ── */
 .badge { display: inline-block; padding: .12em .48em; border-radius: 4px; font-size: .7rem; font-weight: 600; white-space: nowrap; }
@@ -62,10 +80,12 @@
 
 /* ── Filter bar ── */
 .filter-bar { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .65rem; }
+@media (max-width: 640px) { .filter-bar { gap: .25rem; } }
 .filter-bar a {
   font-size: .75rem; padding: .22rem .6rem; border-radius: 4px;
   border: 1px solid var(--color-border, #e5e7eb); text-decoration: none; color: inherit;
 }
+@media (max-width: 640px) { .filter-bar a { padding: .18rem .45rem; font-size: .7rem; } }
 .filter-bar a.active { background: #1d4ed8; color: #fff; border-color: transparent; }
 
 /* ── Buttons ── */
@@ -74,9 +94,12 @@
 .btn-retry-row  { font-size: .73rem; padding: .18rem .5rem; border-radius: 4px; border: 1px solid #dc2626; color: #dc2626; background: none; cursor: pointer; }
 .btn-retry-row:hover { background: #fee2e2; }
 .btn-retry-row:disabled { opacity: .45; cursor: default; }
+.btn-delete-row { font-size: .73rem; padding: .18rem .5rem; border-radius: 4px; border: 1px solid #9ca3af; color: #6b7280; background: none; cursor: pointer; }
+.btn-delete-row:hover { background: #fee2e2; color: #dc2626; border-color: #dc2626; }
 
 .mono { font-family: monospace; color: #9ca3af; }
 .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 768px) { .truncate { max-width: 120px; } }
 </style>
 {% endblock %}
 
@@ -216,50 +239,65 @@
     </div>
     {% endif %}
 
+    {# ── Bulk actions bar ── #}
+    <div class="bulk-actions" id="bulk-actions">
+      <div class="bulk-actions-info">
+        <span id="bulk-count">0</span> selected
+      </div>
+      <button type="button" class="bulk-action-btn" onclick="bulkRetry()">Retry</button>
+      <button type="button" class="bulk-action-btn bulk-action-btn--delete" onclick="bulkDelete()">Delete</button>
+      <button type="button" class="bulk-action-btn" onclick="clearSelection()">Clear</button>
+    </div>
+
     <div class="card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>User</th>
-            <th>Src</th>
-            <th>Status</th>
-            <th>Reason</th>
-            <th>Signature</th>
-            <th>Notes</th>
-            <th>Created</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for job in recent_jobs %}
-          <tr id="row-{{ job.pk }}">
-            <td class="mono" style="font-size:.75rem">{{ job.pk }}</td>
-            <td>{{ job.user.username }}</td>
-            <td style="color:#9ca3af">{{ job.source }}</td>
-            <td><span class="badge badge--{{ job.status }}">{{ job.get_status_display }}</span></td>
-            <td>
-              {% if job.failure_reason %}
-              <span class="badge badge--{{ job.failure_reason }}">{{ job.failure_reason }}</span>
-              {% else %}—{% endif %}
-            </td>
-            <td class="mono truncate" style="font-size:.75rem" title="{{ job.failure_signature }}">
-              {{ job.failure_signature|default:"" }}
-            </td>
-            <td class="truncate" title="{{ job.notes }}">{{ job.notes|default:"" }}</td>
-            <td style="white-space:nowrap;color:#9ca3af;font-size:.78rem">{{ job.created_at|date:"M j H:i" }}</td>
-            <td>
-              {% if job.status == 'failed' %}
-              <button class="btn-retry-row" data-pk="{{ job.pk }}"
-                      onclick="retrySingle(this, {{ job.pk }})">Retry</button>
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:1.5rem">No jobs found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:32px"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
+              <th>#</th>
+              <th>User</th>
+              <th>Src</th>
+              <th>Status</th>
+              <th>Reason</th>
+              <th>Signature</th>
+              <th>Notes</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in recent_jobs %}
+            <tr id="row-{{ job.pk }}">
+              <td style="width:32px"><input type="checkbox" class="job-checkbox" value="{{ job.pk }}" onchange="updateBulkActions()"></td>
+              <td class="mono" style="font-size:.75rem">{{ job.pk }}</td>
+              <td>{{ job.user.username }}</td>
+              <td style="color:#9ca3af">{{ job.source }}</td>
+              <td><span class="badge badge--{{ job.status }}">{{ job.get_status_display }}</span></td>
+              <td>
+                {% if job.failure_reason %}
+                <span class="badge badge--{{ job.failure_reason }}">{{ job.failure_reason }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="mono truncate" style="font-size:.75rem" title="{{ job.failure_signature }}">
+                {{ job.failure_signature|default:"" }}
+              </td>
+              <td class="truncate" title="{{ job.notes }}">{{ job.notes|default:"" }}</td>
+              <td style="white-space:nowrap;color:#9ca3af;font-size:.78rem">{{ job.created_at|date:"M j H:i" }}</td>
+              <td style="text-align:right;white-space:nowrap">
+                {% if job.status == 'failed' %}
+                <button class="btn-retry-row" data-pk="{{ job.pk }}"
+                        onclick="retrySingle(this, {{ job.pk }})">Retry</button>
+                {% endif %}
+                <button class="btn-delete-row" onclick="deleteSingle({{ job.pk }})">×</button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:1.5rem">No jobs found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -401,6 +439,108 @@ function retrySingle(btn, pk) {
     btn.textContent = '✓';
   })
   .catch(() => { btn.disabled = false; btn.textContent = 'Retry'; });
+}
+
+// ── Single-job AJAX delete ───────────────────────────────────────────────
+function deleteSingle(pk) {
+  if (!confirm(`Delete job ${pk}?`)) return;
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  fetch(`/staff/delete/${pk}/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      const row = document.getElementById('row-' + pk);
+      if (row) row.remove();
+    }
+  })
+  .catch(() => alert('Error deleting job'));
+}
+
+// ── Multi-select helpers ──────────────────────────────────────────────────
+function getSelectedPks() {
+  const checkboxes = document.querySelectorAll('.job-checkbox:checked');
+  return Array.from(checkboxes).map(cb => parseInt(cb.value));
+}
+
+function updateBulkActions() {
+  const selected = getSelectedPks();
+  const bulkActions = document.getElementById('bulk-actions');
+  const bulkCount = document.getElementById('bulk-count');
+  
+  if (selected.length > 0) {
+    bulkCount.textContent = selected.length;
+    bulkActions.classList.add('active');
+    document.getElementById('select-all').indeterminate = 
+      selected.length > 0 && selected.length < document.querySelectorAll('.job-checkbox').length;
+  } else {
+    bulkActions.classList.remove('active');
+    document.getElementById('select-all').checked = false;
+    document.getElementById('select-all').indeterminate = false;
+  }
+}
+
+function toggleSelectAll(checkbox) {
+  const checkboxes = document.querySelectorAll('.job-checkbox');
+  checkboxes.forEach(cb => cb.checked = checkbox.checked);
+  updateBulkActions();
+}
+
+function clearSelection() {
+  document.querySelectorAll('.job-checkbox').forEach(cb => cb.checked = false);
+  updateBulkActions();
+}
+
+function bulkRetry() {
+  const pks = getSelectedPks();
+  if (pks.length === 0) return;
+  if (!confirm(`Retry ${pks.length} job(s)?`)) return;
+  
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  fetch('/staff/bulk-retry/', {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pks }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      pks.forEach(pk => {
+        const row = document.getElementById('row-' + pk);
+        if (row) row.style.opacity = '.35';
+      });
+      clearSelection();
+      alert(`Re-queued ${data.count} job(s)`);
+    }
+  })
+  .catch(() => alert('Error retrying jobs'));
+}
+
+function bulkDelete() {
+  const pks = getSelectedPks();
+  if (pks.length === 0) return;
+  if (!confirm(`Delete ${pks.length} job(s)? This cannot be undone.`)) return;
+  
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  fetch('/staff/bulk-delete/', {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pks }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      pks.forEach(pk => {
+        const row = document.getElementById('row-' + pk);
+        if (row) row.remove();
+      });
+      clearSelection();
+      alert(`Deleted ${data.count} job(s)`);
+    }
+  })
+  .catch(() => alert('Error deleting jobs'));
 }
 </script>
 {% endblock %}

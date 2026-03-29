@@ -8,6 +8,9 @@ urlpatterns = [
     path('staff/',                    staff_views.staff_dashboard,    name='staff_dashboard'),
     path('staff/retry/',              staff_views.staff_retry_jobs,   name='staff_retry_jobs'),
     path('staff/retry/<int:pk>/',     staff_views.staff_retry_single, name='staff_retry_single'),
+    path('staff/delete/<int:pk>/',    staff_views.staff_delete_single, name='staff_delete_single'),
+    path('staff/bulk-retry/',         staff_views.staff_bulk_retry,   name='staff_bulk_retry'),
+    path('staff/bulk-delete/',        staff_views.staff_bulk_delete,  name='staff_bulk_delete'),
 
     path('',           include('accounts.urls')),
     path('dashboard/', include('dashboard.urls')),
