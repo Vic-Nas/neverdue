@@ -15,4 +15,8 @@ app.conf.beat_schedule = {
         'task': 'emails.tasks.cleanup_events',
         'schedule': crontab(hour=3, minute=0),  # runs at 3am UTC daily
     },
+    'recover-stale-jobs': {
+        'task': 'emails.tasks.recover_stale_jobs',
+        'schedule': crontab(minute='*/10'),  # runs every 10 minutes
+    },
 }

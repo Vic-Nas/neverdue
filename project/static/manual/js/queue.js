@@ -1,3 +1,4 @@
+// project/static/manual/js/queue.js
 (function () {
   var tbody = document.getElementById('queue-tbody');
   var table = document.getElementById('queue-table');
@@ -11,6 +12,13 @@
   var SOURCE_LABELS = { email: 'Email', upload: 'Upload' };
   var STATUS_LABELS = { queued: 'Queued', processing: 'Processing…', needs_review: 'Needs review', done: 'Done', failed: 'Failed' };
   var STATUS_CLASSES = { queued: 'status--queued', processing: 'status--processing', needs_review: 'status--needs-review', done: 'status--done', failed: 'status--failed' };
+
+  var FAILURE_REASON_LABELS = {
+    llm_error: 'AI service error',
+    scan_limit: 'Scan limit reached',
+    pro_required: 'Pro plan required',
+    internal_error: 'Internal error',
+  };
 
   function fmt(isoStr) {
     var d = new Date(isoStr);
@@ -39,6 +47,7 @@
 
       var isTerminal = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
       var hasPending = j.pending_event_count > 0;
+      var isFailed = j.status === 'failed';
 
       var attentionBadge = hasPending
         ? '<span class="queue-pending-badge">' + j.pending_event_count + ' pending</span>'
@@ -48,7 +57,15 @@
         ? j.active_event_count + ' event' + (j.active_event_count !== 1 ? 's' : '') + ' created'
         : (j.status === 'done' && !hasPending ? 'No events' : '');
 
-      var notesCell = (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + (activeInfo || '');
+      // For failed jobs, surface the reason in the notes cell
+      var failureLabel = isFailed && j.failure_reason
+        ? (FAILURE_REASON_LABELS[j.failure_reason] || j.failure_reason)
+        : '';
+
+      var notesCell = failureLabel
+        ? '<span style="color:#dc2626;font-weight:500;">' + failureLabel + '</span>'
+            + (j.notes ? ' · ' + j.notes : '')
+        : (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + (activeInfo || '');
 
       var sourceLabel = SOURCE_LABELS[j.source] || j.source;
       var sourceCell = isTerminal

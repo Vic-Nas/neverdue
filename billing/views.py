@@ -191,6 +191,7 @@ def _sync_subscription(stripe_sub):
     from django.utils import timezone
     from datetime import datetime, timezone as dt_timezone
 
+    old_status = sub.status
     sub.stripe_subscription_id = stripe_sub['id']
     sub.status = stripe_sub['status']
     try:
@@ -204,6 +205,12 @@ def _sync_subscription(stripe_sub):
         sub.save()
         logger.info('_sync_subscription: synced customer=%s subscription=%s status=%s',
                     stripe_sub['customer'], stripe_sub['id'], stripe_sub['status'])
+        
+        # If subscription just became active, retry any failed jobs
+        if old_status != 'active' and sub.status == 'active':
+            from emails.tasks import retry_jobs_after_plan_upgrade
+            retry_jobs_after_plan_upgrade.delay(sub.user.pk)
+            logger.info('_sync_subscription: triggered retry for user=%s on plan upgrade', sub.user.pk)
     except Exception:
         logger.exception('_sync_subscription: save failed for customer=%s subscription=%s',
                          stripe_sub['customer'], stripe_sub['id'])

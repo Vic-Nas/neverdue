@@ -29,11 +29,36 @@ class ScanJob(models.Model):
         (SOURCE_UPLOAD, 'Upload'),
     ]
 
+    # Failure reason codes — set on every failed job so admin can filter
+    # and bulk-retry by root cause.
+    REASON_LLM_ERROR = 'llm_error'
+    REASON_SCAN_LIMIT = 'scan_limit'
+    REASON_PRO_REQUIRED = 'pro_required'
+    REASON_INTERNAL_ERROR = 'internal_error'
+
+    FAILURE_REASON_CHOICES = [
+        (REASON_LLM_ERROR, 'LLM error'),
+        (REASON_SCAN_LIMIT, 'Scan limit reached'),
+        (REASON_PRO_REQUIRED, 'Pro plan required'),
+        (REASON_INTERNAL_ERROR, 'Internal error'),
+    ]
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scan_jobs')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_EMAIL)
     from_address = models.CharField(max_length=255, blank=True, default='')
     notes = models.CharField(max_length=255, blank=True, default='')
+
+    # Failure classification — both blank on non-failed jobs.
+    # failure_reason: controlled code for admin filtering and bulk retry logic.
+    # failure_signature: short string identifying the exception type + message
+    #   (e.g. "AnthropicError: 529 overloaded") so internal_error jobs can be
+    #   grouped by root cause in the admin.
+    failure_reason = models.CharField(
+        max_length=30, choices=FAILURE_REASON_CHOICES, blank=True, default='',
+    )
+    failure_signature = models.CharField(max_length=255, blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

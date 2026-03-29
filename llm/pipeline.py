@@ -48,10 +48,11 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     Extract events from plain text or a reprocess prompt.
 
     Returns (created_events, notes).
-    notes is non-empty only when a scan limit was hit.
+    On scan limit, sets the job to failed with reason=scan_limit and returns ([], '').
     """
     if not _check_and_increment_scans(user):
-        return [], 'Scan limit reached.'
+        _fail_job_scan_limit(scan_job)
+        return [], ''
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
@@ -78,18 +79,22 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
     Also used by process_uploaded_file (empty body, single attachment).
 
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename].
+
+    Free users with an attachment-only email (no usable body) are blocked:
+    the job is set to failed with reason=pro_required so it stays visible and
+    can be retried automatically after a plan upgrade.
+
     Returns (created_events, notes).
-    notes is non-empty when attachments were stripped (non-Pro) or scan limit hit.
     """
     import base64
 
     if not _check_and_increment_scans(user):
-        return [], 'Scan limit reached.'
+        _fail_job_scan_limit(scan_job)
+        return [], ''
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
 
-    notes = ''
     decoded_attachments = []
     for entry in (attachments or []):
         try:
@@ -100,8 +105,22 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             continue
 
     if decoded_attachments and not user.is_pro:
-        decoded_attachments = []
-        notes = 'Attachments ignored — Pro plan required.'
+        has_usable_body = bool(body and body.strip())
+        if not has_usable_body:
+            # Attachment-only email with no body — cannot process without Pro.
+            # Fail the job so it stays visible and retries on plan upgrade.
+            logger.info(
+                "process_email: attachment-only email blocked for free user=%s — marking pro_required",
+                user.pk,
+            )
+            _fail_job_pro_required(scan_job)
+            return [], ''
+        else:
+            # Body is present — process body only, inform user attachments were skipped.
+            decoded_attachments = []
+            notes_attachments = 'Attachments ignored — upgrade to Pro to include them.'
+    else:
+        notes_attachments = ''
 
     user_instructions = collect_prompt_injections(user, sender)
     try:
@@ -114,12 +133,12 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         )
     except ValueError as exc:
         logger.warning("process_email: extraction failed for user=%s: %s", user.pk, exc)
-        return [], notes
+        return [], notes_attachments
 
     _fire_usage(user, input_tokens, output_tokens)
     logger.info("process_email: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
-    return created, notes
+    return created, notes_attachments
 
 
 def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> tuple[list, str]:
@@ -187,6 +206,49 @@ def _check_and_increment_scans(user) -> bool:
     user.monthly_scans += 1
     user.save(update_fields=['monthly_scans'])
     return True
+
+
+def _fail_job_scan_limit(scan_job) -> None:
+    """
+    Mark the job as failed with reason=scan_limit and a user-visible note.
+    The job stays visible in the queue and is retried automatically on month
+    reset or plan upgrade.
+    """
+    if scan_job is None:
+        return
+    try:
+        from emails.models import ScanJob
+        from django.utils import timezone
+        ScanJob.objects.filter(pk=scan_job.pk).update(
+            status=ScanJob.STATUS_FAILED,
+            failure_reason=ScanJob.REASON_SCAN_LIMIT,
+            failure_signature='',
+            notes='Monthly scan limit reached. Will retry automatically when quota resets or on plan upgrade.',
+            updated_at=timezone.now(),
+        )
+    except Exception as exc:
+        logger.warning("_fail_job_scan_limit: failed pk=%s: %s", scan_job.pk, exc)
+
+
+def _fail_job_pro_required(scan_job) -> None:
+    """
+    Mark the job as failed with reason=pro_required and a user-visible note.
+    The job stays visible in the queue and is retried automatically on plan upgrade.
+    """
+    if scan_job is None:
+        return
+    try:
+        from emails.models import ScanJob
+        from django.utils import timezone
+        ScanJob.objects.filter(pk=scan_job.pk).update(
+            status=ScanJob.STATUS_FAILED,
+            failure_reason=ScanJob.REASON_PRO_REQUIRED,
+            failure_signature='',
+            notes='Attachment processing requires a Pro plan. Upgrade to process this email.',
+            updated_at=timezone.now(),
+        )
+    except Exception as exc:
+        logger.warning("_fail_job_pro_required: failed pk=%s: %s", scan_job.pk, exc)
 
 
 def _get_or_create_uncategorized(user):

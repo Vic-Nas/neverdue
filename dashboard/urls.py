@@ -24,6 +24,7 @@ urlpatterns = [
     path('queue/status/', views.queue_status, name='queue_status'),
     path('queue/<int:pk>/', views.queue_job_detail, name='queue_job_detail'),
     path('queue/<int:pk>/reprocess/', views.queue_job_reprocess, name='queue_job_reprocess'),
+    path('queue/<int:pk>/retry/',     views.queue_job_retry,     name='queue_job_retry'),
     path('sources/', views.email_sources, name='email_sources'),
     path('sources/add/', views.filter_rule_add, name='filter_rule_add'),
     path('sources/<int:pk>/delete/', views.filter_rule_delete, name='filter_rule_delete'),
