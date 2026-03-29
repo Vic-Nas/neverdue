@@ -223,7 +223,7 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
     except Exception as exc:
         logger.error("process_inbound_email: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
-        raise
+        return
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
@@ -298,7 +298,7 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
     except Exception as exc:
         logger.error("process_uploaded_file: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
-        raise
+        return
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
@@ -456,7 +456,7 @@ def process_text_as_upload(self, job_id: int, user_id: int, text: str):
     except Exception as exc:
         logger.error("process_text_as_upload: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
-        raise
+        return
 
 
 @shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
