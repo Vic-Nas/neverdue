@@ -269,7 +269,8 @@ def extract_events_from_email(
                 attachment_events.extend(_parse_and_validate(message, tz))
                 total_input_tokens += message.usage.input_tokens
                 total_output_tokens += message.usage.output_tokens
-            except (ValueError, Exception):
+            except ValueError:
+                # Parsing/validation error from attachment — skip and continue
                 pass
         else:
             non_visual_attachments.append((file_bytes, media_type, filename))
@@ -326,8 +327,8 @@ def extract_events_from_email(
         total_input_tokens += message.usage.input_tokens
         total_output_tokens += message.usage.output_tokens
         return events, total_input_tokens, total_output_tokens
-    except (ValueError, Exception):
-        # Reconciliation failed — return what we have from attachments
+    except ValueError:
+        # Parsing/validation error in reconciliation — return what we have from attachments
         return attachment_events, total_input_tokens, total_output_tokens
 
 
