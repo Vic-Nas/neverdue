@@ -38,6 +38,9 @@
     <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
       Queue<span class="queue-badge queue-badge--processing" id="queue-badge-processing" hidden></span><span class="queue-badge queue-badge--attention" id="queue-badge-attention" hidden></span>
     </a>
+    {% if user.is_staff %}
+    <a href="{% url 'staff_dashboard' %}" class="topnav__link {% if 'staff' in request.resolver_match.url_name|default:'' %}topnav__link--active{% endif %}">Staff</a>
+    {% endif %}
     {% endif %}
     <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
   </div>
