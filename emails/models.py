@@ -49,6 +49,11 @@ class ScanJob(models.Model):
     from_address = models.CharField(max_length=255, blank=True, default='')
     notes = models.CharField(max_length=255, blank=True, default='')
 
+    # Serialized task arguments for replay on retry.
+    # JSON-encoded dict with task-specific kwargs (e.g. body, attachments for email tasks).
+    # Allows failed jobs to be re-enqueued with original args after plan/quota changes.
+    task_args = models.TextField(blank=True, default='{}')
+
     # Failure classification — both blank on non-failed jobs.
     # failure_reason: controlled code for admin filtering and bulk retry logic.
     # failure_signature: short string identifying the exception type + message
