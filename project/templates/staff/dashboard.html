@@ -1,0 +1,406 @@
+{# project/templates/staff/dashboard.html #}
+{% extends "base.html" %}
+{% block title %}Staff — NeverDue{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Layout ── */
+.staff { max-width: 1140px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+.staff__title { font-size: 1.3rem; font-weight: 700; margin-bottom: 1.5rem; }
+.staff__section { margin-top: 2.2rem; }
+.staff__section-title {
+  font-size: .7rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--color-text-muted, #6b7280); margin-bottom: .75rem;
+}
+
+/* ── Stat cards ── */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .65rem; }
+.stat { background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; padding: .85rem 1rem; }
+.stat__label { font-size: .7rem; color: var(--color-text-muted, #6b7280); text-transform: uppercase; letter-spacing: .05em; }
+.stat__value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; margin-top: .15rem; }
+.stat--warn  .stat__value { color: #dc2626; }
+.stat--amber .stat__value { color: #d97706; }
+.stat__sub   { font-size: .72rem; color: #9ca3af; margin-top: .1rem; }
+
+/* ── Chart grid ── */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.chart-grid--wide { grid-template-columns: 1fr; }
+@media (max-width: 700px) { .chart-grid { grid-template-columns: 1fr; } }
+.chart-box {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px; padding: .85rem 1rem;
+}
+.chart-box__title { font-size: .75rem; font-weight: 600; color: var(--color-text-muted, #6b7280); margin-bottom: .5rem; }
+.chart-box canvas, .chart-box .echarts-target { width: 100% !important; }
+
+/* ── Tables ── */
+.card { background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: 8px; overflow: hidden; }
+.data-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+.data-table th {
+  text-align: left; padding: .4rem .7rem; font-size: .68rem;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--color-text-muted, #6b7280);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface-alt, #f9fafb);
+}
+.data-table td { padding: .42rem .7rem; border-bottom: 1px solid var(--color-border, #e5e7eb); vertical-align: middle; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--color-surface-alt, #f9fafb); }
+
+/* ── Badges ── */
+.badge { display: inline-block; padding: .12em .48em; border-radius: 4px; font-size: .7rem; font-weight: 600; white-space: nowrap; }
+.badge--done         { background: #dcfce7; color: #16a34a; }
+.badge--failed       { background: #fee2e2; color: #dc2626; }
+.badge--needs_review { background: #fef3c7; color: #d97706; }
+.badge--queued       { background: #f3f4f6; color: #6b7280; }
+.badge--processing   { background: #dbeafe; color: #2563eb; }
+.badge--llm_error      { background: #fee2e2; color: #dc2626; }
+.badge--scan_limit     { background: #fef3c7; color: #d97706; }
+.badge--pro_required   { background: #dbeafe; color: #2563eb; }
+.badge--internal_error { background: #ede9fe; color: #7c3aed; }
+
+/* ── Filter bar ── */
+.filter-bar { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .65rem; }
+.filter-bar a {
+  font-size: .75rem; padding: .22rem .6rem; border-radius: 4px;
+  border: 1px solid var(--color-border, #e5e7eb); text-decoration: none; color: inherit;
+}
+.filter-bar a.active { background: #1d4ed8; color: #fff; border-color: transparent; }
+
+/* ── Buttons ── */
+.btn-retry-all  { font-size: .75rem; padding: .22rem .6rem; border-radius: 4px; background: #dc2626; color: #fff; border: none; cursor: pointer; }
+.btn-retry-all:hover { background: #b91c1c; }
+.btn-retry-row  { font-size: .73rem; padding: .18rem .5rem; border-radius: 4px; border: 1px solid #dc2626; color: #dc2626; background: none; cursor: pointer; }
+.btn-retry-row:hover { background: #fee2e2; }
+.btn-retry-row:disabled { opacity: .45; cursor: default; }
+
+.mono { font-family: monospace; color: #9ca3af; }
+.truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="staff">
+  <div class="staff__title">Staff Dashboard</div>
+
+  {# ── Stat cards ── #}
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="stat__label">Jobs today</div>
+      <div class="stat__value">{{ counts.total_today }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Done today</div>
+      <div class="stat__value">{{ counts.done_today }}</div>
+    </div>
+    <div class="stat {% if counts.failed %}stat--warn{% endif %}">
+      <div class="stat__label">Failed (open)</div>
+      <div class="stat__value">{{ counts.failed }}</div>
+    </div>
+    <div class="stat {% if counts.needs_review %}stat--amber{% endif %}">
+      <div class="stat__label">Needs review</div>
+      <div class="stat__value">{{ counts.needs_review }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">In flight</div>
+      <div class="stat__value">{{ counts.in_flight }}</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">LLM cost (month)</div>
+      <div class="stat__value" style="font-size:1.25rem">${{ month_cost }}</div>
+      <div class="stat__sub">{{ month_input|floatformat:0 }} in / {{ month_output|floatformat:0 }} out</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label">Total jobs (all)</div>
+      <div class="stat__value">{{ counts.total_all }}</div>
+    </div>
+  </div>
+
+  {# ── Charts ── #}
+  <div class="staff__section">
+    <div class="staff__section-title">Analytics — last 30 days</div>
+    <div class="chart-grid">
+
+      <div class="chart-box">
+        <div class="chart-box__title">Job volume by status</div>
+        <div id="chart-volume" style="height:220px"></div>
+      </div>
+
+      <div class="chart-box">
+        <div class="chart-box__title">Failure rate % &amp; daily volume</div>
+        <div id="chart-failrate" style="height:220px"></div>
+      </div>
+
+    </div>
+
+    {% if reason_datasets_json != '[]' %}
+    <div style="margin-top:.75rem">
+      <div class="chart-box">
+        <div class="chart-box__title">Failures by reason</div>
+        <div id="chart-reasons" style="height:200px"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if monthly_cost_labels_json != '[]' %}
+    <div style="margin-top:.75rem">
+      <div class="chart-box">
+        <div class="chart-box__title">Monthly LLM cost (USD) — last 6 months</div>
+        <div id="chart-cost" style="height:160px"></div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ── Failed job groups ── #}
+  {% if failed_groups %}
+  <div class="staff__section">
+    <div class="staff__section-title">Open failures — grouped by cause</div>
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Reason</th>
+            <th>Signature</th>
+            <th style="text-align:right">Count</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in failed_groups %}
+          <tr>
+            <td><span class="badge badge--{{ g.failure_reason }}">{{ g.failure_reason }}</span></td>
+            <td class="mono truncate" title="{{ g.failure_signature }}">{{ g.failure_signature|default:"—" }}</td>
+            <td style="text-align:right;font-weight:600">{{ g.count }}</td>
+            <td style="text-align:right">
+              <form method="post" action="{% url 'staff_retry_jobs' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="reason" value="{{ g.failure_reason }}">
+                <button class="btn-retry-all" type="submit"
+                  onclick="return confirm('Retry all {{ g.count }} {{ g.failure_reason }} job(s)?')">
+                  Retry all
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Recent jobs table ── #}
+  <div class="staff__section">
+    <div class="staff__section-title">Recent jobs (last 100)</div>
+
+    <div class="filter-bar">
+      <a href="{% url 'staff_dashboard' %}{% if reason_filter %}?reason={{ reason_filter }}{% endif %}"
+         class="{% if not status_filter %}active{% endif %}">All</a>
+      {% for val, label in status_choices %}
+      <a href="{% url 'staff_dashboard' %}?status={{ val }}{% if reason_filter %}&reason={{ reason_filter }}{% endif %}"
+         class="{% if status_filter == val %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    {% if failure_reason_choices %}
+    <div class="filter-bar" style="margin-top:-.3rem">
+      <a href="{% url 'staff_dashboard' %}{% if status_filter %}?status={{ status_filter }}{% endif %}"
+         class="{% if not reason_filter %}active{% endif %}">All reasons</a>
+      {% for val, label in failure_reason_choices %}
+      <a href="{% url 'staff_dashboard' %}?reason={{ val }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+         class="{% if reason_filter == val %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>User</th>
+            <th>Src</th>
+            <th>Status</th>
+            <th>Reason</th>
+            <th>Signature</th>
+            <th>Notes</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in recent_jobs %}
+          <tr id="row-{{ job.pk }}">
+            <td class="mono" style="font-size:.75rem">{{ job.pk }}</td>
+            <td>{{ job.user.username }}</td>
+            <td style="color:#9ca3af">{{ job.source }}</td>
+            <td><span class="badge badge--{{ job.status }}">{{ job.get_status_display }}</span></td>
+            <td>
+              {% if job.failure_reason %}
+              <span class="badge badge--{{ job.failure_reason }}">{{ job.failure_reason }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="mono truncate" style="font-size:.75rem" title="{{ job.failure_signature }}">
+              {{ job.failure_signature|default:"" }}
+            </td>
+            <td class="truncate" title="{{ job.notes }}">{{ job.notes|default:"" }}</td>
+            <td style="white-space:nowrap;color:#9ca3af;font-size:.78rem">{{ job.created_at|date:"M j H:i" }}</td>
+            <td>
+              {% if job.status == 'failed' %}
+              <button class="btn-retry-row" data-pk="{{ job.pk }}"
+                      onclick="retrySingle(this, {{ job.pk }})">Retry</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:1.5rem">No jobs found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+// ── Data from Django ─────────────────────────────────────────────────────────
+const labels        = {{ chart_labels_json|safe }};
+const volumeDS      = {{ volume_datasets_json|safe }};
+const failRates     = {{ failure_rates_json|safe }};
+const dailyTotals   = {{ daily_totals_json|safe }};
+const reasonDS      = {{ reason_datasets_json|safe }};
+const costLabels    = {{ monthly_cost_labels_json|safe }};
+const costValues    = {{ monthly_cost_values_json|safe }};
+
+// ── Shared ECharts helpers ───────────────────────────────────────────────────
+const grid = { top: 28, right: 16, bottom: 48, left: 42 };
+const xAxis = (data) => ({
+  type: 'category', data,
+  axisLabel: { fontSize: 10, rotate: 40 },
+  axisLine: { lineStyle: { color: '#e5e7eb' } },
+  axisTick: { show: false },
+});
+const tooltip = { trigger: 'axis', axisPointer: { type: 'shadow' } };
+
+function initChart(id) {
+  const el = document.getElementById(id);
+  return el ? echarts.init(el) : null;
+}
+
+// ── Chart 1: stacked bar — volume by status ───────────────────────────────
+(function() {
+  const chart = initChart('chart-volume');
+  if (!chart) return;
+  chart.setOption({
+    grid, tooltip,
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    xAxis: xAxis(labels),
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
+    series: volumeDS.map(ds => ({
+      name:      ds.label,
+      type:      'bar',
+      stack:     'total',
+      data:      ds.data,
+      itemStyle: { color: ds.color },
+      emphasis:  { focus: 'series' },
+    })),
+  });
+})();
+
+// ── Chart 2: dual-axis — failure rate % line + volume bar ────────────────
+(function() {
+  const chart = initChart('chart-failrate');
+  if (!chart) return;
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    grid: { ...grid, right: 46 },
+    xAxis: xAxis(labels),
+    yAxis: [
+      { type: 'value', name: 'Jobs', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 }, minInterval: 1 },
+      { type: 'value', name: '%',   nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10, formatter: '{value}%' }, min: 0, max: 100 },
+    ],
+    series: [
+      {
+        name: 'Total jobs', type: 'bar', yAxisIndex: 0,
+        data: dailyTotals,
+        itemStyle: { color: '#93c5fd' },
+      },
+      {
+        name: 'Failure rate', type: 'line', yAxisIndex: 1,
+        data: failRates,
+        smooth: true,
+        symbol: 'circle', symbolSize: 5,
+        lineStyle: { color: '#dc2626', width: 2 },
+        itemStyle: { color: '#dc2626' },
+        areaStyle: { color: 'rgba(220,38,38,.08)' },
+      },
+    ],
+  });
+})();
+
+// ── Chart 3: failure reasons stacked area ────────────────────────────────
+(function() {
+  const chart = initChart('chart-reasons');
+  if (!chart || !reasonDS.length) return;
+  chart.setOption({
+    grid, tooltip,
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    xAxis: xAxis(labels),
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
+    series: reasonDS.map(ds => ({
+      name:      ds.label,
+      type:      'line',
+      stack:     'total',
+      data:      ds.data,
+      smooth:    true,
+      symbol:    'none',
+      areaStyle: { opacity: .65 },
+      lineStyle: { color: ds.color },
+      itemStyle: { color: ds.color },
+    })),
+  });
+})();
+
+// ── Chart 4: monthly LLM cost bar ────────────────────────────────────────
+(function() {
+  const chart = initChart('chart-cost');
+  if (!chart || !costLabels.length) return;
+  chart.setOption({
+    grid: { top: 20, right: 16, bottom: 36, left: 54 },
+    tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>$${p[0].value}` },
+    xAxis: { type: 'category', data: costLabels, axisLabel: { fontSize: 10 }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 10, formatter: '${value}' } },
+    series: [{
+      type: 'bar', data: costValues,
+      itemStyle: { color: '#6366f1' },
+      label: { show: true, position: 'top', formatter: p => `$${p.value}`, fontSize: 10 },
+    }],
+  });
+})();
+
+// ── Single-job AJAX retry ─────────────────────────────────────────────────
+function retrySingle(btn, pk) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  fetch(`/staff/retry/${pk}/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+  })
+  .then(r => r.json())
+  .then(() => {
+    const row = document.getElementById('row-' + pk);
+    if (row) row.style.opacity = '.35';
+    btn.textContent = '✓';
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Retry'; });
+}
+</script>
+{% endblock %}

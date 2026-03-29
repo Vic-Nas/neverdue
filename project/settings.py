@@ -34,7 +34,7 @@ LOGGING = {
 }
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    # django.contrib.admin removed — replaced by /staff/ dashboard
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -99,7 +99,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'project' / 'static' / 'manual']
-STATIC_ROOT = BASE_DIR / 'project' / 'static' / 'cache' 
+STATIC_ROOT = BASE_DIR / 'project' / 'static' / 'cache'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -114,26 +114,26 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # Google OAuth
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 
 # Resend
-RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
-RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', f'noreply@{DOMAIN}')
+RESEND_API_KEY        = os.environ.get('RESEND_API_KEY')
+RESEND_FROM_EMAIL     = os.environ.get('RESEND_FROM_EMAIL', f'noreply@{DOMAIN}')
 RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
 
 # LLM
 LLM_API_KEY = os.environ.get('LLM_API_KEY')
-LLM_MODEL = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
+LLM_MODEL   = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
 
 # Celery
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL    = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
 # Ads
 ADSENSE_CLIENT_ID = os.environ.get('ADSENSE_CLIENT_ID')
-ADSENSE_SLOTS = os.environ.get('ADSENSE_SLOTS', '').split(',')
+ADSENSE_SLOTS     = os.environ.get('ADSENSE_SLOTS', '').split(',')
 
-STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-STRIPE_PRICE_ID = os.environ.get('STRIPE_PRICE_ID')
-STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+STRIPE_SECRET_KEY      = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PRICE_ID        = os.environ.get('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET  = os.environ.get('STRIPE_WEBHOOK_SECRET')
