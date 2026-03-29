@@ -1,5 +1,6 @@
 # emails/views.py
 import json
+import logging
 
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12,6 +13,8 @@ from .webhook import (
     get_user_from_recipient,
     verify_resend_signature,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
@@ -52,7 +55,12 @@ def inbound(request):
     attachments = extract_attachments(payload)
 
     from .tasks import process_inbound_email
-    process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
+    try:
+        process_inbound_email.delay(user.id, body, sender, source_email_id, attachments or None)
+        logger.info("Email queued for processing: user=%s sender=%s message_id=%s", user.id, sender, source_email_id)
+    except Exception as exc:
+        logger.error("Failed to queue email task: user=%s sender=%s: %s", user.id, sender, exc, exc_info=True)
+        # Still return 200 to avoid Resend retries, but log for manual recovery
 
     return HttpResponse('OK', status=200)
 

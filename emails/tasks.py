@@ -2,6 +2,7 @@
 import logging
 from celery import shared_task
 from django.utils import timezone
+from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +146,20 @@ def track_llm_usage(user_id: int, input_tokens: int, output_tokens: int) -> None
         logger.warning("track_llm_usage: failed user=%s: %s", user_id, exc)
 
 
-@shared_task
-def process_inbound_email(user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
+def process_inbound_email(self, user_id: int, body: str, sender: str, message_id: str, attachments: list = None):
     """
     Process a single inbound email through the LLM pipeline.
 
     One email → one ScanJob, always.
     The pipeline (_save_events) decides the terminal status (done / needs_review).
     This task only sets processing and failed.
+
+    Retry Configuration:
+    - Retries up to 5 times on ANY exception
+    - Initial delay: 60 seconds
+    - Exponential backoff: 60s, 120s, 240s, 480s, 960s
+    - acks_late=True: Task marked complete only after successful processing
 
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename].
     """
@@ -216,13 +223,18 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
         raise
 
 
-@shared_task
-def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = ''):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
+def process_uploaded_file(self, user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = ''):
     """
     Process a file uploaded via the dashboard.
 
     Routes through process_email (empty body, single attachment) so the unified
     pipeline and filename-context feature are used consistently.
+
+    Retry Configuration:
+    - Retries up to 5 times on ANY exception
+    - Initial delay: 60 seconds (exponential backoff)
+    - acks_late=True: Task marked complete only after successful processing
 
     file_b64:  base64-encoded file contents.
     filename:  original filename — passed as context hint to the LLM.
@@ -282,8 +294,8 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
         raise
 
 
-@shared_task
-def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = None):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
+def reprocess_events(self, user_id: int, event_ids: list, prompt: str, job_pk: int = None):
     """
     Reprocess a needs_review job after the user supplies a correction prompt.
 
@@ -293,6 +305,11 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
     - Deletes the pending events only AFTER a successful LLM extraction.
     - Re-extracts using the user's prompt, preserving source_email_id.
     - The pipeline (_save_events) sets the terminal job status.
+
+    Retry Configuration:
+    - Retries up to 5 times on ANY exception
+    - Initial delay: 60 seconds (exponential backoff)
+    - acks_late=True: Task marked complete only after successful processing
 
     job_pk must be the pk of the original ScanJob the user is reviewing.
     If job_pk is missing (legacy call), logs an error and aborts — do not
@@ -384,14 +401,19 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int = N
         raise
 
 
-@shared_task
-def process_text_as_upload(user_id: int, text: str):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
+def process_text_as_upload(self, user_id: int, text: str):
     """
     User-initiated re-extraction from event_prompt_edit or bulk reprocess.
 
     The user deleted one or more events from the dashboard and supplied a
     correction prompt. This creates a new upload job — it is NOT a fix of a
     needs_review job and does NOT reuse any existing job.
+
+    Retry Configuration:
+    - Retries up to 5 times on ANY exception
+    - Initial delay: 60 seconds (exponential backoff)
+    - acks_late=True: Task marked complete only after successful processing
 
     The assembled text already contains the original event data plus the
     user's instruction, built by the view before dispatch.
@@ -424,7 +446,7 @@ def process_text_as_upload(user_id: int, text: str):
         raise
 
 
-@shared_task
+@shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
 def reset_monthly_scans():
     """
     Snapshot current-month token usage into MonthlyUsage, then reset all
@@ -433,6 +455,10 @@ def reset_monthly_scans():
 
     Also re-enqueues failed jobs with reason=scan_limit so they are retried
     automatically once the quota resets.
+
+    Retry Configuration:
+    - Retries up to 3 times on transient exceptions
+    - Initial delay: 300 seconds (5 minutes)
     """
     from accounts.models import MonthlyUsage, User
     from emails.models import ScanJob
@@ -470,12 +496,16 @@ def reset_monthly_scans():
     _retry_failed_jobs(reason=ScanJob.REASON_SCAN_LIMIT)
 
 
-@shared_task
+@shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 60})
 def retry_jobs_after_plan_upgrade(user_id: int):
     """
     Re-enqueue all failed jobs for a user that were blocked by plan restrictions
     (scan_limit or pro_required). Called from the billing webhook after a
     successful subscription activation.
+
+    Retry Configuration:
+    - Retries up to 3 times on transient exceptions
+    - Initial delay: 60 seconds
     """
     from emails.models import ScanJob
 
@@ -488,7 +518,7 @@ def retry_jobs_after_plan_upgrade(user_id: int):
     logger.info("retry_jobs_after_plan_upgrade: re-enqueued %s job(s) for user=%s", count, user_id)
 
 
-@shared_task
+@shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
 def recover_stale_jobs():
     """
     Reset jobs stuck in 'processing' for longer than 10 minutes back to 'queued'
@@ -554,11 +584,16 @@ def _reenqueue_jobs(jobs: list) -> int:
     return count
 
 
-@shared_task
-def process_queued_job(scan_job_id: int):
+@shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
+def process_queued_job(self, scan_job_id: int):
     """
     Process a single queued job by replaying its stored task arguments.
     Called after a job is reset to queued status (e.g., after plan upgrade or manual retry).
+    
+    Retry Configuration:
+    - Retries up to 5 times on ANY exception
+    - Initial delay: 60 seconds (exponential backoff)
+    - acks_late=True: Task marked complete only after successful processing
     
     IMPORTANT: This task calls the pipeline directly with the EXISTING job object,
     instead of re-dispatching the original task. This prevents creating duplicate jobs.
@@ -658,7 +693,7 @@ def process_queued_job(scan_job_id: int):
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
 
 
-@shared_task
+@shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
 def cleanup_events():
     """
     Daily cleanup task:
@@ -669,6 +704,10 @@ def cleanup_events():
       3. Delete done ScanJobs older than 1 day.
          Failed jobs are NOT deleted — they stay visible until the user or
          admin dismisses them, and are retried automatically where possible.
+
+    Retry Configuration:
+    - Retries up to 3 times on transient exceptions
+    - Initial delay: 300 seconds (5 minutes)
     """
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal
