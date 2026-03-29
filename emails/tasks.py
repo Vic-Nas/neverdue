@@ -5,6 +5,10 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+try:
+    from emails.models import ScanJob
+except:
+    pass
 
 # ---------------------------------------------------------------------------
 # Internal helpers — job state transitions
@@ -115,6 +119,29 @@ def _make_signature(exc: Exception) -> str:
     return sig[:255]
 
 
+def _log_attempt(job: 'ScanJob | None', status: str, failure_reason: str = '') -> None:
+    """
+    Log a job execution attempt for metrics reporting.
+    
+    Called after every task completion (success or failure).
+    Creates an immutable audit trail that survives job retry/success transitions.
+    
+    status: 'done' or 'failed'
+    failure_reason: only used if status='failed'; one of ScanJob.REASON_* constants
+    """
+    if job is None:
+        return
+    try:
+        from emails.models import JobAttemptLog
+        JobAttemptLog.objects.create(
+            job=job,
+            status=status,
+            failure_reason=failure_reason[:30] if failure_reason else '',
+        )
+    except Exception as exc:
+        logger.warning("_log_attempt: failed job_id=%s: %s", job.pk, exc)
+
+
 # ---------------------------------------------------------------------------
 # Tasks
 # ---------------------------------------------------------------------------
@@ -197,6 +224,7 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
     except User.DoesNotExist:
         logger.warning("process_inbound_email: User pk=%s not found — aborting", user_id)
         _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
     # Duplicate guard: if this message_id already produced active events, skip.
@@ -205,6 +233,7 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
         logger.info("process_inbound_email: duplicate message_id=%s for user=%s — skipping", message_id, user_id)
         _set_notes(job, 'Email already processed — skipped.')
         _set_done(job)
+        _log_attempt(job, 'done')
         return
 
     _set_processing(job)
@@ -220,9 +249,11 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
         elif not created:
             _set_notes(job, 'No events found in this email.')
         logger.info("process_inbound_email: done user=%s events=%s", user_id, len(created))
+        _log_attempt(job, 'done')
     except Exception as exc:
         logger.error("process_inbound_email: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
 
@@ -279,6 +310,7 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
     except User.DoesNotExist:
         logger.warning("process_uploaded_file: User pk=%s not found — aborting", user_id)
         _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
     attachments = [[file_b64, media_type, filename]]
@@ -295,9 +327,11 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
         elif not created:
             _set_notes(job, 'No events found in this file.')
         logger.info("UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
+        _log_attempt(job, 'done')
     except Exception as exc:
         logger.error("process_uploaded_file: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
 
@@ -443,6 +477,7 @@ def process_text_as_upload(self, job_id: int, user_id: int, text: str):
     except User.DoesNotExist:
         logger.warning("process_text_as_upload: User pk=%s not found — aborting", user_id)
         _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
     _set_processing(job)
@@ -453,9 +488,11 @@ def process_text_as_upload(self, job_id: int, user_id: int, text: str):
         elif not created:
             _set_notes(job, 'No events found.')
         logger.info("MANUAL UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
+        _log_attempt(job, 'done')
     except Exception as exc:
         logger.error("process_text_as_upload: failed user=%s: %s", user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
+        _log_attempt(job, 'failed', failure_reason='internal_error')
         return
 
 
@@ -758,3 +795,26 @@ def cleanup_events():
     ).delete()
     if deleted_jobs:
         logger.info("cleanup_events: deleted %s old done ScanJob(s)", deleted_jobs)
+
+
+@shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 2, 'countdown': 300})
+def cleanup_job_attempt_logs():
+    """
+    Delete job attempt logs older than 30 days.
+    
+    Keeps metrics queryable (failure rate by reason, etc.) for the last month
+    while preventing unbounded growth of the attempt log table.
+    
+    Scheduled daily via Celery Beat.
+    
+    Retry Configuration:
+    - Retries up to 2 times on transient exceptions
+    - Initial delay: 300 seconds (5 minutes)
+    """
+    from emails.models import JobAttemptLog
+    
+    cutoff = timezone.now() - timezone.timedelta(days=30)
+    deleted, _ = JobAttemptLog.objects.filter(created_at__lt=cutoff).delete()
+    
+    if deleted:
+        logger.info("cleanup_job_attempt_logs: deleted %s old attempt log(s)", deleted)
