@@ -560,9 +560,15 @@ def process_queued_job(scan_job_id: int):
     """
     Process a single queued job by replaying its stored task arguments.
     Called after a job is reset to queued status (e.g., after plan upgrade or manual retry).
+    
+    IMPORTANT: This task calls the pipeline directly with the EXISTING job object,
+    instead of re-dispatching the original task. This prevents creating duplicate jobs.
     """
     import json
     from emails.models import ScanJob
+    from accounts.models import User
+    from dashboard.models import Event
+    from llm.pipeline import process_email
 
     try:
         job = ScanJob.objects.get(pk=scan_job_id)
@@ -585,39 +591,71 @@ def process_queued_job(scan_job_id: int):
         _set_failed(job, reason='internal_error', signature='Missing task_args')
         return
 
+    # Get user
+    try:
+        user = User.objects.get(pk=task_args.get('user_id'))
+    except User.DoesNotExist:
+        logger.warning("process_queued_job: User pk=%s not found", task_args.get('user_id'))
+        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
+        return
+
+    # Update job to processing (same state as original tasks do)
+    _set_processing(job)
+
     try:
         if job.source == ScanJob.SOURCE_EMAIL:
-            # Re-dispatch the original email task with stored args
-            process_inbound_email.apply_async(
-                args=(
-                    task_args.get('user_id'),
-                    task_args.get('body'),
-                    task_args.get('sender'),
-                    task_args.get('message_id'),
-                    task_args.get('attachments'),
-                ),
+            # Call pipeline directly with stored email args, reusing the EXISTING job
+            message_id = task_args.get('message_id')
+            sender = task_args.get('sender')
+            body = task_args.get('body', '')
+            attachments = task_args.get('attachments') or []
+
+            # Duplicate guard: if this message_id already produced active events, skip.
+            if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
+                logger.info("process_queued_job: duplicate message_id=%s for user=%s — skipping", message_id, user.pk)
+                _set_notes(job, 'Email already processed — skipped.')
+                _set_done(job)
+                return
+
+            created, notes = process_email(
+                user, body, attachments,
+                sender=sender,
+                source_email_id=message_id,
+                scan_job=job,
             )
-            logger.info("process_queued_job: re-dispatched email task for job=%s", scan_job_id)
+            if notes:
+                _set_notes(job, notes)
+            elif not created:
+                _set_notes(job, 'No events found in this email.')
+            logger.info("process_queued_job: email done job=%s user=%s events=%s", scan_job_id, user.pk, len(created))
 
         elif job.source == ScanJob.SOURCE_UPLOAD:
-            # Re-dispatch the original upload task with stored args
-            process_uploaded_file.apply_async(
-                args=(
-                    task_args.get('user_id'),
-                    task_args.get('file_b64'),
-                    task_args.get('media_type'),
-                    task_args.get('context'),
-                    task_args.get('filename'),
-                ),
+            # Call pipeline directly with stored upload args, reusing the EXISTING job
+            file_b64 = task_args.get('file_b64', '')
+            media_type = task_args.get('media_type', '')
+            context = task_args.get('context', '')
+            filename = task_args.get('filename', '')
+            
+            attachments = [[file_b64, media_type, filename]]
+            body = context or ''
+
+            created, notes = process_email(
+                user, body, attachments,
+                scan_job=job,
             )
-            logger.info("process_queued_job: re-dispatched upload task for job=%s", scan_job_id)
+            if notes:
+                _set_notes(job, notes)
+            elif not created:
+                _set_notes(job, 'No events found in this file.')
+            logger.info("process_queued_job: upload done job=%s user=%s events=%s", scan_job_id, user.pk, len(created))
 
         else:
             logger.error("process_queued_job: unknown source=%r for job=%s", job.source, scan_job_id)
             _set_failed(job, reason='internal_error', signature=f'Unknown job source: {job.source}')
 
     except Exception as exc:
-        logger.error("process_queued_job: failed to dispatch task for job=%s: %s", scan_job_id, exc, exc_info=True)
+        logger.error("process_queued_job: failed to process job=%s: %s", scan_job_id, exc, exc_info=True)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
 
 
