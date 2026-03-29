@@ -22,4 +22,8 @@ app.conf.beat_schedule = {
         'task': 'emails.tasks.recover_stale_jobs',
         'schedule': crontab(minute='*/10'),  # runs every 10 minutes
     },
+    'reset-monthly-scans': {
+        'task': 'emails.tasks.reset_monthly_scans',
+        'schedule': crontab(hour=0, minute=0, day_of_month=1),
+    },
 }

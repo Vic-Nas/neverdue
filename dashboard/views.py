@@ -132,17 +132,7 @@ def event_prompt_edit(request, pk):
         if not prompt:
             return JsonResponse({'ok': False, 'error': 'Prompt is required.'}, status=400)
 
-        lines = [
-            f"Title: {event.title}",
-            f"Start: {event.start.isoformat()}",
-            f"End: {event.end.isoformat()}",
-        ]
-        if event.description:
-            lines.append(f"Notes: {event.description}")
-        if event.category:
-            lines.append(f"Category: {event.category.name}")
-
-        full_text = "\n".join(lines) + f"\n\nUser instruction: {prompt}"
+        full_text = event.serialize_as_text() + f"\n\nUser instruction: {prompt}"
 
         event.delete()
         # Create job BEFORE queueing task to prevent duplicate jobs on retry
@@ -183,19 +173,7 @@ def events_bulk_action(request):
             return JsonResponse({'ok': True, 'deleted': count})
 
         # Re-extract: serialise events, delete them, dispatch upload task
-        blocks = []
-        for e in events:
-            lines = [
-                f"Title: {e.title}",
-                f"Start: {e.start.isoformat()}",
-                f"End: {e.end.isoformat()}",
-            ]
-            if e.description:
-                lines.append(f"Notes: {e.description}")
-            if e.category:
-                lines.append(f"Category: {e.category.name}")
-            blocks.append("\n".join(lines))
-
+        blocks = [e.serialize_as_text() for e in events]
         full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
 
         events.delete()
@@ -339,8 +317,13 @@ def category_edit(request, pk=None):
 def category_delete(request, pk):
     try:
         category = get_object_or_404(Category, pk=pk, user=request.user)
-        category.delete()
-        return redirect('dashboard:categories')
+        if request.method == 'POST':
+            category.delete()
+            return redirect('dashboard:categories')
+        return render(request, 'dashboard/category_delete.html', {
+            "category": category,
+            "categories_url": reverse("dashboard:categories"),
+        })
     except Exception:
         logger.exception("category_delete error for user=%s pk=%s", request.user.pk, pk)
         return HttpResponse('Could not delete category.', status=500)

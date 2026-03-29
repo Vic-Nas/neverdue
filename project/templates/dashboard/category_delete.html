@@ -1,22 +1,6 @@
 {# templates/dashboard/category_delete.html #}
-{% extends 'base.html' %}
-{% load static %}
-{% block title %}Delete category — NeverDue{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-{% endblock %}
-
-{% block content %}
-<div class="confirm-page">
-  <h1 class="confirm-page__title">Delete category?</h1>
-  <p class="confirm-page__text">
-    <strong>{{ category.name }}</strong> will be permanently deleted.
-    All events in this category will also be deleted.
-  </p>
-  <form method="post" class="confirm-page__actions">
-    {% csrf_token %}
-    <button type="submit" class="btn-danger btn">Yes, delete</button>
-    <a href="{% url 'dashboard:categories' %}" class="btn-ghost btn">Cancel</a>
-  </form>
-</div>
-{% endblock %}
+{% include 'partials/confirm_delete.html' with
+   page_title="Delete category?"
+   message=category.name|add:" will be permanently deleted. All events in this category will also be deleted."
+   cancel_url=categories_url
+%}

@@ -1,22 +1,6 @@
 {# templates/dashboard/event_delete.html #}
-{% extends 'base.html' %}
-{% load static %}
-{% block title %}Delete event — NeverDue{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-{% endblock %}
-
-{% block content %}
-<div class="confirm-page">
-  <h1 class="confirm-page__title">Delete event?</h1>
-  <p class="confirm-page__text">
-    <strong>{{ event.title }}</strong> will be permanently deleted.
-    This will also remove it from your Google Calendar.
-  </p>
-  <form method="post" class="confirm-page__actions">
-    {% csrf_token %}
-    <button type="submit" class="btn-danger btn">Yes, delete</button>
-    <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="btn-ghost btn">Cancel</a>
-  </form>
-</div>
-{% endblock %}
+{% include 'partials/confirm_delete.html' with
+   page_title="Delete event?"
+   message=event.title|add:" will be permanently deleted. This will also remove it from your Google Calendar."
+   cancel_url=event.get_absolute_url
+%}

@@ -65,54 +65,25 @@
 <div class="layout">
 
   {# ── Ad sidebar ── #}
-  {% comment %}
-  Slot logic:
-  - 0 AdSense: slots 1+2+3 Railway, slot 4 Koho
-  - 1 AdSense: slot 1 AdSense, slots 2+3 Railway, slot 4 Koho
-  - 2 AdSense: slots 1+2 AdSense, slot 3 Railway, slot 4 Koho
-  - 3 AdSense: slots 1+2+3 AdSense, slot 4 Koho
-  - 4 AdSense: all AdSense
-  {% endcomment %}
   <aside class="ad-sidebar">
 
-    {# Slot 1 #}
+    {% for slot_id in ADSENSE_SLOTS|slice:":3" %}
     <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.0 %}
+      {% if ADSENSE_CLIENT_ID and slot_id %}
         <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
              data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ ADSENSE_SLOTS.0 }}"
+             data-ad-slot="{{ slot_id }}"
              data-ad-format="auto"></ins>
         <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
       {% else %}
         {% include 'partials/ad_railway.html' %}
       {% endif %}
     </div>
-
-    {# Slot 2 #}
-    <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.1 %}
-        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
-             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ ADSENSE_SLOTS.1 }}"
-             data-ad-format="auto"></ins>
-        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-      {% else %}
-        {% include 'partials/ad_railway.html' %}
-      {% endif %}
-    </div>
-
-    {# Slot 3 #}
-    <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and ADSENSE_SLOTS.2 %}
-        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
-             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ ADSENSE_SLOTS.2 }}"
-             data-ad-format="auto"></ins>
-        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-      {% else %}
-        {% include 'partials/ad_railway.html' %}
-      {% endif %}
-    </div>
+    {% empty %}
+    {% for _ in "xxx" %}
+    <div class="ad-slot">{% include 'partials/ad_railway.html' %}</div>
+    {% endfor %}
+    {% endfor %}
 
     {# Slot 4 — always Koho #}
     <div class="ad-slot">

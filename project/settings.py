@@ -141,6 +141,8 @@ LLM_MODEL   = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
 # Celery
 CELERY_BROKER_URL    = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # Ads
 ADSENSE_CLIENT_ID = os.environ.get('ADSENSE_CLIENT_ID')

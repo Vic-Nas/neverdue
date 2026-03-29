@@ -170,5 +170,27 @@ class Event(models.Model):
             rule += f';UNTIL={until}'
         return rule
 
+    def serialize_as_text(self) -> str:
+        """
+        Serialize this event to a human-readable text block for LLM re-extraction.
+        Used by reprocess flows in dashboard/views.py and emails/tasks.py.
+        """
+        lines = [
+            f"Title: {self.title}",
+            f"Start: {self.start.isoformat()}",
+            f"End: {self.end.isoformat()}",
+        ]
+        if self.description:
+            lines.append(f"Notes: {self.description}")
+        if self.recurrence_freq:
+            lines.append(f"Recurrence: {self.recurrence_freq}")
+            if self.recurrence_until:
+                lines.append(f"Recurrence until: {self.recurrence_until}")
+        if self.category:
+            lines.append(f"Category: {self.category.name}")
+        if self.pending_concern:
+            lines.append(f"Previous concern: {self.pending_concern}")
+        return "\n".join(lines)
+
     def __str__(self):
         return self.title

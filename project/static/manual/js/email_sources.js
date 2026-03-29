@@ -1,12 +1,6 @@
 /* static/manual/js/email_sources.js */
 
-function getCookie(name) {
-  return document.cookie
-    .split(';')
-    .map(c => c.trim())
-    .find(c => c.startsWith(name + '='))
-    ?.split('=')[1] || '';
-}
+var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
 
 async function addFilterRule() {
   const action  = document.getElementById('filter-action').value;
@@ -18,7 +12,7 @@ async function addFilterRule() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-CSRFToken': getCookie('csrftoken'),
+      'X-CSRFToken': CSRF,
     },
     body: JSON.stringify({ action, pattern }),
   });
@@ -48,7 +42,7 @@ async function removeFilterRule(id) {
   const url = deleteUrlTemplate.replace('/0/', `/${id}/`);
   const resp = await fetch(url, {
     method: 'POST',
-    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    headers: { 'X-CSRFToken': CSRF },
   });
   const data = await resp.json();
 

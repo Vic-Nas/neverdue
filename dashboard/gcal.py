@@ -9,6 +9,7 @@
 
 import logging
 import requests
+from django.conf import settings
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
@@ -29,7 +30,7 @@ def delete_from_gcal(user, google_event_id: str) -> bool:
     try:
         token = get_valid_token(user)
     except Exception as exc:
-        logger.warning("delete_from_gcal: get_valid_token failed for user=%s: %s", user.pk, exc)
+        logger.warning("dashboard.delete_from_gcal: token unavailable | user=%s", user.pk)
         return False
 
     try:
@@ -40,17 +41,18 @@ def delete_from_gcal(user, google_event_id: str) -> bool:
         )
         if response.status_code in (204, 404):
             # 204 = deleted, 404 = already gone — both are fine
-            logger.info("delete_from_gcal: removed google_event_id=%s for user=%s", google_event_id, user.pk)
+            if settings.DEBUG:
+                logger.debug("dashboard.delete_from_gcal: deleting gcal_id | user=%s", user.pk)
             return True
         else:
             logger.warning(
-                "delete_from_gcal: unexpected status %s for google_event_id=%s user=%s — %s",
-                response.status_code, google_event_id, user.pk, response.text,
+                "dashboard.delete_from_gcal: unexpected status | status=%s user=%s",
+                response.status_code, user.pk,
             )
             return False
     except Exception as exc:
-        logger.warning("delete_from_gcal: request failed for google_event_id=%s user=%s: %s",
-                       google_event_id, user.pk, exc)
+        logger.warning("dashboard.delete_from_gcal: request failed | user=%s error=%s",
+                       user.pk, exc)
         return False
 
 
@@ -98,19 +100,28 @@ def push_event_to_gcal(user, event):
     try:
         token = get_valid_token(user)
     except ValueError:
+        logger.warning("dashboard.push_event_to_gcal: token unavailable | user=%s", user.pk)
         return None
 
     body = _build_gcal_body(event)
-    response = requests.post(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
-        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-        json=body,
-        timeout=10,
-    )
-    if response.status_code not in (200, 201):
+    try:
+        response = requests.post(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json=body,
+            timeout=10,
+        )
+        if response.status_code not in (200, 201):
+            logger.warning("dashboard.push_event_to_gcal: api error | status=%s user=%s", response.status_code, user.pk)
+            return None
+        data = response.json()
+        gcal_id = data.get('id', '')
+        if settings.DEBUG:
+            logger.debug("dashboard.push_event_to_gcal: created | user=%s", user.pk)
+        return data.get('htmlLink', ''), gcal_id
+    except Exception as exc:
+        logger.error("dashboard.push_event_to_gcal: request error | user=%s error=%s", user.pk, exc)
         return None
-    data = response.json()
-    return data.get('htmlLink', ''), data.get('id', '')
 
 
 def update_event_in_gcal(user, event) -> bool:
@@ -122,16 +133,27 @@ def update_event_in_gcal(user, event) -> bool:
     try:
         token = get_valid_token(user)
     except ValueError:
+        logger.warning("dashboard.update_event_in_gcal: token unavailable | user=%s", user.pk)
         return False
 
     body = _build_gcal_body(event)
-    response = requests.patch(
-        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
-        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-        json=body,
-        timeout=10,
-    )
-    return response.status_code in (200, 201)
+    try:
+        response = requests.patch(
+            f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{event.google_event_id}',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json=body,
+            timeout=10,
+        )
+        if response.status_code in (200, 201):
+            if settings.DEBUG:
+                logger.debug("dashboard.update_event_in_gcal: patched | user=%s", user.pk)
+            return True
+        else:
+            logger.warning("dashboard.update_event_in_gcal: api error | status=%s user=%s", response.status_code, user.pk)
+            return False
+    except Exception as exc:
+        logger.error("dashboard.update_event_in_gcal: request error | user=%s error=%s", user.pk, exc)
+        return False
 
 
 def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
@@ -141,19 +163,25 @@ def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
     try:
         token = get_valid_token(user)
     except Exception as exc:
-        logger.warning("patch_event_color: token failed user=%s: %s", user.pk, exc)
+        logger.warning("dashboard.patch_event_color: token unavailable | user=%s", user.pk)
         return False
-    response = requests.patch(
-        f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{google_event_id}',
-        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-        json={'colorId': color_id},
-        timeout=10,
-    )
-    if response.status_code in (200, 204):
-        return True
-    logger.warning("patch_event_color: status=%s event=%s user=%s",
-                   response.status_code, google_event_id, user.pk)
-    return False
+    try:
+        response = requests.patch(
+            f'https://www.googleapis.com/calendar/v3/calendars/primary/events/{google_event_id}',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json={'colorId': color_id},
+            timeout=10,
+        )
+        if response.status_code in (200, 204):
+            if settings.DEBUG:
+                logger.debug("dashboard.patch_event_color: patched | user=%s", user.pk)
+            return True
+        logger.warning("dashboard.patch_event_color: api error | status=%s user=%s",
+                       response.status_code, user.pk)
+        return False
+    except Exception as exc:
+        logger.error("dashboard.patch_event_color: request error | user=%s error=%s", user.pk, exc)
+        return False
 
 
 def stop_gcal_watch(user, token: str) -> None:
@@ -175,14 +203,14 @@ def stop_gcal_watch(user, token: str) -> None:
             timeout=10,
         )
         if response.status_code == 204:
-            logger.info("stop_gcal_watch: stopped channel=%s user=%s",
-                        user.gcal_channel_id, user.pk)
-        else:
+            if settings.DEBUG:
+                logger.debug("dashboard.stop_gcal_watch: stopped | user=%s", user.pk)
+        elif response.status_code != 404:
             # 404 means it already expired — that's fine
-            logger.warning("stop_gcal_watch: status=%s channel=%s user=%s",
-                           response.status_code, user.gcal_channel_id, user.pk)
+            logger.warning("dashboard.stop_gcal_watch: api error | status=%s user=%s",
+                           response.status_code, user.pk)
     except Exception as exc:
-        logger.warning("stop_gcal_watch: request failed user=%s: %s", user.pk, exc)
+        logger.warning("dashboard.stop_gcal_watch: request error | user=%s error=%s", user.pk, exc)
 
 
 def register_gcal_watch(user) -> bool:
@@ -209,31 +237,35 @@ def register_gcal_watch(user) -> bool:
 
     channel_id = str(uuid.uuid4())
     webhook_path = reverse('dashboard:gcal_webhook')
-    response = requests.post(
-        'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
-        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-        json={
-            'id': channel_id,
-            'type': 'web_hook',
-            'address': f'https://{settings.DOMAIN}{webhook_path}',
-        },
-        timeout=10,
-    )
-    if response.status_code != 200:
-        logger.warning("register_gcal_watch: status=%s user=%s body=%s",
-                       response.status_code, user.pk, response.text)
+    try:
+        response = requests.post(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json={
+                'id': channel_id,
+                'type': 'web_hook',
+                'address': f'https://{settings.DOMAIN}{webhook_path}',
+            },
+            timeout=10,
+        )
+        if response.status_code != 200:
+            logger.warning("dashboard.register_gcal_watch: api error | status=%s user=%s",
+                           response.status_code, user.pk)
+            return False
+
+        data = response.json()
+        from datetime import datetime, timezone as dt_timezone
+        expiration_ms = int(data.get('expiration', 0))
+        expiration_dt = datetime.fromtimestamp(expiration_ms / 1000, tz=dt_timezone.utc)
+
+        user.gcal_channel_id = channel_id
+        user.gcal_channel_resource_id = data.get('resourceId', '')
+        user.gcal_channel_expiration = expiration_dt
+        user.save(update_fields=['gcal_channel_id', 'gcal_channel_resource_id', 'gcal_channel_expiration'])
+
+        if settings.DEBUG:
+            logger.debug("dashboard.register_gcal_watch: registered | user=%s", user.pk)
+        return True
+    except Exception as exc:
+        logger.error("dashboard.register_gcal_watch: request error | user=%s error=%s", user.pk, exc)
         return False
-
-    data = response.json()
-    from datetime import datetime, timezone as dt_timezone
-    expiration_ms = int(data.get('expiration', 0))
-    expiration_dt = datetime.fromtimestamp(expiration_ms / 1000, tz=dt_timezone.utc)
-
-    user.gcal_channel_id = channel_id
-    user.gcal_channel_resource_id = data.get('resourceId', '')
-    user.gcal_channel_expiration = expiration_dt
-    user.save(update_fields=['gcal_channel_id', 'gcal_channel_resource_id', 'gcal_channel_expiration'])
-
-    logger.info("register_gcal_watch: registered channel=%s expiry=%s user=%s",
-                channel_id, expiration_dt, user.pk)
-    return True

@@ -36,7 +36,7 @@ def _fire_usage(user, input_tokens: int, output_tokens: int) -> None:
         track_llm_usage.delay(user.pk, input_tokens, output_tokens)
     except Exception as exc:
         # Tracking must never break the pipeline.
-        logger.warning("_fire_usage: failed to enqueue for user=%s: %s", user.pk, exc)
+        logger.error("llm._fire_usage: enqueue failed | user=%s error=%s", user.pk, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -64,11 +64,10 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
             user_instructions=user_instructions,
         )
     except ValueError as exc:
-        logger.warning("process_text: extraction failed for user=%s: %s", user.pk, exc)
+        logger.error("llm.process_text: extraction error | user=%s error=%s", user.pk, exc)
         return [], ''
 
     _fire_usage(user, input_tokens, output_tokens)
-    logger.info("process_text: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return created, ''
 
@@ -109,8 +108,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         if not has_usable_body:
             # Attachment-only email with no body — cannot process without Pro.
             # Fail the job so it stays visible and retries on plan upgrade.
-            logger.info(
-                "process_email: attachment-only email blocked for free user=%s — marking pro_required",
+            logger.error("llm.process_email: pro_required | user=%s",
                 user.pk,
             )
             _fail_job_pro_required(scan_job)
@@ -132,11 +130,10 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             user_instructions=user_instructions,
         )
     except ValueError as exc:
-        logger.warning("process_email: extraction failed for user=%s: %s", user.pk, exc)
+        logger.error("llm.process_email: extraction error | user=%s error=%s", user.pk, exc)
         return [], notes_attachments
 
     _fire_usage(user, input_tokens, output_tokens)
-    logger.info("process_email: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return created, notes_attachments
 
@@ -166,7 +163,7 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
         try:
             events, input_tokens, output_tokens = extract_events(text, language=language, user_timezone=user_timezone)
         except ValueError as exc:
-            logger.warning("process_file: extraction failed for user=%s: %s", user.pk, exc)
+            logger.error("llm.process_file: extraction error | user=%s error=%s", user.pk, exc)
             return [], ''
     else:
         try:
@@ -174,11 +171,10 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
                 file_bytes, media_type, context=context, language=language, user_timezone=user_timezone,
             )
         except ValueError as exc:
-            logger.warning("process_file: extraction failed for user=%s: %s", user.pk, exc)
+            logger.error("llm.process_file: extraction error | user=%s error=%s", user.pk, exc)
             return [], ''
 
     _fire_usage(user, input_tokens, output_tokens)
-    logger.info("process_file: extracted %s event(s) for user=%s", len(events), user.pk)
     created = _save_events(user, events)
     return created, ''
 
@@ -227,7 +223,7 @@ def _fail_job_scan_limit(scan_job) -> None:
             updated_at=timezone.now(),
         )
     except Exception as exc:
-        logger.warning("_fail_job_scan_limit: failed pk=%s: %s", scan_job.pk, exc)
+        logger.error("llm._fail_job_scan_limit: update failed | job_id=%s error=%s", scan_job.pk, exc)
 
 
 def _fail_job_pro_required(scan_job) -> None:
@@ -248,7 +244,7 @@ def _fail_job_pro_required(scan_job) -> None:
             updated_at=timezone.now(),
         )
     except Exception as exc:
-        logger.warning("_fail_job_pro_required: failed pk=%s: %s", scan_job.pk, exc)
+        logger.error("llm._fail_job_pro_required: update failed | job_id=%s error=%s", scan_job.pk, exc)
 
 
 def _get_or_create_uncategorized(user):
@@ -380,7 +376,6 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     for event_data in events:
         category = resolve_category(user, event_data, sender)
         if category is DISCARD:
-            logger.info("_save_events: event discarded by rule: %s", event_data.get('title'))
             continue
         if category is None:
             category = _get_or_create_uncategorized(user)
@@ -413,8 +408,4 @@ def _finalise_job(scan_job, has_pending: bool) -> None:
     ScanJob.objects.filter(pk=scan_job.pk).update(
         status=new_status,
         updated_at=timezone.now(),
-    )
-    logger.info(
-        "_finalise_job: job=%s → %s (has_pending=%s)",
-        scan_job.pk, new_status, has_pending,
     )
