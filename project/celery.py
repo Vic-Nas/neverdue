@@ -9,9 +9,6 @@ app = Celery('project')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
-# Explicitly import tasks to ensure they're registered with Celery
-from emails import tasks as _  # noqa
-
 # Celery Beat schedule
 app.conf.beat_schedule = {
     'cleanup-events-daily': {
