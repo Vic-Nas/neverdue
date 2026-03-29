@@ -159,10 +159,28 @@ def process_inbound_email(user_id: int, body: str, sender: str, message_id: str,
     from accounts.models import User
     from dashboard.models import Event
     from llm.pipeline import process_email
+    import json
 
     logger.info("TASK START user=%s message_id=%s body_len=%s", user_id, message_id, len(body) if body else 0)
 
+    # Store task args for potential replay on retry
+    task_args = {
+        'user_id': user_id,
+        'body': body,
+        'sender': sender,
+        'message_id': message_id,
+        'attachments': attachments,
+    }
+    
     job = _create_job(user_id, source='email', from_address=sender or '')
+    
+    if job:
+        try:
+            import json
+            job.task_args = json.dumps(task_args)
+            job.save(update_fields=['task_args'])
+        except Exception as exc:
+            logger.warning("process_inbound_email: failed to store task_args: %s", exc)
 
     try:
         user = User.objects.get(pk=user_id)
@@ -212,13 +230,30 @@ def process_uploaded_file(user_id: int, file_b64: str, media_type: str, context:
     """
     from accounts.models import User
     from llm.pipeline import process_email
+    import json
 
     logger.info(
         "UPLOAD TASK START user=%s media_type=%s filename=%r context_len=%s",
         user_id, media_type, filename, len(context) if context else 0,
     )
 
+    # Store task args for potential replay on retry
+    task_args = {
+        'user_id': user_id,
+        'file_b64': file_b64,
+        'media_type': media_type,
+        'context': context,
+        'filename': filename,
+    }
+
     job = _create_job(user_id, source='upload')
+    
+    if job:
+        try:
+            job.task_args = json.dumps(task_args)
+            job.save(update_fields=['task_args'])
+        except Exception as exc:
+            logger.warning("process_uploaded_file: failed to store task_args: %s", exc)
 
     try:
         user = User.objects.get(pk=user_id)
@@ -436,6 +471,7 @@ def reset_monthly_scans():
 
 
 @shared_task
+@shared_task
 def retry_jobs_after_plan_upgrade(user_id: int):
     """
     Re-enqueue all failed jobs for a user that were blocked by plan restrictions
@@ -491,28 +527,16 @@ def _retry_failed_jobs(reason: str) -> int:
 
 def _reenqueue_jobs(jobs: list) -> int:
     """
-    Reset a list of ScanJob instances to 'queued' and dispatch the appropriate
-    Celery task for each. Returns the number successfully re-enqueued.
+    Reset a list of ScanJob instances to 'queued' and dispatch a task to process them.
+    Returns the number successfully re-enqueued.
 
-    This function is the single place that maps a job back to its task — keeping
-    that logic out of views and admin actions.
+    Uses stored task_args to replay the original task.
     """
     from emails.models import ScanJob
 
     count = 0
     for job in jobs:
         try:
-            # Store task args on the job before clearing failure fields.
-            # We can reconstruct the call from job.source alone — the original
-            # task arguments are no longer available, so we use the job detail
-            # page reprocess flow for email jobs, and mark upload jobs for
-            # manual re-upload if args are gone.
-            #
-            # For jobs that were failed before ever processing (scan_limit,
-            # pro_required), the args are still in the Celery broker result
-            # backend IF result_expires hasn't cleared them. We can't rely on
-            # that, so instead we reset to queued + set a note so the user
-            # knows to re-submit if the task doesn't run.
             ScanJob.objects.filter(pk=job.pk).update(
                 status=ScanJob.STATUS_QUEUED,
                 failure_reason='',
@@ -520,12 +544,81 @@ def _reenqueue_jobs(jobs: list) -> int:
                 notes='Queued for retry.',
                 updated_at=timezone.now(),
             )
+            
+            # Dispatch task to process this queued job with stored args
+            process_queued_job.delay(job.pk)
             count += 1
-            logger.info("_reenqueue_jobs: reset job=%s to queued", job.pk)
+            logger.info("_reenqueue_jobs: reset job=%s to queued and dispatched process task", job.pk)
         except Exception as exc:
             logger.error("_reenqueue_jobs: failed for job=%s: %s", job.pk, exc)
 
     return count
+
+
+@shared_task
+def process_queued_job(scan_job_id: int):
+    """
+    Process a single queued job by replaying its stored task arguments.
+    Called after a job is reset to queued status (e.g., after plan upgrade or manual retry).
+    """
+    import json
+    from emails.models import ScanJob
+
+    try:
+        job = ScanJob.objects.get(pk=scan_job_id)
+    except ScanJob.DoesNotExist:
+        logger.warning("process_queued_job: job=%s not found", scan_job_id)
+        return
+
+    logger.info("process_queued_job: processing job=%s source=%s user=%s", scan_job_id, job.source, job.user_id)
+
+    # Restore and validate task args
+    try:
+        task_args = json.loads(job.task_args) if job.task_args else {}
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.error("process_queued_job: failed to decode task_args for job=%s: %s", scan_job_id, exc)
+        _set_failed(job, reason='internal_error', signature='Invalid task_args JSON')
+        return
+
+    if not task_args:
+        logger.error("process_queued_job: no task_args for job=%s — cannot replay", scan_job_id)
+        _set_failed(job, reason='internal_error', signature='Missing task_args')
+        return
+
+    try:
+        if job.source == ScanJob.SOURCE_EMAIL:
+            # Re-dispatch the original email task with stored args
+            process_inbound_email.apply_async(
+                args=(
+                    task_args.get('user_id'),
+                    task_args.get('body'),
+                    task_args.get('sender'),
+                    task_args.get('message_id'),
+                    task_args.get('attachments'),
+                ),
+            )
+            logger.info("process_queued_job: re-dispatched email task for job=%s", scan_job_id)
+
+        elif job.source == ScanJob.SOURCE_UPLOAD:
+            # Re-dispatch the original upload task with stored args
+            process_uploaded_file.apply_async(
+                args=(
+                    task_args.get('user_id'),
+                    task_args.get('file_b64'),
+                    task_args.get('media_type'),
+                    task_args.get('context'),
+                    task_args.get('filename'),
+                ),
+            )
+            logger.info("process_queued_job: re-dispatched upload task for job=%s", scan_job_id)
+
+        else:
+            logger.error("process_queued_job: unknown source=%r for job=%s", job.source, scan_job_id)
+            _set_failed(job, reason='internal_error', signature=f'Unknown job source: {job.source}')
+
+    except Exception as exc:
+        logger.error("process_queued_job: failed to dispatch task for job=%s: %s", scan_job_id, exc, exc_info=True)
+        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
 
 
 @shared_task
