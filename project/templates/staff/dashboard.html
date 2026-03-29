@@ -405,7 +405,7 @@ function bulkRetry() {
   const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   fetch('/staff/bulk-retry/', {
     method: 'POST',
-    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     body: JSON.stringify({ pks }),
   })
   .then(r => r.json())
@@ -430,7 +430,7 @@ function bulkDelete() {
   const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   fetch('/staff/bulk-delete/', {
     method: 'POST',
-    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+    headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     body: JSON.stringify({ pks }),
   })
   .then(r => r.json())
