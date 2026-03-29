@@ -527,10 +527,11 @@ def _retry_failed_jobs(reason: str) -> int:
 
 def _reenqueue_jobs(jobs: list) -> int:
     """
-    Reset a list of ScanJob instances to 'queued' and dispatch a task to process them.
+    Reset a list of ScanJob instances to 'queued' and process them immediately.
     Returns the number successfully re-enqueued.
 
     Uses stored task_args to replay the original task.
+    Processes synchronously to avoid depending on Celery workers.
     """
     from emails.models import ScanJob
 
@@ -545,10 +546,10 @@ def _reenqueue_jobs(jobs: list) -> int:
                 updated_at=timezone.now(),
             )
             
-            # Dispatch task to process this queued job with stored args
-            process_queued_job.delay(job.pk)
+            # Process this queued job immediately (synchronous) to avoid depending on workers
+            process_queued_job(job.pk)
             count += 1
-            logger.info("_reenqueue_jobs: reset job=%s to queued and dispatched process task", job.pk)
+            logger.info("_reenqueue_jobs: reset job=%s to queued and processed immediately", job.pk)
         except Exception as exc:
             logger.error("_reenqueue_jobs: failed for job=%s: %s", job.pk, exc)
 
