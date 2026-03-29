@@ -66,9 +66,8 @@ def inbound(request):
             status=ScanJob.STATUS_QUEUED,
         )
         process_inbound_email.delay(job.id, user.id, body, sender, source_email_id, attachments or None)
-        logger.info("Email queued for processing: user=%s sender=%s message_id=%s job_id=%s", user.id, sender, source_email_id, job.id)
     except Exception as exc:
-        logger.error("Failed to queue email task: user=%s sender=%s: %s", user.id, sender, exc, exc_info=True)
+        logger.error("emails.inbound: queue failed | user_id=%s sender=%s error=%s", user.id, sender, exc, exc_info=True)
         # Still return 200 to avoid Resend retries, but log for manual recovery
 
     return HttpResponse('OK', status=200)

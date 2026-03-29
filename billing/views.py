@@ -37,8 +37,8 @@ def checkout(request):
             cancel_url=request.build_absolute_uri('/billing/cancel/'),
         )
         return redirect(session.url)
-    except Exception:
-        logger.exception('checkout failed for user=%s', request.user.pk)
+    except Exception as exc:
+        logger.error('billing.checkout: failed | user_id=%s error=%s', request.user.pk, exc, exc_info=True)
         return HttpResponse('Checkout unavailable.', status=500)
 
 
@@ -79,7 +79,7 @@ def portal(request):
     # Has a subscription ID but customer ID looks wrong (edge case: data inconsistency)
     if not sub.stripe_customer_id or not sub.stripe_customer_id.startswith('cus_'):
         logger.error(
-            'User=%s has stripe_subscription_id=%s but invalid stripe_customer_id=%s',
+            'billing.portal: invalid customer_id | user_id=%s subscription_id=%s customer_id=%s',
             request.user.pk, sub.stripe_subscription_id, sub.stripe_customer_id,
         )
         messages.error(
@@ -126,8 +126,8 @@ def webhook(request):
             _sync_subscription(event['data']['object'])
         elif event['type'] == 'checkout.session.completed':
             _handle_checkout_completed(event['data']['object'])
-    except Exception:
-        logger.exception('webhook handler failed for event=%s', event['type'])
+    except Exception as exc:
+        logger.error('billing.webhook: handler failed | event=%s error=%s', event.get('type'), exc, exc_info=True)
         return HttpResponse(status=500)
 
     return HttpResponse(status=200)
@@ -170,14 +170,10 @@ def _handle_checkout_completed(session):
 
     try:
         stripe.Subscription.modify(subscription_id, discounts=sub_discounts)
-        logger.info(
-            '_handle_checkout_completed: applied discounts %s to subscription=%s',
-            sub_discounts, subscription_id,
-        )
-    except stripe.error.StripeError:
-        logger.exception(
-            '_handle_checkout_completed: failed to apply discounts to subscription=%s',
-            subscription_id,
+    except stripe.error.StripeError as exc:
+        logger.error(
+            'billing._handle_checkout_completed: failed | subscription_id=%s error=%s',
+            subscription_id, exc, exc_info=True,
         )
 
 

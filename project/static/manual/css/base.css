@@ -112,6 +112,11 @@ button, .btn {
   transform: translateY(-1px);
 }
 
+.btn--sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
 /* ── Inputs ── */
 input, textarea, select {
   font-family: 'DM Sans', sans-serif;
@@ -153,6 +158,28 @@ textarea {
 .messages .error   { background: #fdecea; color: var(--danger);  border-color: var(--danger); }
 .messages .success { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
 .messages .info    { background: #e8f4fd; color: #1a6fa0; border-color: #1a6fa0; }
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center;
+  padding: 4rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.empty-state__text {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.empty-state__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
 
 /* ── Confirm page ── */
 .confirm-page {

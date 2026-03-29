@@ -2,13 +2,9 @@
 import logging
 from celery import shared_task
 from django.utils import timezone
+from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
-
-try:
-    from emails.models import ScanJob
-except:
-    pass
 
 # ---------------------------------------------------------------------------
 # Internal helpers — job state transitions
@@ -24,7 +20,7 @@ def _create_job(user_id: int, source: str, from_address: str = '') -> 'ScanJob |
         from emails.models import ScanJob
 
         if source not in (ScanJob.SOURCE_EMAIL, ScanJob.SOURCE_UPLOAD):
-            logger.error("_create_job: invalid source=%r for user=%s", source, user_id)
+            logger.error("emails._create_job: invalid source | user_id=%s source=%s", user_id, source)
             return None
 
         return ScanJob.objects.create(
@@ -34,7 +30,7 @@ def _create_job(user_id: int, source: str, from_address: str = '') -> 'ScanJob |
             status=ScanJob.STATUS_QUEUED,
         )
     except Exception as exc:
-        logger.error("_create_job: failed for user=%s: %s", user_id, exc)
+        logger.error("emails._create_job: create failed | user_id=%s error=%s", user_id, exc)
         return None
 
 
@@ -49,7 +45,7 @@ def _set_processing(job: 'ScanJob | None') -> None:
             updated_at=timezone.now(),
         )
     except Exception as exc:
-        logger.warning("_set_processing: failed pk=%s: %s", job.pk, exc)
+        logger.error("emails._set_processing: update failed | job_id=%s error=%s", job.pk, exc)
 
 
 def _set_failed(job: 'ScanJob | None', reason: str = '', signature: str = '') -> None:
@@ -71,7 +67,7 @@ def _set_failed(job: 'ScanJob | None', reason: str = '', signature: str = '') ->
             updated_at=timezone.now(),
         )
     except Exception as exc:
-        logger.warning("_set_failed: failed pk=%s: %s", job.pk, exc)
+        logger.error("emails._set_failed: update failed | job_id=%s error=%s", job.pk, exc)
 
 
 def _set_done(job: 'ScanJob | None') -> None:
@@ -91,7 +87,7 @@ def _set_done(job: 'ScanJob | None') -> None:
             updated_at=timezone.now(),
         )
     except Exception as exc:
-        logger.warning("_set_done: failed pk=%s: %s", job.pk, exc)
+        logger.error("emails._set_done: update failed | job_id=%s error=%s", job.pk, exc)
 
 
 def _set_notes(job: 'ScanJob | None', notes: str) -> None:
@@ -102,7 +98,7 @@ def _set_notes(job: 'ScanJob | None', notes: str) -> None:
         from emails.models import ScanJob
         ScanJob.objects.filter(pk=job.pk).update(notes=notes[:255])
     except Exception as exc:
-        logger.warning("_set_notes: failed pk=%s: %s", job.pk, exc)
+        logger.error("emails._set_notes: update failed | job_id=%s error=%s", job.pk, exc)
 
 
 def _make_signature(exc: Exception) -> str:
@@ -139,7 +135,22 @@ def _log_attempt(job: 'ScanJob | None', status: str, failure_reason: str = '') -
             failure_reason=failure_reason[:30] if failure_reason else '',
         )
     except Exception as exc:
-        logger.warning("_log_attempt: failed job_id=%s: %s", job.pk, exc)
+        logger.error("emails._log_attempt: create failed | job_id=%s status=%s error=%s", job.pk, status, exc)
+
+
+def _get_user_or_fail(user_id: int, job: 'ScanJob | None') -> 'User | None':
+    """
+    Fetch User by pk. On DoesNotExist, marks job failed and returns None.
+    Caller must return immediately when None is returned.
+    """
+    from accounts.models import User
+    try:
+        return User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.error("emails._get_user_or_fail: user not found | user_id=%s job_id=%s", user_id, job.pk if job else "?")
+        _set_failed(job, reason=ScanJob.REASON_INTERNAL_ERROR, signature="User.DoesNotExist")
+        _log_attempt(job, "failed", failure_reason=ScanJob.REASON_INTERNAL_ERROR)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -163,13 +174,9 @@ def track_llm_usage(user_id: int, input_tokens: int, output_tokens: int) -> None
             monthly_input_tokens=F('monthly_input_tokens') + input_tokens,
             monthly_output_tokens=F('monthly_output_tokens') + output_tokens,
         )
-        logger.debug(
-            "track_llm_usage: user=%s +%s in +%s out",
-            user_id, input_tokens, output_tokens,
-        )
     except Exception as exc:
         # Non-fatal — never let tracking failure break the pipeline.
-        logger.warning("track_llm_usage: failed user=%s: %s", user_id, exc)
+        logger.error("emails.track_llm_usage: update failed | user_id=%s input_tokens=%s output_tokens=%s error=%s", user_id, input_tokens, output_tokens, exc)
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={'max_retries': 5, 'countdown': 60}, acks_late=True)
@@ -196,13 +203,11 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
     from emails.models import ScanJob
     import json
 
-    logger.info("TASK START job_id=%s user=%s message_id=%s body_len=%s", job_id, user_id, message_id, len(body) if body else 0)
-
     # Retrieve the job created by webhook
     try:
         job = ScanJob.objects.get(pk=job_id)
     except ScanJob.DoesNotExist:
-        logger.error("process_inbound_email: Job pk=%s not found — aborting", job_id)
+        logger.error("emails.process_inbound_email: job not found | job_id=%s user_id=%s", job_id, user_id)
         return
 
     # Store task args for potential manual replay
@@ -217,20 +222,15 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
         job.task_args = json.dumps(task_args)
         job.save(update_fields=['task_args'])
     except Exception as exc:
-        logger.warning("process_inbound_email: failed to store task_args: %s", exc)
+        logger.error("emails.process_inbound_email: save task_args failed | job_id=%s user_id=%s error=%s", job_id, user_id, exc)
 
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.warning("process_inbound_email: User pk=%s not found — aborting", user_id)
-        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
-        _log_attempt(job, 'failed', failure_reason='internal_error')
+    user = _get_user_or_fail(user_id, job)
+    if user is None:
         return
 
     # Duplicate guard: if this message_id already produced active events, skip.
     # This guard relies on source_email_id being preserved through reprocess — see pipeline.py.
     if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
-        logger.info("process_inbound_email: duplicate message_id=%s for user=%s — skipping", message_id, user_id)
         _set_notes(job, 'Email already processed — skipped.')
         _set_done(job)
         _log_attempt(job, 'done')
@@ -248,10 +248,9 @@ def process_inbound_email(self, job_id: int, user_id: int, body: str, sender: st
             _set_notes(job, notes)
         elif not created:
             _set_notes(job, 'No events found in this email.')
-        logger.info("process_inbound_email: done user=%s events=%s", user_id, len(created))
         _log_attempt(job, 'done')
     except Exception as exc:
-        logger.error("process_inbound_email: failed user=%s: %s", user_id, exc, exc_info=True)
+        logger.error("emails.process_inbound_email: process_email failed | job_id=%s user_id=%s error=%s", job_id, user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         _log_attempt(job, 'failed', failure_reason='internal_error')
         return
@@ -278,17 +277,12 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
     from llm.pipeline import process_email
     import json
 
-    logger.info(
-        "UPLOAD TASK START job_id=%s user=%s media_type=%s filename=%r context_len=%s",
-        job_id, user_id, media_type, filename, len(context) if context else 0,
-    )
-
     # Retrieve the job created by dashboard view
     from emails.models import ScanJob
     try:
         job = ScanJob.objects.get(pk=job_id)
     except ScanJob.DoesNotExist:
-        logger.error("process_uploaded_file: Job pk=%s not found — aborting", job_id)
+        logger.error("emails.process_uploaded_file: job not found | job_id=%s user_id=%s", job_id, user_id)
         return
 
     # Store task args for potential replay on retry
@@ -303,14 +297,10 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
         job.task_args = json.dumps(task_args)
         job.save(update_fields=['task_args'])
     except Exception as exc:
-        logger.warning("process_uploaded_file: failed to store task_args: %s", exc)
+        logger.error("emails.process_uploaded_file: save task_args failed | job_id=%s user_id=%s error=%s", job_id, user_id, exc)
 
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.warning("process_uploaded_file: User pk=%s not found — aborting", user_id)
-        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
-        _log_attempt(job, 'failed', failure_reason='internal_error')
+    user = _get_user_or_fail(user_id, job)
+    if user is None:
         return
 
     attachments = [[file_b64, media_type, filename]]
@@ -326,10 +316,9 @@ def process_uploaded_file(self, job_id: int, user_id: int, file_b64: str, media_
             _set_notes(job, notes)
         elif not created:
             _set_notes(job, 'No events found in this file.')
-        logger.info("UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
         _log_attempt(job, 'done')
     except Exception as exc:
-        logger.error("process_uploaded_file: failed user=%s: %s", user_id, exc, exc_info=True)
+        logger.error("emails.process_uploaded_file: process_email failed | job_id=%s user_id=%s error=%s", job_id, user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         _log_attempt(job, 'failed', failure_reason='internal_error')
         return
@@ -361,27 +350,18 @@ def reprocess_events(self, user_id: int, event_ids: list, prompt: str, job_pk: i
     from emails.models import ScanJob
     from llm.pipeline import process_text
 
-    logger.info("REPROCESS TASK START user=%s event_ids=%s job_pk=%s", user_id, event_ids, job_pk)
-
     if job_pk is None:
-        logger.error(
-            "reprocess_events: job_pk not provided for user=%s — aborting. "
-            "The caller must pass the original job pk.",
-            user_id,
-        )
+        logger.error("emails.reprocess_events: job_pk missing | user_id=%s", user_id)
         return
 
     try:
         job = ScanJob.objects.get(pk=job_pk, user_id=user_id)
     except ScanJob.DoesNotExist:
-        logger.error("reprocess_events: ScanJob pk=%s not found for user=%s — aborting", job_pk, user_id)
+        logger.error("emails.reprocess_events: job not found | job_pk=%s user_id=%s", job_pk, user_id)
         return
 
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.warning("reprocess_events: User pk=%s not found — aborting", user_id)
-        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
+    user = _get_user_or_fail(user_id, job)
+    if user is None:
         return
 
     # Preserve event data AND source_email_id BEFORE any deletion.
@@ -396,31 +376,12 @@ def reprocess_events(self, user_id: int, event_ids: list, prompt: str, job_pk: i
     )
 
     if not prompt.strip():
-        logger.info("reprocess_events: empty prompt — marking job=%s done", job_pk)
         events_qs.delete()
         _set_done(job)
         return
 
     # Serialize event data into text the LLM can read
-    blocks = []
-    for e in events_list:
-        lines = [
-            f"Title: {e.title}",
-            f"Start: {e.start.isoformat()}",
-            f"End: {e.end.isoformat()}",
-        ]
-        if e.description:
-            lines.append(f"Notes: {e.description}")
-        if e.recurrence_freq:
-            lines.append(f"Recurrence: {e.recurrence_freq}")
-            if e.recurrence_until:
-                lines.append(f"Recurrence until: {e.recurrence_until}")
-        if e.category:
-            lines.append(f"Category: {e.category.name}")
-        if e.pending_concern:
-            lines.append(f"Previous concern: {e.pending_concern}")
-        blocks.append("\n".join(lines))
-
+    blocks = [e.serialize_as_text() for e in events_list]
     full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
 
     _set_processing(job)
@@ -433,11 +394,9 @@ def reprocess_events(self, user_id: int, event_ids: list, prompt: str, job_pk: i
         )
         # LLM succeeded — now safe to delete the old pending events.
         events_qs.delete()
-        logger.info("reprocess_events: deleted %s pending event(s), created %s new event(s) for user=%s job=%s",
-                    len(events_list), len(created), user_id, job_pk)
         # Terminal status (done / needs_review) is set by _save_events inside process_text.
     except Exception as exc:
-        logger.error("reprocess_events: failed user=%s job=%s: %s", user_id, job_pk, exc, exc_info=True)
+        logger.error("emails.reprocess_events: process_text failed | job_pk=%s user_id=%s error=%s", job_pk, user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         raise
 
@@ -463,21 +422,15 @@ def process_text_as_upload(self, job_id: int, user_id: int, text: str):
     from llm.pipeline import process_text
     from emails.models import ScanJob
 
-    logger.info("MANUAL UPLOAD TASK START job_id=%s user=%s text_len=%s", job_id, user_id, len(text))
-
     # Retrieve the job created by dashboard view
     try:
         job = ScanJob.objects.get(pk=job_id)
     except ScanJob.DoesNotExist:
-        logger.error("process_text_as_upload: Job pk=%s not found — aborting", job_id)
+        logger.error("emails.process_text_as_upload: job not found | job_id=%s user_id=%s", job_id, user_id)
         return
 
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        logger.warning("process_text_as_upload: User pk=%s not found — aborting", user_id)
-        _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
-        _log_attempt(job, 'failed', failure_reason='internal_error')
+    user = _get_user_or_fail(user_id, job)
+    if user is None:
         return
 
     _set_processing(job)
@@ -487,10 +440,9 @@ def process_text_as_upload(self, job_id: int, user_id: int, text: str):
             _set_notes(job, notes)
         elif not created:
             _set_notes(job, 'No events found.')
-        logger.info("MANUAL UPLOAD TASK DONE user=%s events=%s", user_id, len(created))
         _log_attempt(job, 'done')
     except Exception as exc:
-        logger.error("process_text_as_upload: failed user=%s: %s", user_id, exc, exc_info=True)
+        logger.error("emails.process_text_as_upload: process_text failed | job_id=%s user_id=%s error=%s", job_id, user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
         _log_attempt(job, 'failed', failure_reason='internal_error')
         return
@@ -540,7 +492,6 @@ def reset_monthly_scans():
         monthly_output_tokens=0,
         scan_reset_date=today,
     )
-    logger.info("reset_monthly_scans: reset %s user(s)", updated)
 
     # Retry scan_limit jobs now that quotas have reset.
     _retry_failed_jobs(reason=ScanJob.REASON_SCAN_LIMIT)
@@ -564,8 +515,7 @@ def retry_jobs_after_plan_upgrade(user_id: int):
         status=ScanJob.STATUS_FAILED,
         failure_reason__in=[ScanJob.REASON_SCAN_LIMIT, ScanJob.REASON_PRO_REQUIRED],
     )
-    count = _reenqueue_jobs(list(jobs))
-    logger.info("retry_jobs_after_plan_upgrade: re-enqueued %s job(s) for user=%s", count, user_id)
+    _reenqueue_jobs(list(jobs))
 
 
 @shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
@@ -589,8 +539,7 @@ def recover_stale_jobs():
     if not stale_jobs:
         return
 
-    count = _reenqueue_jobs(stale_jobs)
-    logger.warning("recover_stale_jobs: recovered %s stale job(s)", count)
+    _reenqueue_jobs(stale_jobs)
 
 
 def _retry_failed_jobs(reason: str) -> int:
@@ -627,9 +576,8 @@ def _reenqueue_jobs(jobs: list) -> int:
             # Dispatch task to process this queued job with stored args
             process_queued_job.delay(job.pk)
             count += 1
-            logger.info("_reenqueue_jobs: reset job=%s to queued and dispatched process task", job.pk)
         except Exception as exc:
-            logger.error("_reenqueue_jobs: failed for job=%s: %s", job.pk, exc)
+            logger.error("emails._reenqueue_jobs: update failed | job_id=%s error=%s", job.pk, exc)
 
     return count
 
@@ -657,21 +605,19 @@ def process_queued_job(self, scan_job_id: int):
     try:
         job = ScanJob.objects.get(pk=scan_job_id)
     except ScanJob.DoesNotExist:
-        logger.warning("process_queued_job: job=%s not found", scan_job_id)
+        logger.error("emails.process_queued_job: job not found | job_id=%s", scan_job_id)
         return
-
-    logger.info("process_queued_job: processing job=%s source=%s user=%s", scan_job_id, job.source, job.user_id)
 
     # Restore and validate task args
     try:
         task_args = json.loads(job.task_args) if job.task_args else {}
     except (json.JSONDecodeError, ValueError) as exc:
-        logger.error("process_queued_job: failed to decode task_args for job=%s: %s", scan_job_id, exc)
+        logger.error("emails.process_queued_job: parse task_args failed | job_id=%s error=%s", scan_job_id, exc)
         _set_failed(job, reason='internal_error', signature='Invalid task_args JSON')
         return
 
     if not task_args:
-        logger.error("process_queued_job: no task_args for job=%s — cannot replay", scan_job_id)
+        logger.error("emails.process_queued_job: task_args empty | job_id=%s", scan_job_id)
         _set_failed(job, reason='internal_error', signature='Missing task_args')
         return
 
@@ -679,7 +625,7 @@ def process_queued_job(self, scan_job_id: int):
     try:
         user = User.objects.get(pk=task_args.get('user_id'))
     except User.DoesNotExist:
-        logger.warning("process_queued_job: User pk=%s not found", task_args.get('user_id'))
+        logger.error("emails.process_queued_job: user not found | job_id=%s user_id=%s", scan_job_id, task_args.get('user_id'))
         _set_failed(job, reason='internal_error', signature='User.DoesNotExist')
         return
 
@@ -696,7 +642,6 @@ def process_queued_job(self, scan_job_id: int):
 
             # Duplicate guard: if this message_id already produced active events, skip.
             if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
-                logger.info("process_queued_job: duplicate message_id=%s for user=%s — skipping", message_id, user.pk)
                 _set_notes(job, 'Email already processed — skipped.')
                 _set_done(job)
                 return
@@ -711,7 +656,6 @@ def process_queued_job(self, scan_job_id: int):
                 _set_notes(job, notes)
             elif not created:
                 _set_notes(job, 'No events found in this email.')
-            logger.info("process_queued_job: email done job=%s user=%s events=%s", scan_job_id, user.pk, len(created))
 
         elif job.source == ScanJob.SOURCE_UPLOAD:
             # Call pipeline directly with stored upload args, reusing the EXISTING job
@@ -731,16 +675,16 @@ def process_queued_job(self, scan_job_id: int):
                 _set_notes(job, notes)
             elif not created:
                 _set_notes(job, 'No events found in this file.')
-            logger.info("process_queued_job: upload done job=%s user=%s events=%s", scan_job_id, user.pk, len(created))
 
         else:
-            logger.error("process_queued_job: unknown source=%r for job=%s", job.source, scan_job_id)
+            logger.error("emails.process_queued_job: unknown source | job_id=%s source=%s", scan_job_id, job.source)
             _set_failed(job, reason='internal_error', signature=f'Unknown job source: {job.source}')
 
     except Exception as exc:
-        logger.error("process_queued_job: failed to process job=%s: %s", scan_job_id, exc, exc_info=True)
+        logger.error("emails.process_queued_job: process failed | job_id=%s user_id=%s error=%s", scan_job_id, job.user_id, exc, exc_info=True)
         _set_failed(job, reason='internal_error', signature=_make_signature(exc))
-        _set_failed(job, reason='internal_error', signature=_make_signature(exc))
+        _log_attempt(job, 'failed', failure_reason='internal_error')
+        raise
 
 
 @shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 3, 'countdown': 300})
@@ -781,20 +725,14 @@ def cleanup_events():
             if user.delete_from_gcal_on_cleanup and event.google_event_id:
                 delete_from_gcal(user, event.google_event_id)
             event.delete()
-            logger.info(
-                "cleanup_events: deleted event_id=%s for user=%s (gcal_removed=%s)",
-                event.pk, user.pk, user.delete_from_gcal_on_cleanup,
-            )
 
     # 3. Old completed jobs — done only, never failed.
     # Failed jobs are kept until the user or admin acts on them.
     job_cutoff = timezone.now() - timezone.timedelta(days=1)
-    deleted_jobs, _ = ScanJob.objects.filter(
+    ScanJob.objects.filter(
         status=ScanJob.STATUS_DONE,
         updated_at__lt=job_cutoff,
     ).delete()
-    if deleted_jobs:
-        logger.info("cleanup_events: deleted %s old done ScanJob(s)", deleted_jobs)
 
 
 @shared_task(autoretry_for=(Exception,), retry_kwargs={'max_retries': 2, 'countdown': 300})
@@ -814,7 +752,4 @@ def cleanup_job_attempt_logs():
     from emails.models import JobAttemptLog
     
     cutoff = timezone.now() - timezone.timedelta(days=30)
-    deleted, _ = JobAttemptLog.objects.filter(created_at__lt=cutoff).delete()
-    
-    if deleted:
-        logger.info("cleanup_job_attempt_logs: deleted %s old attempt log(s)", deleted)
+    JobAttemptLog.objects.filter(created_at__lt=cutoff).delete()

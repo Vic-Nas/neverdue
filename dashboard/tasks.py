@@ -20,13 +20,12 @@ def patch_category_colors(user_id: int, category_id: int) -> None:
         user = User.objects.get(pk=user_id)
         category = Category.objects.get(pk=category_id)
     except (User.DoesNotExist, Category.DoesNotExist) as exc:
-        logger.warning("patch_category_colors: lookup failed user=%s category=%s: %s",
-                       user_id, category_id, exc)
+        logger.error("dashboard.patch_category_colors: lookup failed | user_id=%s category_id=%s error=%s",
+                     user_id, category_id, exc)
         return
 
     color_id = category.gcal_color_id
     if not color_id:
-        logger.debug("patch_category_colors: no color_id for category=%s", category_id)
         return
 
     # Find events to patch: active, no local color, has google_event_id
@@ -39,6 +38,3 @@ def patch_category_colors(user_id: int, category_id: int) -> None:
     for event in events:
         if patch_event_color(user, event.google_event_id, color_id):
             count += 1
-
-    logger.info("patch_category_colors: patched %s event(s) for category=%s user=%s",
-                count, category_id, user_id)

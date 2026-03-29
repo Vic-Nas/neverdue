@@ -1,11 +1,14 @@
 # llm/extractor.py
 import json
+import logging
 import re
 import zoneinfo
 from datetime import datetime, timezone as dt_timezone
 import anthropic
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 client = anthropic.Anthropic(api_key=settings.LLM_API_KEY)
 
@@ -167,6 +170,8 @@ def extract_events(text: str, language: str = 'English', user_timezone: str = 'U
     )
 
     events = _parse_and_validate(message, tz)
+    if settings.DEBUG:
+        logger.debug("llm.extract_events: tokens | user_tz=%s text_len=%s input=%s output=%s", user_timezone, len(text), message.usage.input_tokens, message.usage.output_tokens)
     return events, message.usage.input_tokens, message.usage.output_tokens
 
 
@@ -216,6 +221,8 @@ def extract_events_from_image(
     )
 
     events = _parse_and_validate(message, tz)
+    if settings.DEBUG:
+        logger.debug("llm.extract_events_from_image: tokens | media_type=%s input=%s output=%s", media_type, message.usage.input_tokens, message.usage.output_tokens)
     return events, message.usage.input_tokens, message.usage.output_tokens
 
 
@@ -275,8 +282,13 @@ def extract_events_from_email(
         else:
             non_visual_attachments.append((file_bytes, media_type, filename))
 
+    if settings.DEBUG:
+        logger.debug("llm.extract_events_from_email: step1 | attachments=%d input=%s output=%s", len(attachment_events), total_input_tokens, total_output_tokens)
+
     # If no body and no non-visual attachments, skip reconciliation
     if not body and not non_visual_attachments:
+        if settings.DEBUG:
+            logger.debug("llm.extract_events_from_email: early exit (no body/attachments) | events=%d", len(attachment_events))
         return attachment_events, total_input_tokens, total_output_tokens
 
     # ── Step 2: reconcile with body and non-visual attachments ──
@@ -326,9 +338,13 @@ def extract_events_from_email(
         events = _parse_and_validate(message, tz)
         total_input_tokens += message.usage.input_tokens
         total_output_tokens += message.usage.output_tokens
+        if settings.DEBUG:
+            logger.debug("llm.extract_events_from_email: step2 | events=%d input=%s output=%s", len(events), message.usage.input_tokens, message.usage.output_tokens)
         return events, total_input_tokens, total_output_tokens
     except ValueError:
         # Parsing/validation error in reconciliation — return what we have from attachments
+        if settings.DEBUG:
+            logger.debug("llm.extract_events_from_email: step2 error | fallback_events=%d", len(attachment_events))
         return attachment_events, total_input_tokens, total_output_tokens
 
 
@@ -366,6 +382,8 @@ def _validate_event(event: dict, tz) -> dict | None:
     required = ('title', 'start', 'end')
     for field in required:
         if not event.get(field):
+            if settings.DEBUG:
+                logger.debug("llm._validate_event: dropped | missing=%s", field)
             return None
 
     def local_to_utc(dt_str: str) -> str:
@@ -413,7 +431,7 @@ def _validate_event(event: dict, tz) -> dict | None:
         except ValueError:
             expires_at = ''
 
-    return {
+    validated = {
         'title': str(event.get('title', '')).strip()[:255],
         'description': str(event.get('description', '')).strip(),
         'start': start,
@@ -425,3 +443,6 @@ def _validate_event(event: dict, tz) -> dict | None:
         'concern': concern,
         'expires_at': expires_at,
     }
+    if settings.DEBUG:
+        logger.debug("llm._validate_event: ok | title=%r status=%s", validated.get('title'), status)
+    return validated

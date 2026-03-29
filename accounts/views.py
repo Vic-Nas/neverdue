@@ -1,6 +1,5 @@
 # accounts/views.py
-import secrets
-import requests
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -15,7 +14,13 @@ from django.views.decorators.http import require_POST
 import json
 import zoneinfo
 
+from google_auth_oauthlib.flow import Flow
+import google.auth.transport.requests
+import google.oauth2.id_token
+
 from .models import User
+
+logger = logging.getLogger(__name__)
 
 LANGUAGES = [
     'English', 'Français', 'Español', 'Deutsch',
@@ -54,93 +59,85 @@ def logout(request):
     return redirect('accounts:login')
 
 
-def google_login(request):
-    state = secrets.token_urlsafe(32)
-    request.session['oauth_state'] = state
+SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/calendar",
+]
 
-    params = {
-        'client_id': settings.GOOGLE_CLIENT_ID,
-        'redirect_uri': request.build_absolute_uri(reverse('accounts:google_callback')),
-        'response_type': 'code',
-        'scope': ' '.join([
-            'openid',
-            'email',
-            'profile',
-            'https://www.googleapis.com/auth/calendar',
-        ]),
-        'access_type': 'offline',
-        'prompt': 'consent',
-        'state': state,
-    }
-    auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + '&'.join(
-        f'{k}={v}' for k, v in params.items()
+
+def google_login(request):
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=SCOPES,
+        redirect_uri=request.build_absolute_uri(reverse("accounts:google_callback")),
     )
-    return redirect(auth_url)
+    flow.oauth2session.access_type = "offline"
+    flow.oauth2session.prompt = "consent"
+    authorization_url, state = flow.authorization_url()
+    request.session["oauth_state"] = state
+    return redirect(authorization_url)
 
 
 def google_callback(request):
-    state = request.GET.get('state')
-    if not state or state != request.session.pop('oauth_state', None):
-        messages.error(request, 'Invalid OAuth state. Please try again.')
-        return redirect('accounts:login')
+    state = request.GET.get("state")
+    if not state or state != request.session.pop("oauth_state", None):
+        messages.error(request, "Invalid OAuth state. Please try again.")
+        return redirect("accounts:login")
 
-    code = request.GET.get('code')
+    code = request.GET.get("code")
     if not code:
-        messages.error(request, 'Google login failed. Please try again.')
-        return redirect('accounts:login')
+        messages.error(request, "Google login failed. Please try again.")
+        return redirect("accounts:login")
 
-    token_response = requests.post('https://oauth2.googleapis.com/token', data={
-        'code': code,
-        'client_id': settings.GOOGLE_CLIENT_ID,
-        'client_secret': settings.GOOGLE_CLIENT_SECRET,
-        'redirect_uri': request.build_absolute_uri(reverse('accounts:google_callback')),
-        'grant_type': 'authorization_code',
-    })
-
-    if token_response.status_code != 200:
-        messages.error(request, 'Failed to authenticate with Google.')
-        return redirect('accounts:login')
-
-    token_data = token_response.json()
-    access_token = token_data.get('access_token')
-    refresh_token = token_data.get('refresh_token')
-
-    userinfo_response = requests.get(
-        'https://www.googleapis.com/oauth2/v3/userinfo',
-        headers={'Authorization': f'Bearer {access_token}'}
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=SCOPES,
+        redirect_uri=request.build_absolute_uri(reverse("accounts:google_callback")),
+        state=state,
     )
+    flow.fetch_token(code=code)
+    creds = flow.credentials
 
-    if userinfo_response.status_code != 200:
-        messages.error(request, 'Failed to fetch your Google profile.')
-        return redirect('accounts:login')
-
-    userinfo = userinfo_response.json()
-    google_id = userinfo.get('sub')
-    email = userinfo.get('email')
+    id_info = google.oauth2.id_token.verify_oauth2_token(
+        creds.id_token,
+        google.auth.transport.requests.Request(),
+        settings.GOOGLE_CLIENT_ID,
+    )
+    google_id = id_info["sub"]
+    email = id_info["email"]
 
     user, created = User.objects.get_or_create(
         google_id=google_id,
-        defaults={
-            'email': email,
-            'username': email.split('@')[0],
-        }
+        defaults={"email": email, "username": email.split("@")[0]},
     )
+    user.google_calendar_token = creds.token
+    if creds.refresh_token:
+        user.google_refresh_token = creds.refresh_token
+    user.token_expiry = timezone.now() + timedelta(seconds=3600)
+    user.save(update_fields=["google_calendar_token", "google_refresh_token", "token_expiry"])
 
-    user.google_calendar_token = access_token
-    if refresh_token:
-        user.google_refresh_token = refresh_token
-    user.token_expiry = timezone.now() + timedelta(seconds=token_data.get('expires_in', 3600))
-    user.save(update_fields=['google_calendar_token', 'google_refresh_token', 'token_expiry'])
-
-    auth_login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
     from dashboard.gcal import register_gcal_watch
     register_gcal_watch(user)
 
-    if created:
-        return redirect('accounts:username_pick')
-
-    return redirect('dashboard:index')
+    return redirect("accounts:username_pick") if created else redirect("dashboard:index")
 
 
 def username_pick(request):
@@ -251,52 +248,40 @@ def preferences(request):
 VALID_TIMEZONES = zoneinfo.available_timezones()
 
 
+def _parse_tz_request(request):
+    """Parse timezone string from JSON body. Returns (tz_str, error_response_or_None)."""
+    try:
+        data = json.loads(request.body)
+        tz = data.get("timezone", "").strip()
+    except (json.JSONDecodeError, AttributeError):
+        return None, JsonResponse({"ok": False, "error": "bad request"}, status=400)
+    if tz not in VALID_TIMEZONES:
+        return None, JsonResponse({"ok": False, "error": "unknown timezone"}, status=400)
+    return tz, None
+
+
 @login_required
 @require_POST
 def set_timezone_auto(request):
-    """
-    Called once by browser JS on first visit if timezone has never been set.
-    Only updates if timezone_auto_detected is False AND timezone is still 'UTC'
-    (meaning the user has never manually saved a preference).
-    Silently ignored if user already has a real timezone set.
-    """
-    try:
-        data = json.loads(request.body)
-        tz = data.get('timezone', '').strip()
-    except (json.JSONDecodeError, AttributeError):
-        return JsonResponse({'ok': False, 'error': 'bad request'}, status=400)
-
-    if tz not in VALID_TIMEZONES:
-        return JsonResponse({'ok': False, 'error': 'unknown timezone'}, status=400)
-
+    tz, err = _parse_tz_request(request)
+    if err:
+        return err
     user = request.user
-    if user.timezone == 'UTC' and not user.timezone_auto_detected:
+    if user.timezone == "UTC" and not user.timezone_auto_detected:
         user.timezone = tz
         user.timezone_auto_detected = True
-        user.save(update_fields=['timezone', 'timezone_auto_detected'])
-
-    return JsonResponse({'ok': True, 'timezone': user.timezone})
+        user.save(update_fields=["timezone", "timezone_auto_detected"])
+    return JsonResponse({"ok": True, "timezone": user.timezone})
 
 
 @login_required
 @require_POST
 def set_timezone_manual(request):
-    """
-    Called from preferences form when user explicitly picks a timezone.
-    Sets timezone_auto_detected = False so auto-detection never overwrites it again.
-    """
-    try:
-        data = json.loads(request.body)
-        tz = data.get('timezone', '').strip()
-    except (json.JSONDecodeError, AttributeError):
-        return JsonResponse({'ok': False, 'error': 'bad request'}, status=400)
-
-    if tz not in VALID_TIMEZONES:
-        return JsonResponse({'ok': False, 'error': 'unknown timezone'}, status=400)
-
+    tz, err = _parse_tz_request(request)
+    if err:
+        return err
     user = request.user
     user.timezone = tz
     user.timezone_auto_detected = False
-    user.save(update_fields=['timezone', 'timezone_auto_detected'])
-
-    return JsonResponse({'ok': True, 'timezone': user.timezone})
+    user.save(update_fields=["timezone", "timezone_auto_detected"])
+    return JsonResponse({"ok": True, "timezone": user.timezone})

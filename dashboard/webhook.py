@@ -32,7 +32,7 @@ def gcal_webhook(request):
     try:
         user = User.objects.get(gcal_channel_id=channel_id)
     except User.DoesNotExist:
-        logger.warning("gcal_webhook: unknown channel_id=%s", channel_id)
+        logger.error("dashboard.gcal_webhook: channel not found | channel_id=%s", channel_id)
         return HttpResponse(status=200)
 
     _sync_changed_events(user)
@@ -59,7 +59,7 @@ def _sync_changed_events(user):
     try:
         token = get_valid_token(user)
     except Exception as exc:
-        logger.warning("_sync_changed_events: token failed user=%s: %s", user.pk, exc)
+        logger.error("dashboard._sync_changed_events: token failed | user_id=%s error=%s", user.pk, exc)
         return
 
     # Look back 5 minutes — webhooks arrive within seconds, this is generous
@@ -77,8 +77,8 @@ def _sync_changed_events(user):
         timeout=10,
     )
     if response.status_code != 200:
-        logger.warning("_sync_changed_events: fetch failed status=%s user=%s",
-                       response.status_code, user.pk)
+        logger.error("dashboard._sync_changed_events: api error | user_id=%s status=%s",
+                     user.pk, response.status_code)
         return
 
     items = response.json().get('items', [])
@@ -104,5 +104,3 @@ def _sync_changed_events(user):
 
         if changed:
             event.save(update_fields=['color', 'gcal_link'])
-            logger.info("gcal_webhook: synced event=%s color=%s user=%s",
-                        event.pk, new_color, user.pk)

@@ -96,4 +96,46 @@
 
   window.neverdue = window.neverdue || {};
   window.neverdue.startQueuePolling = startPolling;
+
+  window.neverdue.submitWithStatus = function (opts) {
+    // opts: { btn, statusEl, url, body, csrf, originalText, onSuccess }
+    opts.btn.disabled = true;
+    opts.btn.textContent = 'Queuing\u2026';
+    if (opts.statusEl) opts.statusEl.textContent = '';
+
+    fetch(opts.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': opts.csrf },
+      body: JSON.stringify(opts.body || {}),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          if (opts.statusEl) {
+            opts.statusEl.textContent = opts.successText || 'Queued.';
+            opts.statusEl.style.color = 'var(--color-success, #16a34a)';
+          }
+          opts.onSuccess(data);
+        } else {
+          if (opts.statusEl) {
+            opts.statusEl.textContent = 'Error: ' + (data.error || 'unknown');
+            opts.statusEl.style.color = '#ef4444';
+          } else {
+            alert('Error: ' + data.error);
+          }
+          opts.btn.disabled = false;
+          opts.btn.textContent = opts.originalText || 'Submit';
+        }
+      })
+      .catch(function () {
+        if (opts.statusEl) {
+          opts.statusEl.textContent = 'Network error.';
+          opts.statusEl.style.color = '#ef4444';
+        } else {
+          alert('Network error. Please try again.');
+        }
+        opts.btn.disabled = false;
+        opts.btn.textContent = opts.originalText || 'Submit';
+      });
+  };
 })();

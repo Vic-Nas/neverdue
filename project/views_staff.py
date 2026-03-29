@@ -43,6 +43,15 @@ def _date_range(days=30):
     return [(today - datetime.timedelta(days=i)) for i in range(days - 1, -1, -1)]
 
 
+def _parse_pks(request) -> list:
+    """Parse a list of job PKs from either JSON body or form POST."""
+    if request.content_type == "application/json":
+        import json as _json
+        data = _json.loads(request.body)
+        return data.get("pks", [])
+    return request.POST.getlist("pks")
+
+
 @staff_required
 def staff_dashboard(request):
     now   = timezone.now()
@@ -231,12 +240,7 @@ def staff_delete_single(request, pk):
 @staff_required
 @require_POST
 def staff_bulk_retry(request):
-    if request.content_type == 'application/json':
-        import json
-        data = json.loads(request.body)
-        pks = data.get('pks', [])
-    else:
-        pks = request.POST.getlist('pks')
+    pks = _parse_pks(request)
     
     jobs = list(ScanJob.objects.filter(pk__in=pks, status=ScanJob.STATUS_FAILED))
     count = _reenqueue_jobs(jobs)
@@ -250,12 +254,7 @@ def staff_bulk_retry(request):
 @staff_required
 @require_POST
 def staff_bulk_delete(request):
-    if request.content_type == 'application/json':
-        import json
-        data = json.loads(request.body)
-        pks = data.get('pks', [])
-    else:
-        pks = request.POST.getlist('pks')
+    pks = _parse_pks(request)
     
     count, _ = ScanJob.objects.filter(pk__in=pks).delete()
     
