@@ -1,5 +1,6 @@
 # accounts/utils.py
 import logging
+import requests as http_requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from django.conf import settings
@@ -47,3 +48,35 @@ def get_valid_token(user) -> str:
             logger.debug("accounts.get_valid_token: refreshed | user=%s", user.pk)
 
     return user.google_calendar_token
+
+def revoke_google_token(user) -> None:
+    """
+    Revoke the user's Google OAuth token via Google's revocation endpoint.
+    Clears stored tokens from the user record regardless of whether the
+    revocation call succeeds (to avoid leaving stale tokens on re-auth failure).
+    Should be called before logging the user out when revoke_google_on_logout is True.
+    """
+    token = user.google_calendar_token or user.google_refresh_token
+    if token:
+        try:
+            resp = http_requests.post(
+                "https://oauth2.googleapis.com/revoke",
+                params={"token": token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                logger.info("accounts.revoke_google_token: revoked | user=%s", user.pk)
+            else:
+                logger.warning(
+                    "accounts.revoke_google_token: unexpected status %s | user=%s",
+                    resp.status_code, user.pk,
+                )
+        except Exception as exc:
+            logger.error("accounts.revoke_google_token: request failed | user=%s error=%s", user.pk, exc)
+
+    # Clear tokens locally regardless of API outcome
+    user.google_calendar_token = None
+    user.google_refresh_token = None
+    user.token_expiry = None
+    user.save(update_fields=["google_calendar_token", "google_refresh_token", "token_expiry"])
