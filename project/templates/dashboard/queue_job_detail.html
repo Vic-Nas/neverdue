@@ -95,13 +95,13 @@
       <h1 class="page__title">Job #{{ job.pk }}</h1>
       <div class="job-detail__meta">
         <span>Source: <strong>{{ job.get_source_display }}</strong></span>
-        {% if job.from_address %}<span>From: <strong>{{ job.from_address }}</strong></span>
+        {% if job.from_address %}<span>From: <strong>{{ job.from_address }}</strong></span>{% endif %}
         <span>Status: <strong>{{ job.get_status_display }}</strong></span>
         <span>Started: <strong>{{ job.created_at|date:"M d, H:i" }}</strong></span>
         {% if job.status == 'done' or job.status == 'failed' or job.status == 'needs_review' %}
         <span>Duration: <strong>{{ job.duration_seconds|floatformat:0 }}s</strong></span>
-        
-        {% if job.notes %}<span>Note: <strong>{{ job.notes }}</strong></span>
+        {% endif %}
+        {% if job.notes %}<span>Note: <strong>{{ job.notes }}</strong></span>{% endif %}
       </div>
     </div>
     <a href="{% url 'dashboard:queue' %}" class="btn-ghost btn">← Queue</a>
@@ -120,8 +120,8 @@
         There was an error communicating with the AI service. You can retry this job manually once the issue is resolved.
       {% else %}
         An unexpected error occurred. You can retry this job manually.
-      
-      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>
+      {% endif %}
+      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>{% endif %}
     </div>
     {% if job.failure_reason != 'scan_limit' and job.failure_reason != 'pro_required' %}
     <div style="display:flex;gap:8px;align-items:center;">
@@ -132,12 +132,12 @@
       </button>
       <span id="retry-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
     </div>
-    
+    {% endif %}
   </div>
-  
+  {% endif %}
 
   {# ── Pending events — needs attention ── #}
-  
+  {% if pending_events %}
   <div class="job-section">
     <div class="job-section__title job-section__title--attention">
       ⚠ {{ pending_events|length }} event{{ pending_events|length|pluralize }} need{{ pending_events|length|pluralize:"s," }} attention
@@ -153,7 +153,7 @@
           <div class="event-card__title">{{ event.title }}</div>
           {% if event.pending_concern %}
           <div class="concern-text">{{ event.pending_concern }}</div>
-          
+          {% endif %}
         </div>
         <div class="event-card__arrow">→</div>
       </a>
@@ -173,12 +173,12 @@
         <button type="button" class="btn-primary" id="reprocess-btn"
         data-reprocess-url="{% url 'dashboard:queue_job_reprocess' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}"
-        data-pending-ids="[{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endfor %}]">Re-process</button>
+        data-pending-ids="[{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">Re-process</button>
         <span id="reprocess-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
       </div>
     </div>
   </div>
-  
+  {% endif %}
 
   {# ── Active events created by this job ── #}
   <div class="job-section">
@@ -200,10 +200,10 @@
             {% if event.category %}
               <span class="event-card__sep">·</span>
               <span class="category-badge"
-                {% if event.category.color %}style="--cat-color:{{ event.category.color }}">
+                {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}>
                 {{ event.category.name }}
               </span>
-            
+            {% endif %}
           </div>
         </div>
         <div class="event-card__arrow">→</div>
@@ -212,15 +212,12 @@
     </div>
     {% else %}
     <p class="empty-section">No active events were created by this job.</p>
-    
+    {% endif %}
   </div>
 
 </div>
 {% endblock %}
 
 {% block extra_js %}
-
-
 <script src="{% static 'js/queue_action.js' %}"></script>
-
 {% endblock %}
