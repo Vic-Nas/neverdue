@@ -17,64 +17,6 @@
     <p class="page__sub">Automatically categorize or discard events, or inject custom instructions into AI extraction.</p>
   </div>
 
-  {# ── Existing rules ── #}
-  {% if rules %}
-  <div class="section-block">
-
-    {# Group: Sender #}
-    {% for rule in rules %}{% if rule.rule_type == 'sender' %}
-    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem">Sender</p>{% endif %}
-    <div class="rule-row" data-rule-id="{{ rule.pk }}">
-      <span class="rule-type-badge rule-type-badge--sender">Sender</span>
-      <code class="rule-pattern">{{ rule.pattern }}</code>
-      <span class="rule-action-label">
-        {% if rule.action == 'categorize' %}→
-          <span class="category-badge" {% if rule.category and rule.category.color %}style="--cat-color:{{ rule.category.color }}"{% endif %}>
-            {% if rule.category %}{{ rule.category.name }}{% else %}<em>no category</em>{% endif %}
-          </span>
-        {% elif rule.action == 'discard' %}<span class="rule-discard-badge">Discard</span>
-        {% endif %}
-      </span>
-      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
-    </div>
-    {% endif %}{% endfor %}
-
-    {# Group: Keyword #}
-    {% for rule in rules %}{% if rule.rule_type == 'keyword' %}
-    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem;margin-top:1rem">Keyword</p>{% endif %}
-    <div class="rule-row" data-rule-id="{{ rule.pk }}">
-      <span class="rule-type-badge rule-type-badge--keyword">Keyword</span>
-      <code class="rule-pattern">{{ rule.pattern }}</code>
-      <span class="rule-action-label">
-        {% if rule.action == 'categorize' %}→
-          <span class="category-badge" {% if rule.category and rule.category.color %}style="--cat-color:{{ rule.category.color }}"{% endif %}>
-            {% if rule.category %}{{ rule.category.name }}{% else %}<em>no category</em>{% endif %}
-          </span>
-        {% elif rule.action == 'discard' %}<span class="rule-discard-badge">Discard</span>
-        {% endif %}
-      </span>
-      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
-    </div>
-    {% endif %}{% endfor %}
-
-    {# Group: Prompt #}
-    {% for rule in rules %}{% if rule.rule_type == 'prompt' %}
-    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem;margin-top:1rem">Prompt injection</p>{% endif %}
-    <div class="rule-row" data-rule-id="{{ rule.pk }}">
-      <span class="rule-type-badge rule-type-badge--prompt">Prompt</span>
-      {% if rule.pattern %}<code class="rule-pattern">{{ rule.pattern }}</code>{% else %}<em class="rule-pattern" style="color:var(--text-muted)">all senders</em>{% endif %}
-      <span class="rule-action-label rule-prompt-preview">{{ rule.prompt_text|truncatechars:80 }}</span>
-      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
-    </div>
-    {% endif %}{% endfor %}
-
-  </div>
-  {% else %}
-  <div class="empty-state">
-    <p class="empty-state__text">No rules yet.</p>
-  </div>
-  {% endif %}
-
   {# ── Unified add-rule form ── #}
   <div class="section-block">
     <div class="section-block__header">
@@ -176,6 +118,64 @@
          3. Add a collectData entry in RULE_TYPES in rules.js. -->
 
   </div>
+
+  {# ── Existing rules ── #}
+  {% if rules %}
+  <div class="section-block">
+
+    {# Group: Sender #}
+    {% for rule in rules %}{% if rule.rule_type == 'sender' %}
+    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem">Sender</p>{% endif %}
+    <div class="rule-row" data-rule-id="{{ rule.pk }}">
+      <span class="rule-type-badge rule-type-badge--sender">Sender</span>
+      <code class="rule-pattern">{{ rule.pattern }}</code>
+      <span class="rule-action-label">
+        {% if rule.action == 'categorize' %}→
+          <span class="category-badge" {% if rule.category and rule.category.color %}style="--cat-color:{{ rule.category.color }}"{% endif %}>
+            {% if rule.category %}{{ rule.category.name }}{% else %}<em>no category</em>{% endif %}
+          </span>
+        {% elif rule.action == 'discard' %}<span class="rule-discard-badge">Discard</span>
+        {% endif %}
+      </span>
+      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
+    </div>
+    {% endif %}{% endfor %}
+
+    {# Group: Keyword #}
+    {% for rule in rules %}{% if rule.rule_type == 'keyword' %}
+    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem;margin-top:1rem">Keyword</p>{% endif %}
+    <div class="rule-row" data-rule-id="{{ rule.pk }}">
+      <span class="rule-type-badge rule-type-badge--keyword">Keyword</span>
+      <code class="rule-pattern">{{ rule.pattern }}</code>
+      <span class="rule-action-label">
+        {% if rule.action == 'categorize' %}→
+          <span class="category-badge" {% if rule.category and rule.category.color %}style="--cat-color:{{ rule.category.color }}"{% endif %}>
+            {% if rule.category %}{{ rule.category.name }}{% else %}<em>no category</em>{% endif %}
+          </span>
+        {% elif rule.action == 'discard' %}<span class="rule-discard-badge">Discard</span>
+        {% endif %}
+      </span>
+      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
+    </div>
+    {% endif %}{% endfor %}
+
+    {# Group: Prompt #}
+    {% for rule in rules %}{% if rule.rule_type == 'prompt' %}
+    {% if forloop.first %}<p class="label-upper" style="margin-bottom:0.5rem;margin-top:1rem">Prompt injection</p>{% endif %}
+    <div class="rule-row" data-rule-id="{{ rule.pk }}">
+      <span class="rule-type-badge rule-type-badge--prompt">Prompt</span>
+      {% if rule.pattern %}<code class="rule-pattern">{{ rule.pattern }}</code>{% else %}<em class="rule-pattern" style="color:var(--text-muted)">all senders</em>{% endif %}
+      <span class="rule-action-label rule-prompt-preview">{{ rule.prompt_text|truncatechars:80 }}</span>
+      <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
+    </div>
+    {% endif %}{% endfor %}
+
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p class="empty-state__text">No rules yet.</p>
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}
