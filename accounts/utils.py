@@ -56,7 +56,9 @@ def revoke_google_token(user) -> None:
     revocation call succeeds (to avoid leaving stale tokens on re-auth failure).
     Should be called before logging the user out when revoke_google_on_logout is True.
     """
-    token = user.google_calendar_token or user.google_refresh_token
+    # Prefer the refresh token — it's long-lived and revoking it invalidates all
+    # derived access tokens too. Fall back to the access token if that's all we have.
+    token = user.google_refresh_token or user.google_calendar_token
     if token:
         try:
             resp = http_requests.post(
