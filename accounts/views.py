@@ -55,6 +55,9 @@ def login(request):
 
 
 def logout(request):
+    if request.user.is_authenticated and request.user.revoke_google_on_logout:
+        from .utils import revoke_google_token
+        revoke_google_token(request.user)
     auth_logout(request)
     return redirect('accounts:login')
 
@@ -190,6 +193,7 @@ def preferences(request):
         auto_delete = request.POST.get('auto_delete_past_events') == 'on'
         retention_days = request.POST.get('past_event_retention_days', '30').strip()
         delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
+        revoke_on_logout = request.POST.get('revoke_google_on_logout') == 'on'
         timezone_str = request.POST.get('timezone', 'UTC').strip()
 
         try:
@@ -209,6 +213,7 @@ def preferences(request):
         request.user.auto_delete_past_events = auto_delete
         request.user.past_event_retention_days = retention_days
         request.user.delete_from_gcal_on_cleanup = delete_gcal
+        request.user.revoke_google_on_logout = revoke_on_logout
         request.user.timezone = timezone_str
         request.user.timezone_auto_detected = False
         request.user.priority_color_low    = priority_color_low
@@ -220,6 +225,7 @@ def preferences(request):
             'auto_delete_past_events',
             'past_event_retention_days',
             'delete_from_gcal_on_cleanup',
+            'revoke_google_on_logout',
             'timezone',
             'timezone_auto_detected',
             'priority_color_low',

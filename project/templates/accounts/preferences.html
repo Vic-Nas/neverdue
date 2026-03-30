@@ -43,22 +43,24 @@
         <p class="form-hint">Events that have ended will be removed from NeverDue after the retention period below.</p>
       </div>
 
-      <div class="form-group" id="retention-group" {% if not request.user.auto_delete_past_events %}style="opacity:0.4;pointer-events:none"{% endif %}>
-        <label for="retention">Keep past events for</label>
-        <div class="input-suffix-wrap">
-          <input type="number" name="past_event_retention_days" id="retention"
-            value="{{ request.user.past_event_retention_days }}" min="1" max="365">
-          <span class="input-suffix">days</span>
+      <div class="cleanup-sub-fields" id="cleanup-sub-fields" {% if not request.user.auto_delete_past_events %}style="opacity:0.4;pointer-events:none"{% endif %}>
+        <div class="form-group" id="retention-group">
+          <label for="retention">Keep past events for</label>
+          <div class="input-suffix-wrap">
+            <input type="number" name="past_event_retention_days" id="retention"
+              value="{{ request.user.past_event_retention_days }}" min="1" max="365">
+            <span class="input-suffix">days</span>
+          </div>
         </div>
-      </div>
 
-      <div class="form-group form-group--checkbox" id="gcal-delete-group" {% if not request.user.auto_delete_past_events %}style="opacity:0.4;pointer-events:none"{% endif %}>
-        <div class="checkbox-row">
-          <input type="checkbox" name="delete_from_gcal_on_cleanup" id="delete_gcal"
-            {% if request.user.delete_from_gcal_on_cleanup %}checked{% endif %}>
-          <label for="delete_gcal">Also delete from Google Calendar</label>
+        <div class="form-group form-group--checkbox" id="gcal-delete-group">
+          <div class="checkbox-row">
+            <input type="checkbox" name="delete_from_gcal_on_cleanup" id="delete_gcal"
+              {% if request.user.delete_from_gcal_on_cleanup %}checked{% endif %}>
+            <label for="delete_gcal">Also delete from Google Calendar</label>
+          </div>
+          <p class="form-hint">When NeverDue removes a past event, it will also be removed from your Google Calendar.</p>
         </div>
-        <p class="form-hint">When NeverDue removes a past event, it will also be removed from your Google Calendar.</p>
       </div>
     </div>
 
@@ -108,33 +110,55 @@
     {# ── Priority colors ── #}
     <div class="form-section">
       <h2 class="form-section__title">Priority colors</h2>
-      <p class="form-hint form-hint--spaced">Choose which Google Calendar color each priority level maps to. These apply to all events based on their category's priority.</p>
+      <p class="form-hint form-hint--spaced">Choose which Google Calendar color each priority level maps to.</p>
 
       <div class="form-group">
         <div class="priority-color-grid">
           {% for level in priority_levels %}
           <div class="priority-color-row">
             <span class="priority-color-row__label">{{ level.label }}</span>
-            <div class="gcal-swatches" data-field="{{ level.field }}">
-              {% for color in gcal_colors %}
-              <input
-                type="radio"
-                class="gcal-swatch-radio"
-                name="{{ level.field }}"
-                id="{{ level.field }}_{{ color.id }}"
-                value="{{ color.id }}"
-                {% if level.current == color.id %}checked{% endif %}>
-              <label
-                class="gcal-swatch {% if level.current == color.id %}selected{% endif %}"
-                for="{{ level.field }}_{{ color.id }}"
-                style="background: {{ color.hex }}"
-                title="{{ color.name }}">
-              </label>
-              {% endfor %}
-            </div>
+
+            {# Preview: show only the currently selected swatch #}
+            {% for color in gcal_colors %}{% if level.current == color.id %}
+            <span class="gcal-swatch-preview" style="background:{{ color.hex }}" title="{{ color.name }}"></span>
+            {% endif %}{% endfor %}
+
+            <details class="gcal-picker-details">
+              <summary class="gcal-picker-summary">Change</summary>
+              <div class="gcal-swatches" data-field="{{ level.field }}">
+                {% for color in gcal_colors %}
+                <input
+                  type="radio"
+                  class="gcal-swatch-radio"
+                  name="{{ level.field }}"
+                  id="{{ level.field }}_{{ color.id }}"
+                  value="{{ color.id }}"
+                  {% if level.current == color.id %}checked{% endif %}>
+                <label
+                  class="gcal-swatch {% if level.current == color.id %}selected{% endif %}"
+                  for="{{ level.field }}_{{ color.id }}"
+                  style="background: {{ color.hex }}"
+                  title="{{ color.name }}">
+                </label>
+                {% endfor %}
+              </div>
+            </details>
           </div>
           {% endfor %}
         </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2 class="form-section__title">Privacy</h2>
+
+      <div class="form-group form-group--checkbox">
+        <div class="checkbox-row">
+          <input type="checkbox" name="revoke_google_on_logout" id="revoke_google_on_logout"
+            {% if request.user.revoke_google_on_logout %}checked{% endif %}>
+          <label for="revoke_google_on_logout">Revoke Google permissions on logout</label>
+        </div>
+        <p class="form-hint">When enabled, NeverDue will revoke its access to your Google account each time you log out. You will be asked to re-authorize on your next login.</p>
       </div>
     </div>
 
