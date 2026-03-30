@@ -1,4 +1,5 @@
 # dashboard/views.py
+import base64
 import json as _json
 import zoneinfo
 
@@ -14,6 +15,23 @@ from accounts.views import GCAL_COLOR_HEX
 import logging
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+def _build_reprocess_text(events_qs, prompt: str) -> str:
+    """
+    Serialise a queryset of events + a user instruction into the text blob
+    sent to process_text_as_upload. Used by event_prompt_edit and events_bulk_action.
+    """
+    blocks = [e.serialize_as_text() for e in events_qs]
+    return "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
 
 @login_required
 def index(request):
@@ -92,7 +110,6 @@ def event_edit(request, pk=None):
                 event.pending_expires_at = None
 
             event.save()
-
             return JsonResponse({'ok': True, 'pk': event.pk})
 
         return render(request, 'dashboard/event_edit.html', {
@@ -126,21 +143,24 @@ def event_prompt_edit(request, pk):
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
         from emails.tasks import process_text_as_upload
+        from emails.models import ScanJob
         event = get_object_or_404(Event, pk=pk, user=request.user)
         data = _json.loads(request.body)
         prompt = data.get('prompt', '').strip()
         if not prompt:
             return JsonResponse({'ok': False, 'error': 'Prompt is required.'}, status=400)
 
-        full_text = event.serialize_as_text() + f"\n\nUser instruction: {prompt}"
-
+        full_text = _build_reprocess_text([event], prompt)
         event.delete()
-        # Create job BEFORE queueing task to prevent duplicate jobs on retry
-        from emails.models import ScanJob
+
         job = ScanJob.objects.create(
             user=request.user,
             source=ScanJob.SOURCE_UPLOAD,
             status=ScanJob.STATUS_QUEUED,
+            task_args=_json.dumps({
+                'user_id': request.user.pk,
+                'text': full_text,
+            }),
         )
         process_text_as_upload.delay(job.id, request.user.pk, full_text)
         return JsonResponse({'ok': True})
@@ -153,13 +173,13 @@ def event_prompt_edit(request, pk):
 def events_bulk_action(request):
     """
     Bulk delete events with optional re-extraction prompt.
-    When a prompt is supplied, creates a new upload ScanJob —
-    needs_review fix — it produces a new ScanJob.
+    When a prompt is supplied, creates a new upload ScanJob for re-extraction.
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
         from emails.tasks import process_text_as_upload
+        from emails.models import ScanJob
         data = _json.loads(request.body)
         event_ids = [int(i) for i in data.get('event_ids', [])]
         prompt = data.get('prompt', '').strip()
@@ -172,20 +192,20 @@ def events_bulk_action(request):
             events.delete()
             return JsonResponse({'ok': True, 'deleted': count})
 
-        # Re-extract: serialise events, delete them, dispatch upload task
-        blocks = [e.serialize_as_text() for e in events]
-        full_text = "\n\n---\n\n".join(blocks) + f"\n\nUser instruction: {prompt}"
-
+        full_text = _build_reprocess_text(events, prompt)
         events.delete()
-        # Create job BEFORE queueing task to prevent duplicate jobs on retry
-        from emails.models import ScanJob
+
         job = ScanJob.objects.create(
             user=request.user,
             source=ScanJob.SOURCE_UPLOAD,
             status=ScanJob.STATUS_QUEUED,
+            task_args=_json.dumps({
+                'user_id': request.user.pk,
+                'text': full_text,
+            }),
         )
         process_text_as_upload.delay(job.id, request.user.pk, full_text)
-        return JsonResponse({'ok': True, 'queued': len(blocks)})
+        return JsonResponse({'ok': True, 'queued': len(event_ids)})
     except Exception:
         logger.exception("events_bulk_action error for user=%s", request.user.pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
@@ -198,195 +218,49 @@ def queue_job_reprocess(request, pk):
     a correction prompt for a needs_review job.
 
     This is the ONLY entry point that calls reprocess_events — it always
-    passes job_pk so the original job is mutated, never a new one created.
+    passes the existing job's pk so no new job is created.
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
-        from emails.models import ScanJob
         from emails.tasks import reprocess_events
-
+        from emails.models import ScanJob
+        job = get_object_or_404(ScanJob, pk=pk, user=request.user, status=ScanJob.STATUS_NEEDS_REVIEW)
         data = _json.loads(request.body)
         prompt = data.get('prompt', '').strip()
-        event_ids = [int(i) for i in data.get('event_ids', [])]
-
-        job = get_object_or_404(ScanJob, pk=pk, user=request.user)
-
-        if job.status != ScanJob.STATUS_NEEDS_REVIEW:
-            return JsonResponse({'ok': False, 'error': 'Job is not awaiting review'}, status=400)
-
-        if not event_ids:
-            # Default to all pending events on this job
-            event_ids = list(job.events.filter(status='pending').values_list('pk', flat=True))
-
+        event_ids = data.get('event_ids', [])
         reprocess_events.delay(request.user.pk, event_ids, prompt, job_pk=job.pk)
         return JsonResponse({'ok': True})
     except Exception:
-        logger.exception("queue_job_reprocess error for user=%s job=%s", request.user.pk, pk)
+        logger.exception("queue_job_reprocess error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
 
 
 @login_required
 def queue_job_retry(request, pk):
     """
-    POST endpoint to retry a single failed job from the job detail page.
-    Resets the job to queued and re-enqueues it.
-    Only works on failed jobs.
+    POST endpoint to manually retry a failed job.
+    Resets the job to queued and dispatches via _dispatch_job.
     """
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
         from emails.models import ScanJob
         from emails.tasks import _reenqueue_jobs
-
-        job = get_object_or_404(ScanJob, pk=pk, user=request.user)
-
-        if job.status != ScanJob.STATUS_FAILED:
-            return JsonResponse({'ok': False, 'error': 'Job is not failed'}, status=400)
-
+        job = get_object_or_404(ScanJob, pk=pk, user=request.user, status=ScanJob.STATUS_FAILED)
         _reenqueue_jobs([job])
         return JsonResponse({'ok': True})
     except Exception:
-        logger.exception("queue_job_retry error for user=%s job=%s", request.user.pk, pk)
+        logger.exception("queue_job_retry error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
-
-
-@login_required
-def categories(request):
-    try:
-        cats = Category.objects.filter(user=request.user).order_by('name')
-        return render(request, 'dashboard/categories.html', {'categories': cats})
-    except Exception:
-        logger.exception("categories error for user=%s", request.user.pk)
-        return HttpResponse('Categories unavailable.', status=500)
-
-
-@login_required
-def category_detail(request, pk):
-    try:
-        category = get_object_or_404(Category, pk=pk, user=request.user)
-        return render(request, 'dashboard/category_detail.html', {'category': category})
-    except Exception:
-        logger.exception("category_detail error for user=%s pk=%s", request.user.pk, pk)
-        return HttpResponse('Category unavailable.', status=500)
-
-
-@login_required
-def category_edit(request, pk=None):
-    try:
-        if pk:
-            category = get_object_or_404(Category, pk=pk, user=request.user)
-        else:
-            category = None
-
-        if request.method == 'POST':
-            data = _json.loads(request.body)
-            name = data.get('name', '').strip()
-            color = data.get('color', '').strip()
-            gcal_color_id = data.get('gcal_color_id', '').strip()
-            priority = data.get('priority', 1)
-
-            if not name:
-                return JsonResponse({'ok': False, 'error': 'Name is required.'}, status=400)
-
-            if category is None:
-                category = Category(user=request.user)
-
-            category.name = name
-            category.color = color
-            category.gcal_color_id = gcal_color_id
-            category.priority = priority
-            category.save()
-
-            if gcal_color_id:
-                from dashboard.tasks import patch_category_colors
-                patch_category_colors.delay(request.user.pk, category.pk)
-
-            return JsonResponse({'ok': True, 'pk': category.pk})
-
-        return render(request, 'dashboard/category_edit.html', {
-            'category': category,
-            'gcal_color_hex': GCAL_COLOR_HEX,
-        })
-    except Exception:
-        logger.exception("category_edit error for user=%s pk=%s", request.user.pk, pk)
-        return HttpResponse('Could not save category.', status=500)
-
-
-@login_required
-def category_delete(request, pk):
-    try:
-        category = get_object_or_404(Category, pk=pk, user=request.user)
-        if request.method == 'POST':
-            category.delete()
-            return redirect('dashboard:categories')
-        return render(request, 'dashboard/category_delete.html', {
-            "category": category,
-            "categories_url": reverse("dashboard:categories"),
-        })
-    except Exception:
-        logger.exception("category_delete error for user=%s pk=%s", request.user.pk, pk)
-        return HttpResponse('Could not delete category.', status=500)
-
-
-@login_required
-def email_sources(request):
-    try:
-        return render(request, 'dashboard/email_sources.html')
-    except Exception:
-        logger.exception("email_sources error for user=%s", request.user.pk)
-        return HttpResponse('Email sources unavailable.', status=500)
-
-
-@login_required
-def filter_rule_add(request):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
-    try:
-        data = _json.loads(request.body)
-        pattern = data.get('pattern', '').strip()
-        action = data.get('action', '').strip()
-        category_id = data.get('category_id')
-
-        if not pattern or not action:
-            return JsonResponse({'ok': False, 'error': 'Pattern and action are required.'}, status=400)
-
-        category = None
-        if category_id:
-            category = get_object_or_404(Category, pk=category_id, user=request.user)
-
-        FilterRule.objects.create(
-            user=request.user,
-            pattern=pattern,
-            action=action,
-            category=category,
-        )
-        return JsonResponse({'ok': True})
-    except Exception:
-        logger.exception("filter_rule_add error for user=%s", request.user.pk)
-        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
-
-
-@login_required
-def filter_rule_delete(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False}, status=405)
-    try:
-        rule = get_object_or_404(FilterRule, pk=pk, user=request.user)
-        rule.delete()
-        return JsonResponse({'ok': True})
-    except Exception:
-        logger.exception("filter_rule_delete error for user=%s pk=%s", request.user.pk, pk)
-        return JsonResponse({'ok': False}, status=500)
 
 
 @login_required
 def upload(request):
     try:
-        import base64
+        from emails.tasks import process_uploaded_file
+        from emails.models import ScanJob
         if request.method == 'POST':
-            from emails.tasks import process_uploaded_file
-            from emails.models import ScanJob
             uploaded = request.FILES.get('file')
             context = request.POST.get('context', '').strip()
             if not uploaded:
@@ -395,11 +269,17 @@ def upload(request):
             file_bytes = uploaded.read()
             file_b64 = base64.b64encode(file_bytes).decode('utf-8')
             filename = uploaded.name or ''
-            # Create job BEFORE queueing task to prevent duplicate jobs on retry
             job = ScanJob.objects.create(
                 user=request.user,
                 source=ScanJob.SOURCE_UPLOAD,
                 status=ScanJob.STATUS_QUEUED,
+                task_args=_json.dumps({
+                    'user_id':    request.user.pk,
+                    'file_b64':   file_b64,
+                    'media_type': content_type,
+                    'context':    context,
+                    'filename':   filename,
+                }),
             )
             process_uploaded_file.delay(job.id, request.user.pk, file_b64, content_type, context, filename)
             return JsonResponse({'ok': True})
@@ -415,14 +295,13 @@ def export_events(request):
 
     Query params:
       ?ids=1,2,3  — export specific event IDs (must belong to request.user)
-      ?ids=all     — export all active events for the user
+      ?ids=all    — export all active events for the user
     """
     try:
         ids_param = request.GET.get('ids', '')
         if ids_param == 'all':
             events = Event.objects.filter(
-                user=request.user,
-                status='active',
+                user=request.user, status='active',
             ).select_related('category')
         elif ids_param:
             try:
@@ -432,9 +311,7 @@ def export_events(request):
             if not id_list:
                 return HttpResponse('No event IDs provided.', status=400)
             events = Event.objects.filter(
-                pk__in=id_list,
-                user=request.user,
-                status='active',
+                pk__in=id_list, user=request.user, status='active',
             ).select_related('category')
         else:
             return HttpResponse('No event IDs provided.', status=400)
@@ -461,29 +338,21 @@ def queue(request):
 @require_GET
 def queue_status(request):
     from emails.models import ScanJob
-    from dashboard.models import Event
     from django.db.models import Count
 
     jobs = ScanJob.objects.filter(user=request.user).order_by('-created_at')[:50]
-
     active_count = sum(1 for j in jobs if j.status in (ScanJob.STATUS_QUEUED, ScanJob.STATUS_PROCESSING))
 
     job_ids = [j.pk for j in jobs]
     pending_counts = dict(
         Event.objects.filter(scan_job_id__in=job_ids, status='pending')
-        .values('scan_job_id')
-        .annotate(n=Count('id'))
-        .values_list('scan_job_id', 'n')
+        .values('scan_job_id').annotate(n=Count('id')).values_list('scan_job_id', 'n')
     )
     active_event_counts = dict(
         Event.objects.filter(scan_job_id__in=job_ids, status='active')
-        .values('scan_job_id')
-        .annotate(n=Count('id'))
-        .values_list('scan_job_id', 'n')
+        .values('scan_job_id').annotate(n=Count('id')).values_list('scan_job_id', 'n')
     )
 
-    # Nav badge: number of jobs needing user attention
-    # Includes needs_review (user must act) and failed (user should be aware)
     attention_count = sum(
         1 for j in jobs
         if j.status in (ScanJob.STATUS_NEEDS_REVIEW, ScanJob.STATUS_FAILED)
@@ -586,4 +455,132 @@ def rule_delete(request, pk):
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("rule_delete error for user=%s pk=%s", request.user.pk, pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def categories(request):
+    try:
+        cats = Category.objects.filter(user=request.user).order_by('name')
+        return render(request, 'dashboard/categories.html', {'categories': cats})
+    except Exception:
+        logger.exception("categories error for user=%s", request.user.pk)
+        return HttpResponse('Categories unavailable.', status=500)
+
+
+@login_required
+def category_detail(request, pk):
+    try:
+        category = get_object_or_404(Category, pk=pk, user=request.user)
+        events = Event.objects.filter(category=category, user=request.user, status='active').order_by('start')
+        return render(request, 'dashboard/category_detail.html', {
+            'category': category,
+            'events': events,
+            'gcal_color_hex': GCAL_COLOR_HEX,
+        })
+    except Exception:
+        logger.exception("category_detail error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Category unavailable.', status=500)
+
+
+@login_required
+def category_edit(request, pk=None):
+    try:
+        if pk:
+            category = get_object_or_404(Category, pk=pk, user=request.user)
+        else:
+            category = None
+
+        if request.method == 'POST':
+            data = _json.loads(request.body)
+            name = data.get('name', '').strip()
+            priority = data.get('priority', 2)
+            gcal_color_id = data.get('gcal_color_id')
+            reminders = data.get('reminders', [])
+
+            if not name:
+                return JsonResponse({'ok': False, 'error': 'Name is required.'}, status=400)
+
+            if category is None:
+                category = Category(user=request.user)
+
+            old_color = category.gcal_color_id
+            category.name = name
+            category.priority = priority
+            category.gcal_color_id = gcal_color_id
+            category.reminders = reminders
+            category.save()
+
+            # Patch calendar colors if changed
+            if gcal_color_id != old_color:
+                from dashboard.tasks import patch_category_colors
+                patch_category_colors.delay(category.pk)
+
+            return JsonResponse({'ok': True, 'pk': category.pk})
+
+        return render(request, 'dashboard/category_edit.html', {
+            'category': category,
+            'gcal_color_hex': GCAL_COLOR_HEX,
+        })
+    except Exception:
+        logger.exception("category_edit error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Could not save category.', status=500)
+
+
+@login_required
+def category_delete(request, pk):
+    try:
+        category = get_object_or_404(Category, pk=pk, user=request.user)
+        categories_url = '/dashboard/categories/'
+        if request.method == 'POST':
+            category.delete()
+            return redirect('dashboard:categories')
+        return render(request, 'dashboard/category_delete.html', {
+            'category': category,
+            'categories_url': categories_url,
+        })
+    except Exception:
+        logger.exception("category_delete error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Could not delete category.', status=500)
+
+
+@login_required
+def email_sources(request):
+    try:
+        rules = FilterRule.objects.filter(user=request.user).order_by('created_at')
+        return render(request, 'dashboard/email_sources.html', {'filter_rules': rules})
+    except Exception:
+        logger.exception("email_sources error for user=%s", request.user.pk)
+        return HttpResponse('Email sources unavailable.', status=500)
+
+
+@login_required
+def filter_rule_add(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = _json.loads(request.body)
+        action = data.get('action', '').strip()
+        pattern = data.get('pattern', '').strip()
+
+        if not action or not pattern:
+            return JsonResponse({'ok': False, 'error': 'Action and pattern are required.'}, status=400)
+
+        rule = FilterRule.objects.create(user=request.user, action=action, pattern=pattern)
+        return JsonResponse({'ok': True, 'id': rule.pk})
+    except Exception:
+        logger.exception("filter_rule_add error for user=%s", request.user.pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def filter_rule_delete(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        rule = get_object_or_404(FilterRule, pk=pk, user=request.user)
+        rule.delete()
+        return JsonResponse({'ok': True})
+    except Exception:
+        logger.exception("filter_rule_delete error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
