@@ -201,24 +201,29 @@ into duplicate events indefinitely.
 
 ## Job status ownership
 
-**The pipeline (`_save_events`) owns the terminal job status decision for normal runs.**
+**`tasks.py` owns every DB write for job state. `pipeline.py` owns none.**
 
-The task layer (`tasks.py`) is responsible for:
+The task layer (`tasks.py`) writes all job state via three functions:
 
-- Creating the job
-- Setting `processing` when work begins
-- Setting `failed` (with a reason) on exceptions or plan/quota blocks
+- `_set_processing(job)` — queued → processing
+- `_set_terminal(job, outcome)` — any → done / needs_review / failed
+- `_set_failed(job, reason, signature)` — exception path only (no outcome available)
 
-The pipeline (`pipeline.py`) is responsible for:
+`llm/pipeline.py` returns a `ProcessingOutcome` dataclass — it never touches
+the database. After every pipeline call, the task reads the outcome and calls
+`_set_terminal(job, outcome)`. The pipeline determines:
 
-- Setting `done` or `needs_review` based on what was actually created
-- Setting `failed` with `reason=scan_limit` or `reason=pro_required` on quota/plan blocks
+- `outcome.status` — `'done'`, `'needs_review'`, or `'failed'`
+- `outcome.failure_reason` — which `REASON_*` code applies
+- `outcome.notes` — user-visible explanation
 
-The task layer must NOT set `done` or `needs_review` — those are set by
-`_save_events` based on what was actually produced.
+**What must never happen:**
 
-This single rule eliminates the class of bugs where a task marks a job `done`
-before, after, or instead of what the pipeline actually produced.
+- Pipeline code calls `ScanJob.objects.filter(pk=...).update(status=...)`. That is a contract violation.
+- A task sets `done` or `needs_review` directly — those come exclusively from `_set_terminal`.
+
+This means: open `tasks.py` and you can read every job state transition end-to-end
+without opening `pipeline.py`.
 
 ---
 

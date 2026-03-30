@@ -1,4 +1,5 @@
 # emails/webhook.py
+import base64
 import logging
 
 import requests
@@ -17,8 +18,12 @@ _h2t.body_width = 0  # no line wrapping
 def fetch_full_email(email_id: str) -> dict:
     """
     Fetch full email content from Resend's Received Emails API.
-    Resend webhooks only contain metadata — body and attachments
-    must be retrieved separately via this API call.
+
+    Resend webhooks only contain metadata — body and attachments must be
+    retrieved separately. Called inside the Celery task so network failures
+    are covered by task autoretry.
+
+    Returns the full email dict on success, empty dict on failure.
     https://resend.com/docs/api-reference/emails/retrieve-email
     """
     api_key = getattr(settings, 'RESEND_API_KEY', '')
@@ -34,17 +39,16 @@ def fetch_full_email(email_id: str) -> dict:
             timeout=10,
         )
         if response.status_code == 200:
-            data = response.json()
-            return data
-        else:
-            logger.error(
-                "emails.fetch_full_email: api error | email_id=%s status=%s",
-                email_id, response.status_code,
-            )
-            return {}
+            return response.json()
+        logger.error(
+            "emails.fetch_full_email: api error | email_id=%s status=%s",
+            email_id, response.status_code,
+        )
+        return {}
     except requests.RequestException as exc:
         logger.error("emails.fetch_full_email: request failed | email_id=%s error=%s", email_id, exc)
         return {}
+
 
 SUPPORTED_ATTACHMENT_TYPES = {
     'application/pdf',
@@ -58,7 +62,7 @@ SUPPORTED_ATTACHMENT_TYPES = {
 
 def fetch_attachment_content(email_id: str, attachment_id: str) -> tuple[bytes, str] | None:
     """
-    Fetch a single attachment's content via the Resend Attachments API.
+    Fetch a single attachment via the Resend Attachments API.
     Returns (raw_bytes, content_type) or None on failure.
     """
     api_key = getattr(settings, 'RESEND_API_KEY', '')
@@ -70,7 +74,10 @@ def fetch_attachment_content(email_id: str, attachment_id: str) -> tuple[bytes, 
             timeout=10,
         )
         if response.status_code != 200:
-            logger.error("emails.fetch_attachment_content: api error | attachment_id=%s status=%s", attachment_id, response.status_code)
+            logger.error(
+                "emails.fetch_attachment_content: api error | attachment_id=%s status=%s",
+                attachment_id, response.status_code,
+            )
             return None
 
         data = response.json()
@@ -83,11 +90,13 @@ def fetch_attachment_content(email_id: str, attachment_id: str) -> tuple[bytes, 
 
         dl_response = requests.get(download_url, timeout=30)
         if dl_response.status_code != 200:
-            logger.error("emails.fetch_attachment_content: download failed | attachment_id=%s status=%s", attachment_id, dl_response.status_code)
+            logger.error(
+                "emails.fetch_attachment_content: download failed | attachment_id=%s status=%s",
+                attachment_id, dl_response.status_code,
+            )
             return None
 
-        raw_bytes = dl_response.content
-        return raw_bytes, content_type
+        return dl_response.content, content_type
 
     except requests.RequestException as exc:
         logger.error("emails.fetch_attachment_content: request failed | attachment_id=%s error=%s", attachment_id, exc)
@@ -113,42 +122,39 @@ def verify_resend_signature(payload_bytes: bytes, headers: dict) -> bool:
         return False
 
 
-def extract_email_text(payload, full_email: dict = None):
+def extract_email_text(full_email: dict) -> str:
     """
-    Extract plain text body from Resend inbound webhook payload.
-    
-    Because Resend webhooks only include metadata, pass `full_email`
-    (the result of fetch_full_email) to get the actual body.
-    Falls back to stripping HTML if plain text is absent.
-    """
-    # Prefer full_email from the Resend API (has 'text' and 'html')
-    source = full_email if full_email else (payload.get('data') or payload)
+    Extract plain text body from a full_email dict (result of fetch_full_email).
 
-    text = (source.get('text') or '').strip()
+    Prefers the 'text' field; falls back to stripping HTML from 'html'.
+    """
+    text = (full_email.get('text') or '').strip()
     if text:
         return text
 
-    html = source.get('html') or ''
+    html = full_email.get('html') or ''
     if html:
-        stripped = _h2t.handle(html).strip()
-        return stripped
+        return _h2t.handle(html).strip()
 
     logger.error(
         "emails.extract_email_text: no text or html | keys=%s",
-        list(source.keys()),
+        list(full_email.keys()),
     )
     return ''
 
 
-def extract_attachments(payload, full_email: dict = None):
+def extract_attachments(full_email: dict) -> list:
     """
-    Extract supported attachments using Resend's Attachments API.
-    Attachment metadata comes from the webhook payload; content is fetched separately.
-    Returns list of (base64_string, media_type) tuples.
+    Fetch and base64-encode supported attachments from a full_email dict.
+
+    full_email must be the dict returned by fetch_full_email — it contains
+    both the email_id (under 'id') and the attachment metadata list.
+
+    Returns a list of [base64_string, content_type, filename] triples.
+    Only SUPPORTED_ATTACHMENT_TYPES are fetched; others are silently skipped.
     """
-    data = payload.get('data', {})
-    email_id = data.get('email_id')
-    attachment_metas = data.get('attachments', [])  # metadata only, from webhook
+    email_id = full_email.get('id', '')
+    attachment_metas = full_email.get('attachments', [])
 
     if not email_id or not attachment_metas:
         return []
@@ -157,6 +163,7 @@ def extract_attachments(payload, full_email: dict = None):
     for idx, attachment in enumerate(attachment_metas):
         content_type = (attachment.get('content_type') or '').split(';')[0].strip().lower()
         attachment_id = attachment.get('id')
+        filename = attachment.get('filename') or attachment.get('name') or ''
 
         if content_type not in SUPPORTED_ATTACHMENT_TYPES:
             continue
@@ -172,8 +179,7 @@ def extract_attachments(payload, full_email: dict = None):
         raw_bytes, fetched_content_type = fetched
         final_type = fetched_content_type or content_type
         b64 = base64.b64encode(raw_bytes).decode()
-
-        result.append((b64, final_type))
+        result.append([b64, final_type, filename])
 
     return result
 
@@ -185,20 +191,18 @@ RESERVED_USERNAMES = {
 }
 
 
-def get_user_from_recipient(recipient):
+def get_user_from_recipient(recipient: str):
     """
     Extract username from recipient address and return User or None.
-    Supports both:
-      username@user.neverdue.ca
-      username@user.neverdue.ca
+    Supports: username@user.neverdue.ca
     """
     from accounts.models import User
-
     try:
-        local, domain = recipient.lower().split('@', 1)
+        local, _ = recipient.lower().split('@', 1)
         username = local.split('.')[0] if '.' in local else local
-        user = User.objects.get(username=username)
-        return user
+        if username in RESERVED_USERNAMES:
+            return None
+        return User.objects.get(username=username)
     except User.DoesNotExist:
         logger.error("emails.get_user_from_recipient: user not found | recipient=%s", recipient)
         return None
@@ -207,9 +211,10 @@ def get_user_from_recipient(recipient):
         return None
 
 
-def sender_is_allowed(user, sender):
+def sender_is_allowed(user, sender: str) -> bool:
     """
-    Check if a sender is allowed for a given user based on their FilterRules.
+    Check if a sender is allowed based on the user's FilterRules.
+    No rules → all senders allowed.
     """
     from dashboard.models import FilterRule
     from fnmatch import fnmatch
@@ -229,9 +234,6 @@ def sender_is_allowed(user, sender):
 
     if any(matches(p) for p in block_rules):
         return False
-
     if allow_rules:
-        allowed = any(matches(p) for p in allow_rules)
-        return allowed
-
+        return any(matches(p) for p in allow_rules)
     return True

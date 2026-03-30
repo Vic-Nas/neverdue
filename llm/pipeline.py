@@ -1,5 +1,6 @@
 # llm/pipeline.py
 import logging
+from dataclasses import dataclass, field
 
 from django.utils import timezone
 
@@ -10,54 +11,56 @@ from dashboard.writer import write_event_to_calendar
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# NOTE — required change in extractor.py
+# NOTE — required in extractor.py (if not already done)
 # ---------------------------------------------------------------------------
-# Each extract_* function must return a tuple (events, input_tokens, output_tokens)
-# instead of just events. Example for extract_events:
-#
-#   def extract_events(text, language, user_timezone):
+# Each extract_* function must return (events, input_tokens, output_tokens).
+# Example:
+#   def extract_events(text, language, user_timezone, user_instructions=None):
 #       response = client.messages.create(...)
 #       events = _parse_response(response)
 #       return events, response.usage.input_tokens, response.usage.output_tokens
-#
-# Same pattern for extract_events_from_email and extract_events_from_image.
 # ---------------------------------------------------------------------------
 
 
-def _fire_usage(user, input_tokens: int, output_tokens: int) -> None:
+@dataclass
+class ProcessingOutcome:
     """
-    Async-fire token usage tracking. Non-blocking — never raises.
-    Skips silently if tokens are zero (e.g. early-exit paths).
+    Returned by every pipeline entry point.
+
+    Pipeline functions never write to the database. The task layer (tasks.py)
+    reads this dataclass and writes all job state via _set_terminal.
+    This means you can read tasks.py to trace every job state transition
+    without opening pipeline code.
     """
-    if not input_tokens and not output_tokens:
-        return
-    try:
-        from emails.tasks import track_llm_usage
-        track_llm_usage.delay(user.pk, input_tokens, output_tokens)
-    except Exception as exc:
-        # Tracking must never break the pipeline.
-        logger.error("llm._fire_usage: enqueue failed | user=%s error=%s", user.pk, exc)
+    created:           list = field(default_factory=list)
+    notes:             str  = ''
+    status:            str  = 'done'   # 'done' | 'needs_review' | 'failed'
+    failure_reason:    str  = ''       # ScanJob.REASON_* constant or ''
+    failure_signature: str  = ''
 
 
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
 
-def process_text(user, text: str, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, str]:
+def process_text(user, text: str, sender: str = '', source_email_id: str = '') -> ProcessingOutcome:
     """
     Extract events from plain text or a reprocess prompt.
 
-    Returns (created_events, notes).
-    On scan limit, sets the job to failed with reason=scan_limit and returns ([], '').
+    Returns ProcessingOutcome. On scan limit the outcome status is 'failed'.
+    No DB writes — the task layer applies the outcome.
     """
     if not _check_and_increment_scans(user):
-        _fail_job_scan_limit(scan_job)
-        return [], ''
+        return ProcessingOutcome(
+            status='failed',
+            failure_reason='scan_limit',
+            notes='Monthly scan limit reached. Will retry automatically on quota reset or plan upgrade.',
+        )
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
-
     user_instructions = collect_prompt_injections(user, sender)
+
     try:
         events, input_tokens, output_tokens = extract_events(
             text, language=language, user_timezone=user_timezone,
@@ -65,31 +68,41 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
         )
     except ValueError as exc:
         logger.error("llm.process_text: extraction error | user=%s error=%s", user.pk, exc)
-        return [], ''
+        return ProcessingOutcome(
+            status='failed',
+            failure_reason='llm_error',
+            failure_signature=f"ValueError: {str(exc)[:200]}",
+        )
 
     _fire_usage(user, input_tokens, output_tokens)
-    created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
-    return created, ''
+    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id)
+    return ProcessingOutcome(
+        created=created,
+        status='needs_review' if has_pending else 'done',
+    )
 
 
-def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, str]:
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> ProcessingOutcome:
     """
     Extract events from an inbound email (body + optional attachments).
     Also used by process_uploaded_file (empty body, single attachment).
 
     attachments: list of [base64_string, media_type] or [base64_string, media_type, filename].
 
-    Free users with an attachment-only email (no usable body) are blocked:
-    the job is set to failed with reason=pro_required so it stays visible and
-    can be retried automatically after a plan upgrade.
+    Free users with an attachment-only email (no usable body) receive a failed
+    outcome with reason=pro_required — the job stays visible and is retried
+    automatically after a plan upgrade.
 
-    Returns (created_events, notes).
+    Returns ProcessingOutcome. No DB writes.
     """
     import base64
 
     if not _check_and_increment_scans(user):
-        _fail_job_scan_limit(scan_job)
-        return [], ''
+        return ProcessingOutcome(
+            status='failed',
+            failure_reason='scan_limit',
+            notes='Monthly scan limit reached. Will retry automatically on quota reset or plan upgrade.',
+        )
 
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
@@ -103,22 +116,19 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         except Exception:
             continue
 
+    notes = ''
     if decoded_attachments and not user.is_pro:
-        has_usable_body = bool(body and body.strip())
-        if not has_usable_body:
-            # Attachment-only email with no body — cannot process without Pro.
-            # Fail the job so it stays visible and retries on plan upgrade.
-            logger.error("llm.process_email: pro_required | user=%s",
-                user.pk,
+        if not (body and body.strip()):
+            # Attachment-only email, free plan — cannot process.
+            logger.error("llm.process_email: pro_required | user=%s", user.pk)
+            return ProcessingOutcome(
+                status='failed',
+                failure_reason='pro_required',
+                notes='Attachment processing requires a Pro plan. Upgrade to process this email.',
             )
-            _fail_job_pro_required(scan_job)
-            return [], ''
-        else:
-            # Body is present — process body only, inform user attachments were skipped.
-            decoded_attachments = []
-            notes_attachments = 'Attachments ignored — upgrade to Pro to include them.'
-    else:
-        notes_attachments = ''
+        # Body present — process body only, skip attachments.
+        decoded_attachments = []
+        notes = 'Attachments ignored — upgrade to Pro to include them.'
 
     user_instructions = collect_prompt_injections(user, sender)
     try:
@@ -131,52 +141,20 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         )
     except ValueError as exc:
         logger.error("llm.process_email: extraction error | user=%s error=%s", user.pk, exc)
-        return [], notes_attachments
+        return ProcessingOutcome(
+            status='failed',
+            failure_reason='llm_error',
+            failure_signature=f"ValueError: {str(exc)[:200]}",
+            notes=notes,
+        )
 
     _fire_usage(user, input_tokens, output_tokens)
-    created = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
-    return created, notes_attachments
-
-
-def process_file(user, file_bytes: bytes, media_type: str, context: str = '') -> tuple[list, str]:
-    """
-    Extract events from a raw file upload (image, PDF, or plain text).
-
-    NOTE: The dashboard upload view routes through process_email so that filename
-    context reaches the LLM consistently. This function is kept for any direct
-    callers that have already decoded bytes.
-    Returns (created_events, notes).
-    """
-    if not user.is_pro:
-        return [], 'File uploads require a Pro plan.'
-
-    if not _check_and_increment_scans(user):
-        return [], 'Scan limit reached.'
-
-    language = getattr(user, 'language', 'English')
-    user_timezone = getattr(user, 'timezone', 'UTC')
-
-    if media_type == 'text/plain':
-        text = file_bytes.decode('utf-8', errors='ignore')
-        if context:
-            text = f"{text}\n\nUser context: {context}"
-        try:
-            events, input_tokens, output_tokens = extract_events(text, language=language, user_timezone=user_timezone)
-        except ValueError as exc:
-            logger.error("llm.process_file: extraction error | user=%s error=%s", user.pk, exc)
-            return [], ''
-    else:
-        try:
-            events, input_tokens, output_tokens = extract_events_from_image(
-                file_bytes, media_type, context=context, language=language, user_timezone=user_timezone,
-            )
-        except ValueError as exc:
-            logger.error("llm.process_file: extraction error | user=%s error=%s", user.pk, exc)
-            return [], ''
-
-    _fire_usage(user, input_tokens, output_tokens)
-    created = _save_events(user, events)
-    return created, ''
+    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id)
+    return ProcessingOutcome(
+        created=created,
+        notes=notes,
+        status='needs_review' if has_pending else 'done',
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -185,66 +163,43 @@ def process_file(user, file_bytes: bytes, media_type: str, context: str = '') ->
 
 def _check_and_increment_scans(user) -> bool:
     """
-    Enforce monthly scan limit for free users.
-    Resets the counter if the calendar month has rolled over.
-    Returns True if the scan is allowed.
+    Enforce monthly scan limit for free users. Atomic to prevent races.
+
+    Uses a conditional UPDATE so two concurrent workers cannot both pass
+    the limit check and both increment — only one UPDATE succeeds per slot.
+    Returns True if the scan is allowed and the counter was incremented.
     """
+    from django.db.models import F
+    from accounts.models import User
+
     today = timezone.now().date()
 
+    # Reset counter if the calendar month has rolled over.
     if not user.scan_reset_date or user.scan_reset_date.month != today.month:
-        user.monthly_scans = 0
-        user.scan_reset_date = today
-        user.save(update_fields=['monthly_scans', 'scan_reset_date'])
+        User.objects.filter(pk=user.pk).update(monthly_scans=0, scan_reset_date=today)
+        user.refresh_from_db(fields=['monthly_scans', 'scan_reset_date'])
 
-    if not user.is_pro and user.monthly_scans >= 30:
-        return False
+    if user.is_pro:
+        User.objects.filter(pk=user.pk).update(monthly_scans=F('monthly_scans') + 1)
+        return True
 
-    user.monthly_scans += 1
-    user.save(update_fields=['monthly_scans'])
-    return True
+    # Atomic conditional increment: only updates (and returns 1) if still under limit.
+    updated = User.objects.filter(
+        pk=user.pk,
+        monthly_scans__lt=30,
+    ).update(monthly_scans=F('monthly_scans') + 1)
+    return bool(updated)
 
 
-def _fail_job_scan_limit(scan_job) -> None:
-    """
-    Mark the job as failed with reason=scan_limit and a user-visible note.
-    The job stays visible in the queue and is retried automatically on month
-    reset or plan upgrade.
-    """
-    if scan_job is None:
+def _fire_usage(user, input_tokens: int, output_tokens: int) -> None:
+    """Async-fire token usage tracking. Non-blocking — never raises."""
+    if not input_tokens and not output_tokens:
         return
     try:
-        from emails.models import ScanJob
-        from django.utils import timezone
-        ScanJob.objects.filter(pk=scan_job.pk).update(
-            status=ScanJob.STATUS_FAILED,
-            failure_reason=ScanJob.REASON_SCAN_LIMIT,
-            failure_signature='',
-            notes='Monthly scan limit reached. Will retry automatically when quota resets or on plan upgrade.',
-            updated_at=timezone.now(),
-        )
+        from emails.tasks import track_llm_usage
+        track_llm_usage.delay(user.pk, input_tokens, output_tokens)
     except Exception as exc:
-        logger.error("llm._fail_job_scan_limit: update failed | job_id=%s error=%s", scan_job.pk, exc)
-
-
-def _fail_job_pro_required(scan_job) -> None:
-    """
-    Mark the job as failed with reason=pro_required and a user-visible note.
-    The job stays visible in the queue and is retried automatically on plan upgrade.
-    """
-    if scan_job is None:
-        return
-    try:
-        from emails.models import ScanJob
-        from django.utils import timezone
-        ScanJob.objects.filter(pk=scan_job.pk).update(
-            status=ScanJob.STATUS_FAILED,
-            failure_reason=ScanJob.REASON_PRO_REQUIRED,
-            failure_signature='',
-            notes='Attachment processing requires a Pro plan. Upgrade to process this email.',
-            updated_at=timezone.now(),
-        )
-    except Exception as exc:
-        logger.error("llm._fail_job_pro_required: update failed | job_id=%s error=%s", scan_job.pk, exc)
+        logger.error("llm._fire_usage: enqueue failed | user=%s error=%s", user.pk, exc)
 
 
 def _get_or_create_uncategorized(user):
@@ -265,8 +220,6 @@ def _find_conflicts(user, event_data: dict) -> list:
     Conflict conditions (either triggers):
       1. Same source_email_id — this email was already successfully processed.
       2. Same title + start time within ±1 hour of an existing active event.
-
-    Returns a list of conflicting Event instances (may be empty).
     """
     from dashboard.models import Event
     from datetime import timedelta
@@ -275,18 +228,14 @@ def _find_conflicts(user, event_data: dict) -> list:
     conflicts = []
     source_email_id = event_data.get('source_email_id', '')
 
-    # Condition 1: same source email already has active events
     if source_email_id:
         by_email = list(
             Event.objects.filter(
-                user=user,
-                source_email_id=source_email_id,
-                status='active',
+                user=user, source_email_id=source_email_id, status='active',
             ).only('pk', 'title', 'start')
         )
         conflicts.extend(by_email)
 
-    # Condition 2: same title + overlapping start time (±1 hour)
     title = event_data.get('title', '').strip()
     start_str = event_data.get('start', '')
     if title and start_str:
@@ -301,9 +250,8 @@ def _find_conflicts(user, event_data: dict) -> list:
                         title__iexact=title,
                         start__range=(window_start, window_end),
                         status='active',
-                    ).exclude(
-                        pk__in=[c.pk for c in conflicts]
-                    ).only('pk', 'title', 'start')
+                    ).exclude(pk__in=[c.pk for c in conflicts])
+                    .only('pk', 'title', 'start')
                 )
                 conflicts.extend(by_title)
         except Exception:
@@ -313,54 +261,43 @@ def _find_conflicts(user, event_data: dict) -> list:
 
 
 def _append_conflict_concern(event_data: dict, conflicts: list) -> dict:
-    """
-    Append conflict details to event_data['concern'] and ensure status is pending.
-    Mutates and returns event_data.
-    """
-    lines = []
-    for conflict in conflicts:
-        date_str = conflict.start.strftime('%Y-%m-%d %H:%M') if conflict.start else '?'
-        lines.append(f"Conflicts with existing event: '{conflict.title}' on {date_str} (id={conflict.pk}).")
-
+    """Append conflict details to event_data['concern'] and force status to pending."""
+    lines = [
+        f"Conflicts with existing event: '{c.title}' on "
+        f"{c.start.strftime('%Y-%m-%d %H:%M') if c.start else '?'} (id={c.pk})."
+        for c in conflicts
+    ]
     conflict_note = ' '.join(lines)
-    existing_concern = event_data.get('concern', '').strip()
-    event_data['concern'] = f"{existing_concern} {conflict_note}".strip() if existing_concern else conflict_note
+    existing = event_data.get('concern', '').strip()
+    event_data['concern'] = f"{existing} {conflict_note}".strip() if existing else conflict_note
     event_data['status'] = 'pending'
     return event_data
 
 
-def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> list:
+def _save_events(user, events: list, sender: str = '', source_email_id: str = '') -> tuple[list, bool]:
     """
-    Persist extracted events and set the final job status.
+    Persist extracted events. Returns (created_list, has_pending).
 
-    Rules applied here (in order):
-      1. Conflict detection — pending status + enriched concern for any event
+    Rules applied in order:
+      1. Stamp source_email_id on every event.
+      2. Conflict detection — pending status + enriched concern for any event
          that clashes with an existing active event.
-      2. All-or-nothing batch rule — if any event ends up pending, all events
-         in the batch flip to pending (with a generic concern on the ones that
-         were already active).
-      3. Job status ownership — this function is the only place that sets
-         needs_review or done on the job. The task layer never sets these.
+      3. All-or-nothing batch rule — if any event is pending, all flip to pending.
+      4. Write events via write_event_to_calendar.
 
-    Returns the list of created Event instances.
+    Does not touch the database for job state — that is the task layer's job.
     """
-    from emails.models import ScanJob
-
     if not events:
-        _finalise_job(scan_job, has_pending=False)
-        return []
+        return [], False
 
-    # Stamp source_email_id on every event before any processing
     for event_data in events:
         event_data['source_email_id'] = source_email_id
 
-    # Step 1: conflict detection — enrich pending concern where needed
     for event_data in events:
         conflicts = _find_conflicts(user, event_data)
         if conflicts:
             _append_conflict_concern(event_data, conflicts)
 
-    # Step 2: all-or-nothing batch rule
     if any(e.get('status') == 'pending' for e in events):
         for e in events:
             if e.get('status') == 'active':
@@ -371,7 +308,6 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
 
     has_pending = any(e.get('status') == 'pending' for e in events)
 
-    # Step 3: write events
     created = []
     for event_data in events:
         category = resolve_category(user, event_data, sender)
@@ -379,33 +315,8 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
             continue
         if category is None:
             category = _get_or_create_uncategorized(user)
-        event = write_event_to_calendar(user, event_data, category, scan_job=scan_job)
+        event = write_event_to_calendar(user, event_data, category)
         if event:
             created.append(event)
 
-    # Step 4: set terminal job status — pipeline owns this, not the task layer
-    _finalise_job(scan_job, has_pending=has_pending)
-
-    return created
-
-
-def _finalise_job(scan_job, has_pending: bool) -> None:
-    """
-    Set the terminal status on a ScanJob.
-    needs_review if any pending events were produced, done otherwise.
-    The task layer must not set done/needs_review — only failed on exception.
-    """
-    if scan_job is None:
-        return
-
-    from emails.models import ScanJob
-
-    if has_pending:
-        new_status = ScanJob.STATUS_NEEDS_REVIEW
-    else:
-        new_status = ScanJob.STATUS_DONE
-
-    ScanJob.objects.filter(pk=scan_job.pk).update(
-        status=new_status,
-        updated_at=timezone.now(),
-    )
+    return created, has_pending
