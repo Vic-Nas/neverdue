@@ -32,9 +32,6 @@
     <a href="https://calendar.google.com/calendar/u/0/r"
        target="_blank" rel="noopener"
        class="topnav__link">Calendar ↗</a>
-    {% if user.is_pro %}
-    <a href="{% url 'dashboard:upload' %}" class="topnav__link {% if request.resolver_match.url_name == 'upload' %}topnav__link--active{% endif %}">Import</a>
-    {% endif %}
     <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
       Queue<span class="queue-badge queue-badge--processing" id="queue-badge-processing" hidden></span><span class="queue-badge queue-badge--attention" id="queue-badge-attention" hidden></span>
     </a>
