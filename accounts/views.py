@@ -11,7 +11,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+import base64
+import hashlib
 import json
+import secrets
 import zoneinfo
 
 from google_auth_oauthlib.flow import Flow
@@ -71,6 +74,12 @@ SCOPES = [
 
 
 def google_login(request):
+    # Generate PKCE code verifier and challenge
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b'=').decode()
+
     flow = Flow.from_client_config(
         {
             "web": {
@@ -85,8 +94,12 @@ def google_login(request):
     )
     flow.oauth2session.access_type = "offline"
     flow.oauth2session.prompt = "consent"
-    authorization_url, state = flow.authorization_url()
+    authorization_url, state = flow.authorization_url(
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+    )
     request.session["oauth_state"] = state
+    request.session["pkce_verifier"] = code_verifier
     return redirect(authorization_url)
 
 
@@ -114,7 +127,8 @@ def google_callback(request):
         redirect_uri=request.build_absolute_uri(reverse("accounts:google_callback")),
         state=state,
     )
-    flow.fetch_token(code=code)
+    code_verifier = request.session.pop("pkce_verifier", None)
+    flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
 
     id_info = google.oauth2.id_token.verify_oauth2_token(
