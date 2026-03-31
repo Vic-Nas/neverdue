@@ -209,31 +209,3 @@ def get_user_from_recipient(recipient: str):
     except (IndexError, ValueError) as exc:
         logger.error("emails.get_user_from_recipient: parse failed | recipient=%s error=%s", recipient, exc)
         return None
-
-
-def sender_is_allowed(user, sender: str) -> bool:
-    """
-    Check if a sender is allowed based on the user's FilterRules.
-    No rules → all senders allowed.
-    """
-    from dashboard.models import FilterRule
-    from fnmatch import fnmatch
-
-    rules = FilterRule.objects.filter(user=user)
-    if not rules.exists():
-        return True
-
-    sender = sender.lower()
-    allow_rules = [r.pattern.lower() for r in rules if r.action == 'allow']
-    block_rules = [r.pattern.lower() for r in rules if r.action == 'block']
-
-    def matches(pattern):
-        if pattern.startswith('@'):
-            return sender.endswith(pattern)
-        return sender == pattern or fnmatch(sender, pattern)
-
-    if any(matches(p) for p in block_rules):
-        return False
-    if allow_rules:
-        return any(matches(p) for p in allow_rules)
-    return True

@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 
-from .models import Category, Event, FilterRule, Rule
+from .models import Category, Event, Rule
 from .ical import build_ics
 from accounts.views import GCAL_COLOR_HEX
 
@@ -421,11 +421,34 @@ def rule_add(request):
         pattern = data.get('pattern', '').strip()
         action = data.get('action', '').strip()
         category_id = data.get('category_id')
+        prompt_text = data.get('prompt_text', '').strip()
 
-        if not rule_type or not action:
-            return JsonResponse({'ok': False, 'error': 'Rule type and action are required.'}, status=400)
+        if not rule_type:
+            return JsonResponse({'ok': False, 'error': 'Rule type is required.'}, status=400)
 
-        if action == 'categorize' and not category_id:
+        if rule_type == Rule.TYPE_PROMPT:
+            if not prompt_text:
+                return JsonResponse({'ok': False, 'error': 'Prompt text is required.'}, status=400)
+            Rule.objects.create(
+                user=request.user,
+                rule_type=rule_type,
+                pattern=pattern,
+                prompt_text=prompt_text,
+            )
+            return JsonResponse({'ok': True})
+
+        # sender / keyword rules require an action
+        if not action:
+            return JsonResponse({'ok': False, 'error': 'Action is required.'}, status=400)
+
+        # allow/block are only valid for sender rules
+        if action in (Rule.ACTION_ALLOW, Rule.ACTION_BLOCK) and rule_type != Rule.TYPE_SENDER:
+            return JsonResponse(
+                {'ok': False, 'error': 'Allow and block actions are only valid for sender rules.'},
+                status=400,
+            )
+
+        if action == Rule.ACTION_CATEGORIZE and not category_id:
             return JsonResponse({'ok': False, 'error': 'A category is required for categorize action.'}, status=400)
 
         category = None
@@ -542,45 +565,3 @@ def category_delete(request, pk):
     except Exception:
         logger.exception("category_delete error for user=%s pk=%s", request.user.pk, pk)
         return HttpResponse('Could not delete category.', status=500)
-
-
-@login_required
-def email_sources(request):
-    try:
-        rules = FilterRule.objects.filter(user=request.user).order_by('created_at')
-        return render(request, 'dashboard/email_sources.html', {'filter_rules': rules})
-    except Exception:
-        logger.exception("email_sources error for user=%s", request.user.pk)
-        return HttpResponse('Email sources unavailable.', status=500)
-
-
-@login_required
-def filter_rule_add(request):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
-    try:
-        data = _json.loads(request.body)
-        action = data.get('action', '').strip()
-        pattern = data.get('pattern', '').strip()
-
-        if not action or not pattern:
-            return JsonResponse({'ok': False, 'error': 'Action and pattern are required.'}, status=400)
-
-        rule = FilterRule.objects.create(user=request.user, action=action, pattern=pattern)
-        return JsonResponse({'ok': True, 'id': rule.pk})
-    except Exception:
-        logger.exception("filter_rule_add error for user=%s", request.user.pk)
-        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
-
-
-@login_required
-def filter_rule_delete(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
-    try:
-        rule = get_object_or_404(FilterRule, pk=pk, user=request.user)
-        rule.delete()
-        return JsonResponse({'ok': True})
-    except Exception:
-        logger.exception("filter_rule_delete error for user=%s pk=%s", request.user.pk, pk)
-        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)

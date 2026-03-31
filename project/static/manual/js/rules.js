@@ -44,18 +44,6 @@
         };
       },
     },
-    // ── Example: add a new "domain" rule type ────────────────────────────────
-    // domain: {
-    //   collectData: function (form) {
-    //     var catSelect = form.querySelector('[name="category_id"]');
-    //     return {
-    //       rule_type: 'domain',
-    //       pattern: form.querySelector('[name="pattern"]').value.trim(),
-    //       action: form.querySelector('[name="action"]').value,
-    //       category_id: catSelect ? catSelect.value || null : null,
-    //     };
-    //   },
-    // },
   };
 
   // ─── Rule type dropdown → show/hide field blocks ──────────────────────────
@@ -69,25 +57,41 @@
     if (type && document.getElementById('rule-fields-' + type)) {
       document.getElementById('rule-fields-' + type).hidden = false;
     }
+    // When sender type is selected, show allow/block options in the action select.
+    // For other types, hide them so the user can't accidentally pick them.
+    var actionSelects = document.querySelectorAll('#rule-fields-sender select[name="action"], #rule-fields-keyword select[name="action"]');
+    actionSelects.forEach(function (sel) {
+      var isSender = sel.closest('#rule-fields-sender') !== null;
+      sel.querySelectorAll('option').forEach(function (opt) {
+        if (opt.value === 'allow' || opt.value === 'block') {
+          opt.hidden = !isSender || type !== 'sender';
+        }
+      });
+      // Reset to first visible option if current value is now hidden
+      if (opt && (opt.value === 'allow' || opt.value === 'block') && type !== 'sender') {
+        sel.value = 'categorize';
+        toggleCatGroup(sel);
+      }
+    });
   }
 
   if (typeSelect) {
     typeSelect.addEventListener('change', function () {
       showFieldsForType(typeSelect.value);
     });
-    // Restore selection on back-navigation
     showFieldsForType(typeSelect.value);
   }
 
-  // ─── Category select visibility (action → categorize / discard) ───────────
+  // ─── Category select visibility (action → categorize / discard / allow / block) ──
+
+  function toggleCatGroup(sel) {
+    var catGroup = sel.closest('form').querySelector('.cat-select-group');
+    if (catGroup) catGroup.hidden = sel.value !== 'categorize';
+  }
 
   document.querySelectorAll('select[name="action"]').forEach(function (sel) {
-    function toggle() {
-      var catGroup = sel.closest('form').querySelector('.cat-select-group');
-      if (catGroup) catGroup.hidden = sel.value !== 'categorize';
-    }
-    sel.addEventListener('change', toggle);
-    toggle();
+    sel.addEventListener('change', function () { toggleCatGroup(sel); });
+    toggleCatGroup(sel);
   });
 
   // ─── Submit ───────────────────────────────────────────────────────────────

@@ -35,12 +35,15 @@ class ScanJob(models.Model):
     REASON_SCAN_LIMIT = 'scan_limit'
     REASON_PRO_REQUIRED = 'pro_required'
     REASON_INTERNAL_ERROR = 'internal_error'
+    # Not a failure — job completes as done. Used only in notes for UI display.
+    REASON_DISCARDED_BY_RULE = 'discarded_by_rule'
 
     FAILURE_REASON_CHOICES = [
         (REASON_LLM_ERROR, 'LLM error'),
         (REASON_SCAN_LIMIT, 'Scan limit reached'),
         (REASON_PRO_REQUIRED, 'Pro plan required'),
         (REASON_INTERNAL_ERROR, 'Internal error'),
+        (REASON_DISCARDED_BY_RULE, 'Discarded by rule'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scan_jobs')
@@ -91,36 +94,36 @@ class JobAttemptLog(models.Model):
     """
     Immutable log of every job execution attempt.
     Used for metrics that must survive job retry/success transitions.
-    
+
     Each attempt (initial + retries) creates a row.
     Metrics queries this table instead of querying ScanJob.status,
     so failure history isn't lost when jobs are retried and succeed.
     """
     STATUS_DONE = 'done'
     STATUS_FAILED = 'failed'
-    
+
     STATUS_CHOICES = [
         (STATUS_DONE, 'Done'),
         (STATUS_FAILED, 'Failed'),
     ]
-    
+
     job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name='attempt_logs')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     failure_reason = models.CharField(
-        max_length=30, 
-        choices=ScanJob.FAILURE_REASON_CHOICES, 
-        blank=True, 
+        max_length=30,
+        choices=ScanJob.FAILURE_REASON_CHOICES,
+        blank=True,
         default='',
         help_text='Only populated if status=failed'
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['created_at']),
             models.Index(fields=['status', 'failure_reason']),
         ]
-    
+
     def __str__(self):
         return f'JobAttemptLog(job={self.job_id} status={self.status} reason={self.failure_reason})'
