@@ -1,12 +1,17 @@
 # emails/tasks.py
 import json
 import logging
+from fnmatch import fnmatch
 
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
 from emails.models import ScanJob, JobAttemptLog
+
+try:
+    from llm.pipeline import ProcessingOutcome
+except: pass
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +138,57 @@ def _get_user_or_fail(user_id: int, job: 'ScanJob | None'):
 
 
 # ---------------------------------------------------------------------------
+# Sender rule check
+# ---------------------------------------------------------------------------
+
+def _check_sender_rules(user, sender: str) -> tuple[bool, str]:
+    """
+    Evaluate sender-type Rule rows for allow/block actions.
+
+    Returns (is_blocked, note) where note is a human-readable explanation
+    to store on the job if blocked.
+
+    Logic mirrors the old FilterRule behaviour:
+      - No sender rules → all senders allowed.
+      - block match → blocked (checked first).
+      - allow rules present + no allow match → blocked.
+      - allow rules present + allow match → allowed.
+      - No block match, no allow rules → allowed.
+
+    Pattern matching supports exact address, @domain suffix, and fnmatch globs.
+    """
+    from dashboard.models import Rule
+
+    sender_rules = Rule.objects.filter(
+        user=user,
+        rule_type=Rule.TYPE_SENDER,
+        action__in=[Rule.ACTION_ALLOW, Rule.ACTION_BLOCK],
+    )
+
+    if not sender_rules.exists():
+        return False, ''
+
+    sender_lower = sender.lower()
+
+    def matches(pattern: str) -> bool:
+        p = pattern.lower()
+        if p.startswith('@'):
+            return sender_lower.endswith(p)
+        return sender_lower == p or fnmatch(sender_lower, p)
+
+    allow_patterns = [r.pattern for r in sender_rules if r.action == Rule.ACTION_ALLOW]
+    block_patterns = [r.pattern for r in sender_rules if r.action == Rule.ACTION_BLOCK]
+
+    if any(matches(p) for p in block_patterns):
+        return True, f'Discarded — sender blocked by rule: {sender}'
+
+    if allow_patterns and not any(matches(p) for p in allow_patterns):
+        return True, f'Discarded — sender not in allow list: {sender}'
+
+    return False, ''
+
+
+# ---------------------------------------------------------------------------
 # Retry dispatcher
 # ---------------------------------------------------------------------------
 
@@ -238,11 +294,12 @@ def process_inbound_email(self, job_id: int, user_id: int, email_id: str, sender
 
     Flow (all I/O happens here — the webhook only stored metadata):
       1. Load the pre-created ScanJob
-      2. Duplicate guard on message_id
-      3. Fetch full email from Resend (body + attachment bytes) — retryable
-      4. Extract text and attachments
-      5. Run process_email → ProcessingOutcome
-      6. Write all job state from outcome
+      2. Sender rule check (allow/block) — closes job as done if blocked
+      3. Duplicate guard on message_id
+      4. Fetch full email from Resend (body + attachment bytes) — retryable
+      5. Extract text and attachments
+      6. Run process_email → ProcessingOutcome
+      7. Write all job state from outcome
 
     On retry: Resend keeps emails for 24 h. Re-fetching is safe and correct.
     Retry: up to 5x, 60 s initial, exponential backoff via autoretry_for.
@@ -269,6 +326,20 @@ def process_inbound_email(self, job_id: int, user_id: int, email_id: str, sender
 
     user = _get_user_or_fail(user_id, job)
     if user is None:
+        return
+
+    # Sender rule check: allow/block rules evaluated before any network I/O.
+    # Blocked jobs close as done so they appear in the queue with a clear note.
+    is_blocked, block_note = _check_sender_rules(user, sender)
+    if is_blocked:
+        if settings.DEBUG:
+            logger.debug(
+                "emails.process_inbound_email: sender blocked by rule | job_id=%s sender=%s",
+                job_id, sender,
+            )
+        _set_notes(job, block_note)
+        _set_terminal(job, ProcessingOutcome(status='done'))
+        _log_attempt(job, 'done')
         return
 
     # Duplicate guard: if this message_id already produced active events, skip.

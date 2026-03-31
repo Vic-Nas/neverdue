@@ -7,7 +7,7 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .webhook import get_user_from_recipient, sender_is_allowed, verify_resend_signature
+from .webhook import get_user_from_recipient, verify_resend_signature
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,11 @@ def inbound(request):
       1. Verify Svix signature
       2. Parse metadata: email_id, sender, recipient
       3. Resolve user from recipient address
-      4. Check sender filter
-      5. Create ScanJob (queued) with task_args stored immediately
-      6. Queue process_inbound_email — returns 200 instantly
+      4. Create ScanJob (queued) with task_args stored immediately
+      5. Queue process_inbound_email — returns 200 instantly
+
+    Sender allow/block rules are evaluated inside the task, not here,
+    so discarded-by-rule jobs are visible in the user's queue.
     """
     payload_bytes = request.body
 
@@ -51,14 +53,6 @@ def inbound(request):
 
     user = get_user_from_recipient(recipient)
     if not user:
-        return HttpResponse('OK', status=200)
-
-    if not sender_is_allowed(user, sender):
-        if settings.DEBUG:
-            logger.debug(
-                "emails.inbound: sender blocked | user_id=%s sender=%s",
-                user.id, sender,
-            )
         return HttpResponse('OK', status=200)
 
     from .tasks import process_inbound_email

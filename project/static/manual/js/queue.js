@@ -10,15 +10,61 @@
   var POLL_MS = 4000;
 
   var SOURCE_LABELS = { email: 'Email', upload: 'Upload' };
-  var STATUS_LABELS = { queued: 'Queued', processing: 'Processing…', needs_review: 'Needs review', done: 'Done', failed: 'Failed' };
-  var STATUS_CLASSES = { queued: 'status--queued', processing: 'status--processing', needs_review: 'status--needs-review', done: 'status--done', failed: 'status--failed' };
+  var STATUS_LABELS = {
+    queued: 'Queued',
+    processing: 'Processing…',
+    needs_review: 'Needs review',
+    done: 'Done',
+    failed: 'Failed',
+  };
+  var STATUS_CLASSES = {
+    queued: 'status--queued',
+    processing: 'status--processing',
+    needs_review: 'status--needs-review',
+    done: 'status--done',
+    failed: 'status--failed',
+  };
 
   var FAILURE_REASON_LABELS = {
     llm_error: 'AI service error',
     scan_limit: 'Scan limit reached',
     pro_required: 'Pro plan required',
     internal_error: 'Internal error',
+    discarded_by_rule: 'Discarded by rule',
   };
+
+  // ─── Filter state ─────────────────────────────────────────────────────────
+
+  var filterStatus = '';
+  var filterSource = '';
+
+  var filterStatusEl = document.getElementById('queue-filter-status');
+  var filterSourceEl = document.getElementById('queue-filter-source');
+
+  if (filterStatusEl) {
+    filterStatusEl.addEventListener('change', function () {
+      filterStatus = filterStatusEl.value;
+      if (lastJobs) render(lastJobs);
+    });
+  }
+  if (filterSourceEl) {
+    filterSourceEl.addEventListener('change', function () {
+      filterSource = filterSourceEl.value;
+      if (lastJobs) render(lastJobs);
+    });
+  }
+
+  var lastJobs = null;
+
+  function applyFilters(jobs) {
+    return jobs.filter(function (j) {
+      if (filterStatus && j.status !== filterStatus) return false;
+      if (filterSource && j.source !== filterSource) return false;
+      return true;
+    });
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
 
   function fmt(isoStr) {
     var d = new Date(isoStr);
@@ -32,22 +78,30 @@
     return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
   }
 
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   function render(jobs) {
-    if (!jobs || jobs.length === 0) {
+    var visible = applyFilters(jobs);
+
+    if (!visible || visible.length === 0) {
       table.hidden = true;
       emptyMsg.hidden = false;
+      emptyMsg.textContent = jobs.length > 0
+        ? 'No jobs match the current filters.'
+        : 'No jobs yet.';
       return;
     }
     emptyMsg.hidden = true;
     table.hidden = false;
     tbody.innerHTML = '';
 
-    jobs.forEach(function (j) {
+    visible.forEach(function (j) {
       var tr = document.createElement('tr');
 
       var isTerminal = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
       var hasPending = j.pending_event_count > 0;
       var isFailed = j.status === 'failed';
+      var isDiscarded = j.status === 'done' && j.notes && j.notes.startsWith('Discarded —');
 
       var attentionBadge = hasPending
         ? '<span class="queue-pending-badge">' + j.pending_event_count + ' pending</span>'
@@ -55,17 +109,20 @@
 
       var activeInfo = j.active_event_count > 0
         ? j.active_event_count + ' event' + (j.active_event_count !== 1 ? 's' : '') + ' created'
-        : (j.status === 'done' && !hasPending ? 'No events' : '');
+        : (j.status === 'done' && !hasPending && !isDiscarded ? 'No events' : '');
 
-      // For failed jobs, surface the reason in the notes cell
-      var failureLabel = isFailed && j.failure_reason
-        ? (FAILURE_REASON_LABELS[j.failure_reason] || j.failure_reason)
-        : '';
-
-      var notesCell = failureLabel
-        ? '<span style="color:#dc2626;font-weight:500;">' + failureLabel + '</span>'
-            + (j.notes ? ' · ' + j.notes : '')
-        : (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + (activeInfo || '');
+      // For failed jobs, surface the reason in the notes cell.
+      // For discarded-by-rule jobs, the note IS the message — surface it directly.
+      var notesCell;
+      if (isFailed && j.failure_reason) {
+        var failureLabel = FAILURE_REASON_LABELS[j.failure_reason] || j.failure_reason;
+        notesCell = '<span style="color:#dc2626;font-weight:500;">' + failureLabel + '</span>'
+          + (j.notes ? ' · ' + j.notes : '');
+      } else if (isDiscarded) {
+        notesCell = '<span class="queue-discarded-note">' + j.notes + '</span>';
+      } else {
+        notesCell = (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + (activeInfo || '');
+      }
 
       var sourceLabel = SOURCE_LABELS[j.source] || j.source;
       var sourceCell = isTerminal
@@ -99,12 +156,15 @@
     return jobs && jobs.some(function (j) { return j.status === 'queued' || j.status === 'processing'; });
   }
 
+  // ─── Poll ─────────────────────────────────────────────────────────────────
+
   function poll() {
     fetch(QUEUE_STATUS_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data) return;
-        render(data.jobs);
+        lastJobs = data.jobs;
+        render(lastJobs);
         if (!hasActive(data.jobs) && pollInterval) {
           clearInterval(pollInterval);
           pollInterval = null;

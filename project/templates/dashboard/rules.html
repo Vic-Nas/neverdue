@@ -5,6 +5,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/categories.css' %}">
+<link rel="stylesheet" href="{% static 'css/rules.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -15,6 +16,22 @@
   <div class="page__header">
     <h1 class="page__title">Rules</h1>
     <p class="page__sub">Automatically categorize or discard events, or inject custom instructions into AI extraction.</p>
+  </div>
+
+  {# ── Your NeverDue inbox address ── #}
+  <div class="section-block inbox-section">
+    <div class="section-block__header">
+      <h2 class="section-block__title">Your NeverDue inbox</h2>
+    </div>
+    <div class="inbox-address-box">
+      <span id="inbox-address" class="inbox-address-text">{{ request.user.username }}@user.{{ DOMAIN }}</span>
+      <button class="btn-ghost btn btn--sm" onclick="copyInboxAddress()">Copy</button>
+    </div>
+    <p class="inbox-hint">Forward any email to this address and it will be scanned for deadlines and calendar events.</p>
+
+    <div class="forwarding-setup">
+      <p>Set up forwarding in <a href="https://gmail.com" target="_blank" rel="noopener">Gmail</a>, <a href="https://outlook.com" target="_blank" rel="noopener">Outlook</a>, <a href="https://icloud.com/mail" target="_blank" rel="noopener">Apple Mail</a>, or <a href="https://mail.yahoo.com" target="_blank" rel="noopener">Yahoo</a> — <a href="{% url 'help' %}">see the setup guide →</a></p>
+    </div>
   </div>
 
   {# ── Unified add-rule form ── #}

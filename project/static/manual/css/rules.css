@@ -1,0 +1,54 @@
+/* static/manual/css/rules.css */
+
+/* ── Inbox section ── */
+.inbox-section {
+  background: linear-gradient(135deg, var(--accent-muted) 0%, rgba(216, 243, 220, 0.5) 100%);
+  border: 1px solid var(--accent-light);
+}
+
+.inbox-address-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.inbox-address-text {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  flex: 1;
+  word-break: break-all;
+}
+
+.inbox-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.forwarding-setup {
+  margin-top: 1rem;
+}
+
+.forwarding-setup p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.forwarding-setup a {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.forwarding-setup a:hover {
+  color: var(--accent-light);
+}

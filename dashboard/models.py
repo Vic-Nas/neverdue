@@ -44,13 +44,20 @@ class Rule(models.Model):
         (TYPE_PROMPT, 'Prompt injection'),
     ]
 
+    ACTION_ALLOW = 'allow'
+    ACTION_BLOCK = 'block'
     ACTION_CATEGORIZE = 'categorize'
     ACTION_DISCARD = 'discard'
 
     ACTION_CHOICES = [
+        (ACTION_ALLOW, 'Allow'),
+        (ACTION_BLOCK, 'Block'),
         (ACTION_CATEGORIZE, 'Categorize'),
         (ACTION_DISCARD, 'Discard'),
     ]
+
+    # Actions that are only valid for sender-type rules
+    SENDER_ONLY_ACTIONS = {ACTION_ALLOW, ACTION_BLOCK}
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='rules')
     rule_type = models.CharField(max_length=20, choices=RULE_TYPES, default=TYPE_KEYWORD)
@@ -72,25 +79,6 @@ class Rule(models.Model):
         if self.rule_type == self.TYPE_PROMPT:
             return f'prompt: {self.prompt_text[:50]}'
         return f'{self.rule_type}:{self.pattern} → {self.action}'
-
-
-class FilterRule(models.Model):
-    """Allow/block rules for inbound email filtering."""
-    ACTION_CHOICES = [
-        ('allow', 'Allow'),
-        ('block', 'Block'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='filter_rules')
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
-    pattern = models.CharField(max_length=255)  # email, domain (e.g. @gmail.com), or glob (e.g. *@company.*)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ['user', 'pattern']
-
-    def __str__(self):
-        return f'{self.action}:{self.pattern}'
 
 
 class Event(models.Model):
