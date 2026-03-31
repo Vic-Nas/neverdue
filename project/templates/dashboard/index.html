@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/events.css' %}">
 <link rel="stylesheet" href="{% static 'css/categories.css' %}">
+<link rel="stylesheet" href="{% static 'css/email-inbox.css' %}">
 <style>
   /* ── Selection mode ── */
   .event-card { position: relative; }
@@ -100,6 +101,22 @@
   </div>
   {% endif %}
 
+  {# ── Your NeverDue inbox address ── #}
+  <div class="section-block inbox-section">
+    <div class="section-block__header">
+      <h2 class="section-block__title">Your NeverDue inbox</h2>
+    </div>
+    <div class="inbox-address-box">
+      <span id="inbox-address" class="inbox-address-text">{{ request.user.username }}@user.{{ DOMAIN }}</span>
+      <button class="btn-ghost btn btn--sm" onclick="copyInboxAddress()">Copy</button>
+    </div>
+    <p class="inbox-hint">Forward any email to this address and it will be scanned for deadlines and calendar events.</p>
+
+    <div class="forwarding-setup">
+      <p>Set up forwarding in <a href="https://gmail.com" target="_blank" rel="noopener">Gmail</a>, <a href="https://outlook.com" target="_blank" rel="noopener">Outlook</a>, <a href="https://icloud.com/mail" target="_blank" rel="noopener">Apple Mail</a>, or <a href="https://mail.yahoo.com" target="_blank" rel="noopener">Yahoo</a> — <a href="{% url 'help' %}">see the setup guide →</a></p>
+    </div>
+  </div>
+
   {# Scan usage bar (free users only) #}
   {% if scans_used is not None %}
   <div class="scan-banner">
@@ -177,7 +194,7 @@
             {% endif %}
             {% if event.recurrence_freq %}
               <span class="event-card__sep">·</span>
-              <span class="event-card__recur">↻ {{ event.get_recurrence_freq_display }}</span>
+              <span class="event-rules' %}" class="btn-ghost btn">Set up email forwarding
             {% endif %}
           </div>
         </div>
