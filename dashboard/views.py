@@ -515,11 +515,11 @@ def category_edit(request, pk=None):
             category = None
 
         if request.method == 'POST':
-            data = _json.loads(request.body)
-            name = data.get('name', '').strip()
-            priority = data.get('priority', 2)
-            gcal_color_id = data.get('gcal_color_id')
-            reminders = data.get('reminders', [])
+            name = request.POST.get('name', '').strip()
+            priority = int(request.POST.get('priority', 2)) or 2
+            gcal_color_id = request.POST.get('gcal_color_id', '').strip() or None
+            reminders = request.POST.getlist('reminders')
+            reminders = [int(r) for r in reminders if r.isdigit()]
 
             if not name:
                 return JsonResponse({'ok': False, 'error': 'Name is required.'}, status=400)
@@ -539,7 +539,7 @@ def category_edit(request, pk=None):
                 from dashboard.tasks import patch_category_colors
                 patch_category_colors.defer(user_id=request.user.pk, category_id=category.pk)
 
-            return JsonResponse({'ok': True, 'pk': category.pk})
+            return JsonResponse({'ok': True, 'pk': category.pk, 'redirect': '/dashboard/categories/'})
 
         return render(request, 'dashboard/category_edit.html', {
             'category': category,
