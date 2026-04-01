@@ -6,6 +6,7 @@
   var preview   = document.getElementById('file-preview');
   var fileName  = document.getElementById('file-name');
   var form      = document.getElementById('upload-form');
+  var errorEl   = document.getElementById('upload-error');
 
   if (!input || !dropzone) return;
 
@@ -32,9 +33,22 @@
     }
   });
 
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (!input.files.length) {
+        e.preventDefault();
+        if (errorEl) {
+          errorEl.textContent = 'Please select a file first using the "Browse files" button above.';
+          errorEl.hidden = false;
+        }
+      }
+    });
+  }
+
   function showFile(file) {
     if (fileName)  fileName.textContent = file.name;
     if (preview)   preview.hidden = false;
+    if (errorEl)   errorEl.hidden = true;
   }
 
   window.clearFile = function () {
