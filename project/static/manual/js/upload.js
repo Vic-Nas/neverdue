@@ -1,46 +1,54 @@
 /* static/manual/js/upload.js */
 
 (function () {
-  const input     = document.getElementById('file-input');
-  const dropzone  = document.getElementById('dropzone');
-  const preview   = document.getElementById('file-preview');
-  const fileName  = document.getElementById('file-name');
-  const submitBtn = document.getElementById('submit-btn');
+  var input     = document.getElementById('file-input');
+  var dropzone  = document.getElementById('dropzone');
+  var preview   = document.getElementById('file-preview');
+  var fileName  = document.getElementById('file-name');
+  var form      = document.getElementById('upload-form');
 
   if (!input || !dropzone) return;
 
-  input.addEventListener('change', () => {
+  input.addEventListener('change', function () {
     if (input.files.length) showFile(input.files[0]);
   });
 
-  dropzone.addEventListener('dragover', e => {
+  dropzone.addEventListener('dragover', function (e) {
     e.preventDefault();
     dropzone.classList.add('upload-dropzone--active');
   });
 
-  dropzone.addEventListener('dragleave', () => {
+  dropzone.addEventListener('dragleave', function () {
     dropzone.classList.remove('upload-dropzone--active');
   });
 
-  dropzone.addEventListener('drop', e => {
+  dropzone.addEventListener('drop', function (e) {
     e.preventDefault();
     dropzone.classList.remove('upload-dropzone--active');
-    const file = e.dataTransfer.files[0];
+    var file = e.dataTransfer.files[0];
     if (file) {
       input.files = e.dataTransfer.files;
       showFile(file);
     }
   });
 
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (!input.files.length) {
+        e.preventDefault();
+        dropzone.classList.add('upload-dropzone--error');
+        setTimeout(function () { dropzone.classList.remove('upload-dropzone--error'); }, 1500);
+      }
+    });
+  }
+
   function showFile(file) {
     if (fileName)  fileName.textContent = file.name;
     if (preview)   preview.hidden = false;
-    if (submitBtn) submitBtn.disabled = false;
   }
 
   window.clearFile = function () {
     input.value = '';
     if (preview)   preview.hidden = true;
-    if (submitBtn) submitBtn.disabled = true;
   };
 }());
