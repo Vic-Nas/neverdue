@@ -35,7 +35,6 @@ class ScanJob(models.Model):
     REASON_SCAN_LIMIT = 'scan_limit'
     REASON_PRO_REQUIRED = 'pro_required'
     REASON_INTERNAL_ERROR = 'internal_error'
-    # Not a failure — job completes as done. Used only in notes for UI display.
     REASON_DISCARDED_BY_RULE = 'discarded_by_rule'
 
     FAILURE_REASON_CHOICES = [
@@ -52,20 +51,24 @@ class ScanJob(models.Model):
     from_address = models.CharField(max_length=255, blank=True, default='')
     notes = models.CharField(max_length=255, blank=True, default='')
 
-    # Serialized task arguments for replay on retry.
-    # JSON-encoded dict with task-specific kwargs (e.g. body, attachments for email tasks).
-    # Allows failed jobs to be re-enqueued with original args after plan/quota changes.
-    task_args = models.TextField(blank=True, default='{}')
-
-    # Failure classification — both blank on non-failed jobs.
+    # Failure classification — blank on non-failed jobs.
     # failure_reason: controlled code for admin filtering and bulk retry logic.
-    # failure_signature: short string identifying the exception type + message
-    #   (e.g. "AnthropicError: 529 overloaded") so internal_error jobs can be
-    #   grouped by root cause in the admin.
     failure_reason = models.CharField(
         max_length=30, choices=FAILURE_REASON_CHOICES, blank=True, default='',
     )
-    failure_signature = models.CharField(max_length=255, blank=True, default='')
+
+    # Typed retry fields — store only what each source type needs to re-dispatch.
+    # Email jobs: message_id is sufficient to re-fetch from Resend + dedup guard.
+    # Upload jobs: file_b64/media_type/context/filename to rerun process_uploaded_file,
+    #              or upload_text to rerun process_text_as_upload.
+    # Fields are blank/null when not applicable to the source type.
+    message_id = models.CharField(max_length=255, blank=True, default='')  # email source
+    email_id = models.CharField(max_length=255, blank=True, default='')    # email source
+    file_b64 = models.TextField(blank=True, default='')                    # upload source (file)
+    media_type = models.CharField(max_length=100, blank=True, default='')  # upload source (file)
+    upload_context = models.TextField(blank=True, default='')              # upload source (file)
+    filename = models.CharField(max_length=255, blank=True, default='')    # upload source (file)
+    upload_text = models.TextField(blank=True, default='')                 # upload source (text)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -88,42 +91,3 @@ class ScanJob(models.Model):
     @property
     def active_events(self):
         return self.events.filter(status='active')
-
-
-class JobAttemptLog(models.Model):
-    """
-    Immutable log of every job execution attempt.
-    Used for metrics that must survive job retry/success transitions.
-
-    Each attempt (initial + retries) creates a row.
-    Metrics queries this table instead of querying ScanJob.status,
-    so failure history isn't lost when jobs are retried and succeed.
-    """
-    STATUS_DONE = 'done'
-    STATUS_FAILED = 'failed'
-
-    STATUS_CHOICES = [
-        (STATUS_DONE, 'Done'),
-        (STATUS_FAILED, 'Failed'),
-    ]
-
-    job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name='attempt_logs')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
-    failure_reason = models.CharField(
-        max_length=30,
-        choices=ScanJob.FAILURE_REASON_CHOICES,
-        blank=True,
-        default='',
-        help_text='Only populated if status=failed'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['created_at']
-        indexes = [
-            models.Index(fields=['created_at']),
-            models.Index(fields=['status', 'failure_reason']),
-        ]
-
-    def __str__(self):
-        return f'JobAttemptLog(job={self.job_id} status={self.status} reason={self.failure_reason})'

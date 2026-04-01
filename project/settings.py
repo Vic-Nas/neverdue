@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'dashboard.apps.DashboardConfig',
     'emails',
     'llm',
+    'procrastinate.contrib.django',
 ]
 
 MIDDLEWARE = [
@@ -104,27 +105,6 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-from celery.schedules import crontab
-
-CELERY_BEAT_SCHEDULE = {
-    'reset-monthly-scans': {
-        'task': 'emails.tasks.reset_monthly_scans',
-        'schedule': crontab(day_of_month=1, hour=0, minute=0),
-    },
-    'recover-stale-jobs': {
-        'task': 'emails.tasks.recover_stale_jobs',
-        'schedule': crontab(minute='*/10'),  # Every 10 minutes
-    },
-    'cleanup-events': {
-        'task': 'emails.tasks.cleanup_events',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-    },
-    'cleanup-job-attempt-logs': {
-        'task': 'emails.tasks.cleanup_job_attempt_logs',
-        'schedule': crontab(hour=3, minute=0),  # Daily at 3 AM
-    },
-}
-
 # Google OAuth
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
@@ -138,11 +118,8 @@ RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
 LLM_API_KEY = os.environ.get('LLM_API_KEY')
 LLM_MODEL   = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
 
-# Celery
-CELERY_BROKER_URL    = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_TASK_ACKS_LATE = True
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# Procrastinate — uses the default Django DB (Postgres). No broker needed.
+PROCRASTINATE_ON_APP_READY = None  # tasks auto-discovered via INSTALLED_APPS
 
 # Ads
 ADSENSE_CLIENT_ID = os.environ.get('ADSENSE_CLIENT_ID')

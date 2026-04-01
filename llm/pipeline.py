@@ -43,7 +43,7 @@ class ProcessingOutcome:
 # Public entry points
 # ---------------------------------------------------------------------------
 
-def process_text(user, text: str, sender: str = '', source_email_id: str = '') -> ProcessingOutcome:
+def process_text(user, text: str, sender: str = '', source_email_id: str = '', scan_job=None) -> ProcessingOutcome:
     """
     Extract events from plain text or a reprocess prompt.
 
@@ -75,14 +75,14 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '') -
         )
 
     _fire_usage(user, input_tokens, output_tokens)
-    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id)
+    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return ProcessingOutcome(
         created=created,
         status='needs_review' if has_pending else 'done',
     )
 
 
-def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '') -> ProcessingOutcome:
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None) -> ProcessingOutcome:
     """
     Extract events from an inbound email (body + optional attachments).
     Also used by process_uploaded_file (empty body, single attachment).
@@ -149,7 +149,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         )
 
     _fire_usage(user, input_tokens, output_tokens)
-    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id)
+    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     return ProcessingOutcome(
         created=created,
         notes=notes,
@@ -274,7 +274,7 @@ def _append_conflict_concern(event_data: dict, conflicts: list) -> dict:
     return event_data
 
 
-def _save_events(user, events: list, sender: str = '', source_email_id: str = '') -> tuple[list, bool]:
+def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, bool]:
     """
     Persist extracted events. Returns (created_list, has_pending).
 
@@ -315,7 +315,7 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
             continue
         if category is None:
             category = _get_or_create_uncategorized(user)
-        event = write_event_to_calendar(user, event_data, category)
+        event = write_event_to_calendar(user, event_data, category, scan_job=scan_job)
         if event:
             created.append(event)
 

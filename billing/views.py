@@ -205,7 +205,7 @@ def _sync_subscription(stripe_sub):
         # If subscription just became active, retry any failed jobs
         if old_status != 'active' and sub.status == 'active':
             from emails.tasks import retry_jobs_after_plan_upgrade
-            retry_jobs_after_plan_upgrade.delay(sub.user.pk)
+            retry_jobs_after_plan_upgrade.defer(user_id=sub.user.pk)
             logger.info('_sync_subscription: triggered retry for user=%s on plan upgrade', sub.user.pk)
     except Exception:
         logger.exception('_sync_subscription: save failed for customer=%s subscription=%s',

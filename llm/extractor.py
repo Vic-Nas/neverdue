@@ -12,6 +12,19 @@ logger = logging.getLogger(__name__)
 
 client = anthropic.Anthropic(api_key=settings.LLM_API_KEY)
 
+
+def _call_api(**kwargs):
+    """
+    Thin wrapper around client.messages.create that converts Anthropic SDK
+    errors into ValueError so the pipeline's except-ValueError path can set
+    failure_reason='llm_error' instead of letting them bubble up as
+    internal_error.
+    """
+    try:
+        return client.messages.create(**kwargs)
+    except anthropic.APIError as exc:
+        raise ValueError(f"Anthropic API error: {exc}") from exc
+
 SYSTEM_PROMPT = """You are a calendar event extractor. Given text content from an email or document, extract all calendar events, deadlines, and scheduled items.
 
 Return ONLY a valid JSON array. No explanation, no markdown, no extra text.
@@ -162,7 +175,7 @@ def extract_events(text: str, language: str = 'English', user_timezone: str = 'U
         user_content += f"\nUser instructions (follow strictly):\n{user_instructions}\n"
     user_content += f"\nExtract all calendar events from this content:\n\n{text}"
 
-    message = client.messages.create(
+    message = _call_api(
         model=settings.LLM_MODEL,
         max_tokens=2000,
         system=system,
@@ -205,7 +218,7 @@ def extract_events_from_image(
     if user_instructions:
         user_text += f'\n\nUser instructions (follow strictly): {user_instructions}'
 
-    message = client.messages.create(
+    message = _call_api(
         model=settings.LLM_MODEL,
         max_tokens=2000,
         system=system,
@@ -267,7 +280,7 @@ def extract_events_from_email(
             )})
 
             try:
-                message = client.messages.create(
+                message = _call_api(
                     model=settings.LLM_MODEL,
                     max_tokens=2000,
                     system=system,
@@ -329,7 +342,7 @@ def extract_events_from_email(
         recon_system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
 
     try:
-        message = client.messages.create(
+        message = _call_api(
             model=settings.LLM_MODEL,
             max_tokens=2000,
             system=recon_system,

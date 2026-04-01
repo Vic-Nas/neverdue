@@ -157,12 +157,9 @@ def event_prompt_edit(request, pk):
             user=request.user,
             source=ScanJob.SOURCE_UPLOAD,
             status=ScanJob.STATUS_QUEUED,
-            task_args=_json.dumps({
-                'user_id': request.user.pk,
-                'text': full_text,
-            }),
+            upload_text=full_text,
         )
-        process_text_as_upload.delay(job.id, request.user.pk, full_text)
+        process_text_as_upload.defer(job_id=job.id, user_id=request.user.pk, text=full_text)
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("event_prompt_edit error for user=%s pk=%s", request.user.pk, pk)
@@ -199,12 +196,9 @@ def events_bulk_action(request):
             user=request.user,
             source=ScanJob.SOURCE_UPLOAD,
             status=ScanJob.STATUS_QUEUED,
-            task_args=_json.dumps({
-                'user_id': request.user.pk,
-                'text': full_text,
-            }),
+            upload_text=full_text,
         )
-        process_text_as_upload.delay(job.id, request.user.pk, full_text)
+        process_text_as_upload.defer(job_id=job.id, user_id=request.user.pk, text=full_text)
         return JsonResponse({'ok': True, 'queued': len(event_ids)})
     except Exception:
         logger.exception("events_bulk_action error for user=%s", request.user.pk)
@@ -229,7 +223,7 @@ def queue_job_reprocess(request, pk):
         data = _json.loads(request.body)
         prompt = data.get('prompt', '').strip()
         event_ids = data.get('event_ids', [])
-        reprocess_events.delay(request.user.pk, event_ids, prompt, job_pk=job.pk)
+        reprocess_events.defer(user_id=request.user.pk, event_ids=event_ids, prompt=prompt, job_pk=job.pk)
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("queue_job_reprocess error for user=%s pk=%s", request.user.pk, pk)
@@ -246,9 +240,9 @@ def queue_job_retry(request, pk):
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:
         from emails.models import ScanJob
-        from emails.tasks import _reenqueue_jobs
+        from emails.tasks import _retry_jobs
         job = get_object_or_404(ScanJob, pk=pk, user=request.user, status=ScanJob.STATUS_FAILED)
-        _reenqueue_jobs([job])
+        _retry_jobs([job])
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("queue_job_retry error for user=%s pk=%s", request.user.pk, pk)
@@ -273,15 +267,19 @@ def upload(request):
                 user=request.user,
                 source=ScanJob.SOURCE_UPLOAD,
                 status=ScanJob.STATUS_QUEUED,
-                task_args=_json.dumps({
-                    'user_id':    request.user.pk,
-                    'file_b64':   file_b64,
-                    'media_type': content_type,
-                    'context':    context,
-                    'filename':   filename,
-                }),
+                file_b64=file_b64,
+                media_type=content_type,
+                upload_context=context,
+                filename=filename,
             )
-            process_uploaded_file.delay(job.id, request.user.pk, file_b64, content_type, context, filename)
+            process_uploaded_file.defer(
+                job_id=job.id,
+                user_id=request.user.pk,
+                file_b64=file_b64,
+                media_type=content_type,
+                context=context,
+                filename=filename,
+            )
             return JsonResponse({'ok': True})
         return render(request, 'dashboard/upload.html')
     except Exception:
@@ -537,7 +535,7 @@ def category_edit(request, pk=None):
             # Patch calendar colors if changed
             if gcal_color_id != old_color:
                 from dashboard.tasks import patch_category_colors
-                patch_category_colors.delay(category.pk)
+                patch_category_colors.defer(user_id=request.user.pk, category_id=category.pk)
 
             return JsonResponse({'ok': True, 'pk': category.pk})
 
