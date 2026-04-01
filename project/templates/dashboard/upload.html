@@ -4,6 +4,7 @@
 {% block title %}Import — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/upload.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -21,26 +22,26 @@
     <span class="upload-counter__label">scans used this month</span>
   </div>
 
+  {% if error %}
+  <div class="upload-error" id="upload-error">{{ error }}</div>
+  {% else %}
+  <div class="upload-error" id="upload-error" hidden></div>
+  {% endif %}
+
   <form method="post" enctype="multipart/form-data" class="upload-form" id="upload-form">
     {% csrf_token %}
 
-    {% if error %}
-    <p class="form-error">{{ error }}</p>
-    {% endif %}
-
     <div class="upload-dropzone" id="dropzone">
       <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" hidden>
-      <div class="upload-dropzone__icon">↑</div>
+      <div class="upload-dropzone__icon">📄</div>
       <p class="upload-dropzone__text">Drag and drop your file here</p>
-      <button type="button" class="btn-ghost btn" onclick="document.getElementById('file-input').click()">Browse files</button>
-      <p class="upload-dropzone__hint">Supports JPG, PNG, PDF, TXT — max 10MB</p>
+      <button type="button" class="upload-dropzone__browse" id="browse-btn" onclick="document.getElementById('file-input').click()">Browse files</button>
+      <p class="upload-dropzone__hint">JPG, PNG, PDF, TXT — max 10MB</p>
       <div class="upload-dropzone__preview" id="file-preview" hidden>
-        <span id="file-name"></span>
+        <span class="upload-dropzone__filename" id="file-name"></span>
         <button type="button" class="upload-dropzone__clear" onclick="clearFile()">✕</button>
       </div>
     </div>
-
-    <p class="form-error" id="upload-error" hidden></p>
 
     <div class="form-group">
       <label for="context">Context <span class="label-optional">(optional)</span></label>
@@ -60,9 +61,7 @@
     </div>
 
     <div class="upload-form__actions">
-      <button type="submit" class="btn-primary" id="submit-btn">
-        Submit
-      </button>
+      <button type="submit" class="btn-primary" id="submit-btn">Submit</button>
       <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>
     </div>
 
