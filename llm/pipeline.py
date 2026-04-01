@@ -68,7 +68,7 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     )
 
 
-def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None) -> ProcessingOutcome:
+def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None, is_upload: bool = False) -> ProcessingOutcome:
     """
     Extract events from an inbound email (body + optional attachments).
     Also used by process_uploaded_file (empty body, single attachment).
@@ -103,7 +103,7 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             continue
 
     notes = ''
-    if decoded_attachments and not user.is_pro:
+    if decoded_attachments and not user.is_pro and not is_upload:
         if not (body and body.strip()):
             # Attachment-only email, free plan — cannot process.
             logger.error("llm.process_email: pro_required | user=%s", user.pk)
