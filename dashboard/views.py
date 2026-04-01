@@ -281,7 +281,9 @@ def upload(request):
                 filename=filename,
             )
             return JsonResponse({'ok': True})
-        return render(request, 'dashboard/upload.html')
+        return render(request, 'dashboard/upload.html', {
+            'categories': Category.objects.filter(user=request.user).order_by('name'),
+        })
     except Exception:
         logger.exception("upload error for user=%s", request.user.pk)
         return HttpResponse('Upload unavailable.', status=500)
