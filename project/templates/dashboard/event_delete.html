@@ -1,6 +1,15 @@
 {# templates/dashboard/event_delete.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Delete event — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
 {% include 'partials/confirm_delete.html' with
    page_title="Delete event?"
    message=event.title|add:" will be permanently deleted. This will also remove it from your Google Calendar."
    cancel_url=event.get_absolute_url
 %}
+{% endblock %}
