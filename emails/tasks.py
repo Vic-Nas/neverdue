@@ -400,7 +400,7 @@ def recover_stale_jobs(timestamp: int) -> None:
     if not stale:
         return
 
-    _reenqueue_jobs(stale)
+    _retry_jobs(stale)
     logger.info("emails.recover_stale_jobs: recovered %s stale job(s)", len(stale))
 
 
