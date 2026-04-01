@@ -18,16 +18,16 @@ def inbound(request):
     """
     Resend inbound-email webhook.
 
-    This handler is intentionally thin — metadata only, no HTTP calls.
-    Full email body and attachments are fetched inside process_inbound_email
-    (the Celery task), so any network failure is retried automatically.
+    Intentionally thin — metadata only, no HTTP calls.
+    Full email body and attachments are fetched inside process_inbound_email,
+    so any network failure is retried automatically by Procrastinate.
 
     Flow:
       1. Verify Svix signature
       2. Parse metadata: email_id, sender, recipient
       3. Resolve user from recipient address
-      4. Create ScanJob (queued) with task_args stored immediately
-      5. Queue process_inbound_email — returns 200 instantly
+      4. Create ScanJob (queued) with typed retry fields
+      5. Defer process_inbound_email — returns 200 instantly
 
     Sender allow/block rules are evaluated inside the task, not here,
     so discarded-by-rule jobs are visible in the user's queue.
@@ -64,14 +64,16 @@ def inbound(request):
             source=ScanJob.SOURCE_EMAIL,
             from_address=sender or '',
             status=ScanJob.STATUS_QUEUED,
-            task_args=json.dumps({
-                'user_id': user.id,
-                'email_id': email_id,
-                'sender': sender,
-                'message_id': message_id,
-            }),
+            email_id=email_id,
+            message_id=message_id,
         )
-        process_inbound_email.delay(job.id, user.id, email_id, sender, message_id)
+        process_inbound_email.defer(
+            job_id=job.id,
+            user_id=user.id,
+            email_id=email_id,
+            sender=sender,
+            message_id=message_id,
+        )
         if settings.DEBUG:
             logger.debug(
                 "emails.inbound: job queued | job_id=%s user_id=%s email_id=%s sender=%s",
