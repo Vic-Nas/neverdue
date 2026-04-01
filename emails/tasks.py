@@ -217,8 +217,9 @@ def process_uploaded_file(job_id: int, user_id: int, file_b64: str, media_type: 
 
     outcome = process_email(user, context or '', [[file_b64, media_type, filename]], scan_job=job)
 
-    if not outcome.notes and not outcome.created and outcome.status == 'done':
-        outcome.notes = 'No events found in this file.'
+    if not outcome.created and outcome.status == 'done':
+        outcome.status = 'needs_review'
+        outcome.notes = 'No events found — the file may need a different format or more context.'
 
     _apply_outcome(job_id, outcome)
 
@@ -250,8 +251,9 @@ def process_text_as_upload(job_id: int, user_id: int, text: str) -> None:
 
     outcome = process_text(user, text, scan_job=job)
 
-    if not outcome.notes and not outcome.created and outcome.status == 'done':
-        outcome.notes = 'No events found.'
+    if not outcome.created and outcome.status == 'done':
+        outcome.status = 'needs_review'
+        outcome.notes = 'No events found — try rephrasing or adding more detail.'
 
     _apply_outcome(job_id, outcome)
 

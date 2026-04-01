@@ -273,11 +273,16 @@ def extract_events_from_email(
                 content.append({'type': 'document', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
             else:
                 content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
-            content.append({'type': 'text', 'text': (
+            step1_text = (
                 f"Today's date: {today}\n"
                 f"User's timezone: {user_timezone}\n\n"
                 f"Extract all calendar events from this file."
-            )})
+            )
+            if body:
+                step1_text += f'\n\nUser context (follow strictly): {body}'
+            if user_instructions:
+                step1_text += f'\n\nUser instructions (follow strictly): {user_instructions}'
+            content.append({'type': 'text', 'text': step1_text})
 
             try:
                 message = _call_api(
