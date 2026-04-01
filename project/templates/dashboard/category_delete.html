@@ -7,9 +7,5 @@
 {% endblock %}
 
 {% block content %}
-{% include 'partials/confirm_delete.html' with
-   page_title="Delete category?"
-   message=category.name|add:" will be permanently deleted. All events in this category will also be deleted."
-   cancel_url=categories_url
-%}
+{% include 'partials/confirm_delete.html' with page_title="Delete category?" message=category.name|add:' will be permanently deleted. All events in this category will also be deleted.' cancel_url=categories_url %}
 {% endblock %}

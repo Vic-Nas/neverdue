@@ -7,9 +7,5 @@
 {% endblock %}
 
 {% block content %}
-{% include 'partials/confirm_delete.html' with
-   page_title="Delete event?"
-   message=event.title|add:" will be permanently deleted. This will also remove it from your Google Calendar."
-   cancel_url=event.get_absolute_url
-%}
+{% include 'partials/confirm_delete.html' with page_title="Delete event?" message=event.title|add:' will be permanently deleted. This will also remove it from your Google Calendar.' cancel_url=event.get_absolute_url %}
 {% endblock %}

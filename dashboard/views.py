@@ -125,8 +125,12 @@ def event_edit(request, pk=None):
 def event_delete(request, pk):
     try:
         event = get_object_or_404(Event, pk=pk, user=request.user)
-        event.delete()
-        return redirect('dashboard:index')
+        if request.method == 'POST':
+            event.delete()
+            return redirect('dashboard:index')
+        return render(request, 'dashboard/event_delete.html', {
+            'event': event,
+        })
     except Exception:
         logger.exception("event_delete error for user=%s pk=%s", request.user.pk, pk)
         return HttpResponse('Could not delete event.', status=500)
@@ -280,7 +284,7 @@ def upload(request):
                 context=context,
                 filename=filename,
             )
-            return JsonResponse({'ok': True})
+            return redirect('dashboard:queue')
         return render(request, 'dashboard/upload.html', {
             'categories': Category.objects.filter(user=request.user).order_by('name'),
         })
@@ -539,7 +543,7 @@ def category_edit(request, pk=None):
                 from dashboard.tasks import patch_category_colors
                 patch_category_colors.defer(user_id=request.user.pk, category_id=category.pk)
 
-            return JsonResponse({'ok': True, 'pk': category.pk, 'redirect': '/dashboard/categories/'})
+            return redirect('dashboard:categories')
 
         return render(request, 'dashboard/category_edit.html', {
             'category': category,
