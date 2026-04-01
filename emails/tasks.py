@@ -215,7 +215,7 @@ def process_uploaded_file(job_id: int, user_id: int, file_b64: str, media_type: 
 
     ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING)
 
-    outcome = process_email(user, context or '', [[file_b64, media_type, filename]], scan_job=job, is_upload=True)
+    outcome = process_email(user, context or '', [[file_b64, media_type, filename]], scan_job=job)
 
     if not outcome.created and outcome.status == 'done':
         outcome.status = 'needs_review'
