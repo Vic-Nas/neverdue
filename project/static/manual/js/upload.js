@@ -35,10 +35,13 @@
 
   if (form) {
     form.addEventListener('submit', function (e) {
-      if (!input.files.length) {
+      var contextEl = document.getElementById('context');
+      var hasFile = input.files.length > 0;
+      var hasPrompt = contextEl && contextEl.value.trim().length > 0;
+      if (!hasFile && !hasPrompt) {
         e.preventDefault();
         if (errorEl) {
-          errorEl.textContent = 'Please select a file first using the "Browse files" button above.';
+          errorEl.textContent = 'Please provide a file or a prompt.';
           errorEl.hidden = false;
         }
       }
