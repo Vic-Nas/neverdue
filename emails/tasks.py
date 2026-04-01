@@ -378,6 +378,32 @@ def retry_jobs_after_plan_upgrade(user_id: int) -> None:
     _retry_jobs(jobs)
 
 
+@app.periodic(cron="*/10 * * * *")
+@app.task
+def recover_stale_jobs(timestamp: int) -> None:
+    """
+    Reset ScanJobs stuck in 'processing' for longer than 10 minutes back to
+    'queued' and re-enqueue them.
+
+    A job gets stuck when a worker crashes mid-task before it can set a
+    terminal status. Without this, those jobs stay at 'processing' forever.
+    Procrastinate's row-level locking means a crashed worker's lock is
+    released automatically, but ScanJob.status is our own field — it still
+    needs to be reconciled.
+
+    Scheduled: every 10 minutes.
+    """
+    cutoff = timezone.now() - timezone.timedelta(minutes=10)
+    stale = list(
+        ScanJob.objects.filter(status=ScanJob.STATUS_PROCESSING, updated_at__lt=cutoff)
+    )
+    if not stale:
+        return
+
+    _reenqueue_jobs(stale)
+    logger.info("emails.recover_stale_jobs: recovered %s stale job(s)", len(stale))
+
+
 @app.periodic(cron="0 2 * * *")
 @app.task
 def cleanup_events(timestamp: int) -> None:
