@@ -12,7 +12,7 @@ from django.contrib import messages
 
 from accounts.models import MonthlyUsage, User
 from emails.models import ScanJob
-from emails.tasks import _reenqueue_jobs
+from emails.tasks import _retry_jobs
 
 INPUT_CPM = 3.00
 OUTPUT_CPM = 15.00
@@ -87,21 +87,18 @@ def staff_dashboard(request):
     monthly_cost_labels = [f"{r['year']}-{r['month']:02d}" for r in hist]
     monthly_cost_values = [_cost(r['inp'] or 0, r['out'] or 0) for r in hist]
 
-    # ── 30-day attempt breakdown by status and failure_reason ──────────────
-    # Query JobAttemptLog instead of ScanJob.status='failed' for accurate metrics.
-    # ScanJob.status only shows final state; when a job is retried and succeeds,
-    # its failure disappears. JobAttemptLog records every attempt permanently.
-    from emails.models import JobAttemptLog
-    
+    # ── 30-day breakdown from ScanJob ───────────────────────────────────────
+    # JobAttemptLog was removed — metrics now read from ScanJob.updated_at.
+    # This means retried+succeeded jobs won't appear as historical failures,
+    # but it avoids the deleted model dependency.
     cutoff     = now - datetime.timedelta(days=29)
     date_range = _date_range(30)
     date_strs  = [d.isoformat() for d in date_range]
 
-    # Query attempts grouped by attempt date, status, and failure reason
-    attempt_qs = (
-        JobAttemptLog.objects
-        .filter(created_at__gte=cutoff)
-        .extra(select={'day': 'DATE(created_at)'})
+    job_qs = (
+        ScanJob.objects
+        .filter(updated_at__gte=cutoff)
+        .extra(select={'day': 'DATE(updated_at)'})
         .values('day', 'status', 'failure_reason')
         .annotate(n=Count('pk'))
         .order_by('day')
@@ -109,20 +106,18 @@ def staff_dashboard(request):
 
     by_day_status = {d: {} for d in date_strs}
     by_day_reason = {d: {} for d in date_strs}
-    for row in attempt_qs:
+    for row in job_qs:
         d = str(row['day'])
         if d not in by_day_status:
             continue
         s = row['status']
         by_day_status[d][s] = by_day_status[d].get(s, 0) + row['n']
-        if row['failure_reason']:
+        if row['failure_reason'] and s == ScanJob.STATUS_FAILED:
             r = row['failure_reason']
             by_day_reason[d][r] = by_day_reason[d].get(r, 0) + row['n']
 
     chart_labels = [d[5:] for d in date_strs]  # MM-DD
 
-    # Chart 1 — stacked bar: attempt volume by status
-    # Shows all attempts (including retries), not final job states.
     status_series = [
         {'name': 'Done',   'status': 'done',   'color': '#16a34a'},
         {'name': 'Failed', 'status': 'failed', 'color': '#dc2626'},
@@ -136,8 +131,6 @@ def staff_dashboard(request):
         for s in status_series
     ]
 
-    # Chart 2 — failure rate % (line) + total volume (bar, dual axis)
-    # Now based on JobAttemptLog, so it counts ALL attempts even if later retried and fixed.
     daily_totals  = [sum(by_day_status[d].values()) for d in date_strs]
     daily_failed  = [by_day_status[d].get('failed', 0) for d in date_strs]
     failure_rates = [
@@ -145,7 +138,6 @@ def staff_dashboard(request):
         for f, t in zip(daily_failed, daily_totals)
     ]
 
-    # Chart 3 — failure reason breakdown (stacked area)
     all_reasons = sorted({r for d in date_strs for r in by_day_reason[d]})
     reason_datasets = [
         {
@@ -156,11 +148,11 @@ def staff_dashboard(request):
         for reason in all_reasons
     ]
 
-    # ── Failed jobs grouped by reason + signature (bulk retry) ──────────────
+    # ── Failed jobs grouped by reason (failure_signature removed) ──────────
     failed_groups = list(
         ScanJob.objects
         .filter(status=ScanJob.STATUS_FAILED)
-        .values('failure_reason', 'failure_signature')
+        .values('failure_reason')
         .annotate(count=Count('pk'))
         .order_by('-count')
     )
@@ -210,18 +202,18 @@ def staff_retry_jobs(request):
     else:
         jobs = []
 
-    count = _reenqueue_jobs(jobs)
-    messages.success(request, f'Re-enqueued {count} job(s).')
+    _retry_jobs(jobs)
+    messages.success(request, f'Re-enqueued {len(jobs)} job(s).')
     return redirect('staff_dashboard')
 
 
 @staff_required
 @require_POST
 def staff_retry_single(request, pk):
-    job   = get_object_or_404(ScanJob, pk=pk, status=ScanJob.STATUS_FAILED)
-    count = _reenqueue_jobs([job])
+    job = get_object_or_404(ScanJob, pk=pk, status=ScanJob.STATUS_FAILED)
+    _retry_jobs([job])
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'count': count})
+        return JsonResponse({'ok': True, 'count': 1})
     messages.success(request, f'Job {pk} re-enqueued.')
     return redirect('staff_dashboard')
 
@@ -241,13 +233,12 @@ def staff_delete_single(request, pk):
 @require_POST
 def staff_bulk_retry(request):
     pks = _parse_pks(request)
-    
     jobs = list(ScanJob.objects.filter(pk__in=pks, status=ScanJob.STATUS_FAILED))
-    count = _reenqueue_jobs(jobs)
-    
+    _retry_jobs(jobs)
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'count': count})
-    messages.success(request, f'Re-enqueued {count} job(s).')
+        return JsonResponse({'ok': True, 'count': len(jobs)})
+    messages.success(request, f'Re-enqueued {len(jobs)} job(s).')
     return redirect('staff_dashboard')
 
 
@@ -255,9 +246,8 @@ def staff_bulk_retry(request):
 @require_POST
 def staff_bulk_delete(request):
     pks = _parse_pks(request)
-    
     count, _ = ScanJob.objects.filter(pk__in=pks).delete()
-    
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse({'ok': True, 'count': count})
     messages.success(request, f'Deleted {count} job(s).')

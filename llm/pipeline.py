@@ -10,33 +10,20 @@ from dashboard.writer import write_event_to_calendar
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# NOTE — required in extractor.py (if not already done)
-# ---------------------------------------------------------------------------
-# Each extract_* function must return (events, input_tokens, output_tokens).
-# Example:
-#   def extract_events(text, language, user_timezone, user_instructions=None):
-#       response = client.messages.create(...)
-#       events = _parse_response(response)
-#       return events, response.usage.input_tokens, response.usage.output_tokens
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class ProcessingOutcome:
     """
     Returned by every pipeline entry point.
 
     Pipeline functions never write to the database. The task layer (tasks.py)
-    reads this dataclass and writes all job state via _set_terminal.
+    reads this dataclass and writes all job state via _apply_outcome.
     This means you can read tasks.py to trace every job state transition
     without opening pipeline code.
     """
-    created:           list = field(default_factory=list)
-    notes:             str  = ''
-    status:            str  = 'done'   # 'done' | 'needs_review' | 'failed'
-    failure_reason:    str  = ''       # ScanJob.REASON_* constant or ''
-    failure_signature: str  = ''
+    created:        list = field(default_factory=list)
+    notes:          str  = ''
+    status:         str  = 'done'   # 'done' | 'needs_review' | 'failed'
+    failure_reason: str  = ''       # ScanJob.REASON_* constant or ''
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +58,6 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
         return ProcessingOutcome(
             status='failed',
             failure_reason='llm_error',
-            failure_signature=f"ValueError: {str(exc)[:200]}",
         )
 
     _fire_usage(user, input_tokens, output_tokens)
@@ -144,7 +130,6 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         return ProcessingOutcome(
             status='failed',
             failure_reason='llm_error',
-            failure_signature=f"ValueError: {str(exc)[:200]}",
             notes=notes,
         )
 
@@ -197,7 +182,7 @@ def _fire_usage(user, input_tokens: int, output_tokens: int) -> None:
         return
     try:
         from emails.tasks import track_llm_usage
-        track_llm_usage.delay(user.pk, input_tokens, output_tokens)
+        track_llm_usage.defer(user_id=user.pk, input_tokens=input_tokens, output_tokens=output_tokens)
     except Exception as exc:
         logger.error("llm._fire_usage: enqueue failed | user=%s error=%s", user.pk, exc)
 
