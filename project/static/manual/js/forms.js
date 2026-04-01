@@ -80,3 +80,39 @@ function addRule() {
      <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>`
   );
 }
+
+/* ── Category edit: form submission ── */
+(function () {
+  const form = document.querySelector('.category-form');
+  if (!form) return;
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const data = {
+      name: document.getElementById('name').value,
+      priority: parseInt(document.getElementById('priority').value) || 2,
+      gcal_color_id: document.querySelector('input[name="gcal_color_id"]:checked')?.value || '',
+      color: document.getElementById('color')?.value || '',
+      reminders: Array.from(document.querySelectorAll('input[name="reminders"]')).map(el => parseInt(el.value) || 0).filter(v => v > 0),
+    };
+
+    fetch(form.action || window.location.href, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    .then(res => res.json())
+    .then(result => {
+      if (result.ok) {
+        window.location.href = result.redirect || '/dashboard/categories/';
+      } else {
+        alert('Error: ' + (result.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      console.error('Error:', err);
+      alert('Error: ' + err.message);
+    });
+  });
+}());
