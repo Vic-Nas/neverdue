@@ -262,7 +262,10 @@ def upload(request):
             uploaded = request.FILES.get('file')
             context = request.POST.get('context', '').strip()
             if not uploaded:
-                return JsonResponse({'ok': False, 'error': 'No file provided.'}, status=400)
+                return render(request, 'dashboard/upload.html', {
+                    'categories': Category.objects.filter(user=request.user).order_by('name'),
+                    'error': 'Please select a file first.',
+                })
             content_type = uploaded.content_type or 'application/octet-stream'
             file_bytes = uploaded.read()
             file_b64 = base64.b64encode(file_bytes).decode('utf-8')
