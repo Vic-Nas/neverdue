@@ -24,6 +24,10 @@
   <form method="post" enctype="multipart/form-data" class="upload-form" id="upload-form">
     {% csrf_token %}
 
+    {% if error %}
+    <p class="form-error">{{ error }}</p>
+    {% endif %}
+
     <div class="upload-dropzone" id="dropzone">
       <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" hidden>
       <div class="upload-dropzone__icon">↑</div>
