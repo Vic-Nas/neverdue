@@ -161,12 +161,22 @@ class Event(models.Model):
     def serialize_as_text(self) -> str:
         """
         Serialize this event to a human-readable text block for LLM re-extraction.
+        Times are converted to the user's local timezone so the LLM sees the
+        same times the user sees.
         Used by reprocess flows in dashboard/views.py and emails/tasks.py.
         """
+        import zoneinfo
+        user_tz_name = getattr(self.user, 'timezone', 'UTC') if self.user else 'UTC'
+        try:
+            user_tz = zoneinfo.ZoneInfo(user_tz_name)
+        except (zoneinfo.ZoneInfoNotFoundError, KeyError):
+            user_tz = zoneinfo.ZoneInfo('UTC')
+        local_start = self.start.astimezone(user_tz)
+        local_end = self.end.astimezone(user_tz)
         lines = [
             f"Title: {self.title}",
-            f"Start: {self.start.isoformat()}",
-            f"End: {self.end.isoformat()}",
+            f"Start: {local_start.strftime('%Y-%m-%dT%H:%M:%S')}",
+            f"End: {local_end.strftime('%Y-%m-%dT%H:%M:%S')}",
         ]
         if self.description:
             lines.append(f"Notes: {self.description}")
