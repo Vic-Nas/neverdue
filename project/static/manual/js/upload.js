@@ -32,16 +32,6 @@
     }
   });
 
-  if (form) {
-    form.addEventListener('submit', function (e) {
-      if (!input.files.length) {
-        e.preventDefault();
-        dropzone.classList.add('upload-dropzone--error');
-        setTimeout(function () { dropzone.classList.remove('upload-dropzone--error'); }, 1500);
-      }
-    });
-  }
-
   function showFile(file) {
     if (fileName)  fileName.textContent = file.name;
     if (preview)   preview.hidden = false;
