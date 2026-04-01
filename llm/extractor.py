@@ -459,3 +459,4 @@ def _validate_event(event: dict, tz) -> dict | None:
     if settings.DEBUG:
         logger.debug("llm._validate_event: ok | title=%r status=%s", validated.get('title'), status)
     return validated
+    

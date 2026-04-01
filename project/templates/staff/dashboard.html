@@ -90,7 +90,6 @@
         <thead>
           <tr>
             <th>Reason</th>
-            <th>Signature</th>
             <th style="text-align:right">Count</th>
             <th></th>
           </tr>
@@ -99,7 +98,6 @@
           {% for g in failed_groups %}
           <tr>
             <td><span class="badge badge--{{ g.failure_reason }}">{{ g.failure_reason }}</span></td>
-            <td class="mono truncate" title="{{ g.failure_signature }}">{{ g.failure_signature|default:"—" }}</td>
             <td style="text-align:right;font-weight:600">{{ g.count }}</td>
             <td style="text-align:right">
               <form method="post" action="{% url 'staff_retry_jobs' %}" style="display:inline">
@@ -164,7 +162,6 @@
               <th>Src</th>
               <th>Status</th>
               <th>Reason</th>
-              <th>Signature</th>
               <th>Notes</th>
               <th>Created</th>
               <th></th>
@@ -183,9 +180,6 @@
                 <span class="badge badge--{{ job.failure_reason }}">{{ job.failure_reason }}</span>
                 {% else %}—{% endif %}
               </td>
-              <td class="mono truncate" style="font-size:.75rem" title="{{ job.failure_signature }}">
-                {{ job.failure_signature|default:"" }}
-              </td>
               <td class="truncate" title="{{ job.notes }}">{{ job.notes|default:"" }}</td>
               <td style="white-space:nowrap;color:#9ca3af;font-size:.78rem">{{ job.created_at|date:"M j H:i" }}</td>
               <td style="text-align:right;white-space:nowrap">
@@ -197,7 +191,7 @@
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:1.5rem">No jobs found.</td></tr>
+            <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:1.5rem">No jobs found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -373,11 +367,11 @@ function updateBulkActions() {
   const selected = getSelectedPks();
   const bulkActions = document.getElementById('bulk-actions');
   const bulkCount = document.getElementById('bulk-count');
-  
+
   if (selected.length > 0) {
     bulkCount.textContent = selected.length;
     bulkActions.classList.add('active');
-    document.getElementById('select-all').indeterminate = 
+    document.getElementById('select-all').indeterminate =
       selected.length > 0 && selected.length < document.querySelectorAll('.job-checkbox').length;
   } else {
     bulkActions.classList.remove('active');
@@ -401,7 +395,7 @@ function bulkRetry() {
   const pks = getSelectedPks();
   if (pks.length === 0) return;
   if (!confirm(`Retry ${pks.length} job(s)?`)) return;
-  
+
   const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   fetch('/staff/bulk-retry/', {
     method: 'POST',
@@ -426,7 +420,7 @@ function bulkDelete() {
   const pks = getSelectedPks();
   if (pks.length === 0) return;
   if (!confirm(`Delete ${pks.length} job(s)? This cannot be undone.`)) return;
-  
+
   const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   fetch('/staff/bulk-delete/', {
     method: 'POST',
