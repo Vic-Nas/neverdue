@@ -291,17 +291,25 @@ def extract_events_from_email(
                     system=system,
                     messages=[{'role': 'user', 'content': content}]
                 )
-                attachment_events.extend(_parse_and_validate(message, tz))
+                raw_text = message.content[0].text.strip() if message.content else '<empty>'
+                parsed = _parse_and_validate(message, tz)
+                if not parsed:
+                    logger.warning(
+                        "llm.extract_events_from_email: step1 zero events | media_type=%s filename=%s raw=%s",
+                        media_type, filename, raw_text[:500],
+                    )
+                attachment_events.extend(parsed)
                 total_input_tokens += message.usage.input_tokens
                 total_output_tokens += message.usage.output_tokens
-            except ValueError:
-                # Parsing/validation error from attachment — skip and continue
-                pass
+            except ValueError as exc:
+                logger.error(
+                    "llm.extract_events_from_email: step1 error | media_type=%s filename=%s error=%s",
+                    media_type, filename, exc,
+                )
         else:
             non_visual_attachments.append((file_bytes, media_type, filename))
 
-    if settings.DEBUG:
-        logger.debug("llm.extract_events_from_email: step1 | attachments=%d input=%s output=%s", len(attachment_events), total_input_tokens, total_output_tokens)
+    logger.info("llm.extract_events_from_email: step1 done | events=%d input=%s output=%s", len(attachment_events), total_input_tokens, total_output_tokens)
 
     # If no body and no non-visual attachments, skip reconciliation
     if not body and not non_visual_attachments:
@@ -356,13 +364,16 @@ def extract_events_from_email(
         events = _parse_and_validate(message, tz)
         total_input_tokens += message.usage.input_tokens
         total_output_tokens += message.usage.output_tokens
-        if settings.DEBUG:
-            logger.debug("llm.extract_events_from_email: step2 | events=%d input=%s output=%s", len(events), message.usage.input_tokens, message.usage.output_tokens)
+        raw_text = message.content[0].text.strip() if message.content else '<empty>'
+        if not events:
+            logger.warning(
+                "llm.extract_events_from_email: step2 zero events | raw=%s",
+                raw_text[:500],
+            )
+        logger.info("llm.extract_events_from_email: step2 done | events=%d input=%s output=%s", len(events), message.usage.input_tokens, message.usage.output_tokens)
         return events, total_input_tokens, total_output_tokens
-    except ValueError:
-        # Parsing/validation error in reconciliation — return what we have from attachments
-        if settings.DEBUG:
-            logger.debug("llm.extract_events_from_email: step2 error | fallback_events=%d", len(attachment_events))
+    except ValueError as exc:
+        logger.error("llm.extract_events_from_email: step2 error | fallback_events=%d error=%s", len(attachment_events), exc)
         return attachment_events, total_input_tokens, total_output_tokens
 
 
