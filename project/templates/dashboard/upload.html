@@ -31,13 +31,16 @@
     <div class="upload-dropzone" id="dropzone">
       <input type="file" name="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" hidden>
       <div class="upload-dropzone__icon">↑</div>
-      <p class="upload-dropzone__text">Drag and drop your file here, or <button type="button" class="upload-dropzone__browse" onclick="document.getElementById('file-input').click()">browse</button></p>
+      <p class="upload-dropzone__text">Drag and drop your file here</p>
+      <button type="button" class="btn-ghost btn" onclick="document.getElementById('file-input').click()">Browse files</button>
       <p class="upload-dropzone__hint">Supports JPG, PNG, PDF, TXT — max 10MB</p>
       <div class="upload-dropzone__preview" id="file-preview" hidden>
         <span id="file-name"></span>
         <button type="button" class="upload-dropzone__clear" onclick="clearFile()">✕</button>
       </div>
     </div>
+
+    <p class="form-error" id="upload-error" hidden></p>
 
     <div class="form-group">
       <label for="context">Context <span class="label-optional">(optional)</span></label>
@@ -58,7 +61,7 @@
 
     <div class="upload-form__actions">
       <button type="submit" class="btn-primary" id="submit-btn">
-        Upload
+        Submit
       </button>
       <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>
     </div>
