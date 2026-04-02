@@ -7,10 +7,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}NeverDue{% endblock %}</title>
   <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}">
-  <link rel="stylesheet" href="{% static 'css/base.css' %}">
-  <link rel="stylesheet" href="{% static 'css/layout.css' %}">
-  <link rel="stylesheet" href="{% static 'css/forms.css' %}">
-  <link rel="stylesheet" href="{% static 'css/house_ads.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base/forms.css' %}">
+  <link rel="stylesheet" href="{% static 'css/components/house_ads.css' %}">
   {% block extra_css %}{% endblock %}
   <meta name="csrf-token" content="{{ csrf_token }}">
 
@@ -116,7 +116,7 @@
 {% block extra_js %}{% endblock %}
 
 {% if user.is_authenticated %}
-<script src="{% static 'js/base.js' %}"></script>
+<script src="{% static 'js/core/base.js' %}"></script>
 {% endif %}
 </body>
 </html>

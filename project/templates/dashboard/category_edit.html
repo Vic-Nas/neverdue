@@ -3,8 +3,8 @@
 {% load static %}
 {% block title %}{% if category %}Edit category{% else %}New category{% endif %} — NeverDue{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-<link rel="stylesheet" href="{% static 'css/categories.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -119,5 +119,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/forms.js' %}"></script>
+<script src="{% static 'js/core/forms.js' %}"></script>
 {% endblock %}

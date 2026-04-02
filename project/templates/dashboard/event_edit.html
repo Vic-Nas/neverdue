@@ -4,8 +4,8 @@
 {% load tz_display %}
 {% block title %}{% if event %}Edit event{% else %}New event{% endif %} — NeverDue{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-<link rel="stylesheet" href="{% static 'css/categories.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
 <style>
   .prompt-edit-section {
     margin-top: 32px;
@@ -156,8 +156,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/forms.js' %}"></script>
+<script src="{% static 'js/core/forms.js' %}"></script>
 {% if event %}
-<script src="{% static 'js/event_edit.js' %}"></script>
+<script src="{% static 'js/pages/event_edit.js' %}"></script>
 {% endif %}
 {% endblock %}

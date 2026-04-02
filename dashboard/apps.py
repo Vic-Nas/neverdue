@@ -7,5 +7,4 @@ class DashboardConfig(AppConfig):
     name = 'dashboard'
 
     def ready(self):
-        # Import gcal to register the pre_delete signal on Event
-        import dashboard.gcal  # noqa: F401
+        import dashboard.gcal.signals  # noqa: F401
