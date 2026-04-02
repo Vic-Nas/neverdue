@@ -55,7 +55,7 @@ def process_inbound_email(job_id: int, user_id: int, email_id: str, sender: str,
 
 
 @app.task(retry=_transient_retry)
-def process_uploaded_file(job_id: int, user_id: int, file_b64: str, media_type: str, context: str = '', filename: str = '') -> None:
+def process_uploaded_file(job_id: int, user_id: int, attachments: list, context: str = '') -> None:
     from llm.pipeline import process_email
 
     try:
@@ -69,7 +69,7 @@ def process_uploaded_file(job_id: int, user_id: int, file_b64: str, media_type: 
         return
 
     ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING)
-    outcome = process_email(user, context or '', [[file_b64, media_type, filename]], scan_job=job)
+    outcome = process_email(user, context or '', attachments, scan_job=job)
 
     if not outcome.created and outcome.status == 'done':
         outcome.status = 'needs_review'
