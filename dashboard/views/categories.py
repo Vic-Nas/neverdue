@@ -1,8 +1,9 @@
 # dashboard/views/categories.py
+import json as _json
 import logging
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from dashboard.models import Category, Event
@@ -87,3 +88,17 @@ def category_delete(request, pk):
     except Exception:
         logger.exception("category_delete error for user=%s pk=%s", request.user.pk, pk)
         return HttpResponse('Could not delete category.', status=500)
+
+
+@login_required
+def categories_bulk_delete(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = _json.loads(request.body)
+        ids = [int(i) for i in data.get('ids', [])]
+        count, _ = Category.objects.filter(pk__in=ids, user=request.user).delete()
+        return JsonResponse({'ok': True, 'deleted': count})
+    except Exception:
+        logger.exception("categories_bulk_delete error for user=%s", request.user.pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
