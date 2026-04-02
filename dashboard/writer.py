@@ -141,4 +141,3 @@ def _save_active_event(user, event_data, category, scan_job):
         status='active', gcal_link=google_event.get('htmlLink', ''),
         scan_job=scan_job,
     )
-    return event
