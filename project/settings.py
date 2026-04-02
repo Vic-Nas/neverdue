@@ -28,6 +28,12 @@ LOGGING = {
     'handlers': {
         'console': {'class': 'logging.StreamHandler'},
     },
+    'loggers': {
+        'procrastinate': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+    },
     'root': {
         'handlers': ['console'],
         'level': 'DEBUG' if DEBUG else 'WARNING',

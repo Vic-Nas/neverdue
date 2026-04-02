@@ -47,6 +47,21 @@ def _validate_event(event: dict, tz) -> dict | None:
         except (ValueError, TypeError):
             return dt_str
 
+    def _fix_past_year(dt_str: str) -> str:
+        """If the LLM returned a date in a past year, bump it to the current year."""
+        try:
+            dt = datetime.fromisoformat(dt_str)
+            now = datetime.now(tz=tz)
+            dt_aware = dt.replace(tzinfo=tz) if dt.tzinfo is None else dt
+            if dt_aware < now and dt_aware.year < now.year:
+                dt = dt.replace(year=now.year)
+            return dt.isoformat() if dt.tzinfo else dt.strftime('%Y-%m-%dT%H:%M:%S')
+        except (ValueError, TypeError):
+            return dt_str
+
+    event['start'] = _fix_past_year(event['start'])
+    event['end'] = _fix_past_year(event['end'])
+
     start = local_to_utc(event['start'])
     end = local_to_utc(event['end'])
 
@@ -65,6 +80,14 @@ def _validate_event(event: dict, tz) -> dict | None:
             recurrence_freq = ''
 
     recurrence_until = event.get('recurrence_until', '').strip() if recurrence_freq else ''
+    if recurrence_until:
+        try:
+            ru_date = datetime.strptime(recurrence_until, '%Y-%m-%d').date()
+            now_date = datetime.now(tz=tz).date()
+            if ru_date < now_date and ru_date.year < now_date.year:
+                recurrence_until = ru_date.replace(year=now_date.year).isoformat()
+        except ValueError:
+            pass
 
     status = event.get('status', 'active').strip().lower()
     if status not in ('active', 'pending'):
