@@ -4,9 +4,15 @@ import os
 import dj_database_url
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load env vars from the correct .env file based on DEBUG.
+# Check the env var first (may be set by the OS / CI), then fall back to prod.
+_debug_raw = os.environ.get('DEBUG', '')
+if _debug_raw == 'True':
+    load_dotenv(BASE_DIR / 'env' / 'dev.env')
+else:
+    load_dotenv(BASE_DIR / 'env' / 'prod.env')
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
