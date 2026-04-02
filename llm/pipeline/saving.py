@@ -112,19 +112,11 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
             _append_conflict_concern(event_data, conflicts)
 
     if any(e.get('status') == 'pending' for e in events):
-        root_concerns = [
-            e['concern'] for e in events
-            if e.get('status') == 'pending' and e.get('concern', '').strip()
-        ]
-        if root_concerns:
-            summary = '; '.join(root_concerns[:3])
-            batch_note = f'Other events in this batch needed attention: {summary}'
-        else:
-            batch_note = 'Other events in this batch needed attention.'
         for e in events:
             if e.get('status') == 'active':
                 e['status'] = 'pending'
                 existing = e.get('concern', '').strip()
+                batch_note = 'Other events in this batch needed attention — review them individually for details.'
                 e['concern'] = f"{existing} {batch_note}".strip() if existing else batch_note
 
     has_pending = any(e.get('status') == 'pending' for e in events)

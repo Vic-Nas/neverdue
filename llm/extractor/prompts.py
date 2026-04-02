@@ -8,7 +8,7 @@ Today's date and the user's local timezone will be provided in the user message.
 Each event must have:
 - "title": concise event name (string)
 - "description": relevant context from the source (string, can be empty)
-- "start": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (e.g. "2025-09-15T09:00:00")
+- "start": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (e.g. "2026-09-15T09:00:00")
 - "end": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (must be after start)
 - "category_hint": suggested category name based on context (string, can be empty)
 - "recurrence_freq": one of "DAILY", "WEEKLY", "MONTHLY", "YEARLY" or empty string
@@ -20,7 +20,7 @@ Each event must have:
 Rules:
 - If only a date is given with no time, set start to 09:00 and end to 10:00
 - If a deadline is mentioned with no end time, set end to 1 hour after start
-- YEAR INFERENCE: When no year is given, use the year from today's date. Only advance to next year if the date would be in the past.
+- YEAR INFERENCE: When no year is given, use the year from today's date. If that puts the date in the past, advance to the next year. Never use a past year.
 - If no events are found, return an empty array []
 - Never return null values — use empty strings instead
 - Do NOT apply any UTC offset — output the local time as-is
