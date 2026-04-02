@@ -1,3 +1,4 @@
+# dashboard/models/event.py
 import zoneinfo
 
 from django.core.exceptions import ValidationError

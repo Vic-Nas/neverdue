@@ -1,3 +1,4 @@
+# accounts/views/auth.py
 import logging
 
 from django.contrib.auth import logout as auth_logout

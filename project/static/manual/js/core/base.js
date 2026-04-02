@@ -1,3 +1,4 @@
+// project/static/manual/js/core/base.js
 (function () {
   var meta = document.querySelector('meta[name="csrf-token"]');
   var CSRF = meta ? meta.content : '';

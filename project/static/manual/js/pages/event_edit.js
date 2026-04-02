@@ -1,3 +1,4 @@
+// project/static/manual/js/pages/event_edit.js
 (function () {
   var btn = document.getElementById('prompt-submit-btn');
   if (!btn) return;

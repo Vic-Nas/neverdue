@@ -1,4 +1,4 @@
-// queue_action.js
+// project/static/manual/js/pages/queue_action.js
 // Handles both the reprocess button (needs_review jobs) and the retry button
 // (failed jobs) on queue_job_detail.html. Replaces queue_job_detail.js and
 // queue_job_retry.js — loaded once, each section guards on element existence.

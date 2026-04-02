@@ -1,4 +1,4 @@
-// project/static/manual/js/queue.js
+// project/static/manual/js/pages/queue.js
 (function () {
   var tbody = document.getElementById('queue-tbody');
   var table = document.getElementById('queue-table');

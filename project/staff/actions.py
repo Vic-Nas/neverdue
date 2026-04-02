@@ -1,3 +1,4 @@
+# project/staff/actions.py
 import json
 
 from django.http import JsonResponse

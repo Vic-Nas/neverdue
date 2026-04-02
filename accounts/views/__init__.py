@@ -1,3 +1,4 @@
+# accounts/views/__init__.py
 from .auth import login, logout
 from .google import google_login, google_callback, SCOPES
 from .username import username_pick

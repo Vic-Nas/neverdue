@@ -1,3 +1,4 @@
+# dashboard/views/events.py
 import json as _json
 import logging
 

@@ -1,3 +1,4 @@
+# llm/extractor/prompts.py
 SYSTEM_PROMPT = """You are a calendar event extractor. Given text content from an email or document, extract all calendar events, deadlines, and scheduled items.
 
 Return ONLY a valid JSON array. No explanation, no markdown, no extra text.

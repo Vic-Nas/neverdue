@@ -1,4 +1,4 @@
-/* static/manual/js/forms.js */
+// project/static/manual/js/core/forms.js
 
 /**
  * Toggle a form group's disabled appearance based on a select value.

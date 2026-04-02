@@ -1,3 +1,4 @@
+# dashboard/models/rule.py
 from django.db import models
 from accounts.models import User
 from .category import Category
