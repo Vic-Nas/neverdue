@@ -239,10 +239,12 @@ resets any job that has been in `processing` for longer than 10 minutes back to
 ## Job retention and cleanup
 
 - `done` jobs are deleted after 1 day by `cleanup_events`.
+- `needs_review` jobs are deleted after 30 days by `cleanup_events`.
 - `failed` jobs are **never auto-deleted**. They remain visible in the user's queue
   until they are retried (automatically or manually) and complete, or until the admin
   dismisses them.
-- `needs_review` jobs are kept until the user acts on them.
+- Raw input fields (`file_b64`, `upload_text`, `upload_context`) are purged as soon
+  as processing succeeds (done or needs_review). Only failed jobs retain them for retry.
 
 ---
 

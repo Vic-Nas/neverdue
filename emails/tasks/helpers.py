@@ -57,12 +57,18 @@ def _load_user(user_id: int, job_id: int):
 
 
 def _apply_outcome(job_id: int, outcome) -> None:
-    ScanJob.objects.filter(pk=job_id).update(
+    updates = dict(
         status=outcome.status,
         failure_reason=outcome.failure_reason[:30] if outcome.failure_reason else '',
         notes=outcome.notes[:255] if outcome.notes else '',
         updated_at=timezone.now(),
     )
+    # Purge raw inputs once processing succeeds — no reason to keep
+    # images / text in the DB after extraction.  Failed jobs keep them
+    # so retry can re-dispatch.
+    if outcome.status != ScanJob.STATUS_FAILED:
+        updates.update(file_b64='', upload_text='', upload_context='')
+    ScanJob.objects.filter(pk=job_id).update(**updates)
 
 
 @app.task(retry=_transient_retry)
