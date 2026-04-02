@@ -33,6 +33,14 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'WARNING',
         },
+        'httpx': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
+        'httpcore': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
     },
     'root': {
         'handlers': ['console'],
