@@ -25,8 +25,12 @@ def extract_events_from_email(
         attachments, system, body, user_instructions, user_timezone, today, tz,
     )
 
-    if not body and not non_visual:
-        return attachment_events, total_in, total_out
+    # When all attachments are visual (no non_visual left to process) and
+    # we already extracted events, the body/context was already fed into
+    # each per-image call — reconciliation would only risk losing events.
+    if not non_visual:
+        if attachment_events or not body:
+            return attachment_events, total_in, total_out
 
     return _reconcile(
         attachment_events, non_visual, body, user_instructions,
@@ -58,8 +62,11 @@ def _extract_from_attachments(attachments, system, body, user_instructions, user
             content.append({'type': 'text', 'text': step1_text})
 
             try:
+                logger.debug("step1: extracting from attachment | media_type=%s filename=%s size=%d", media_type, filename, len(file_bytes))
                 message = call_api(model=settings.LLM_MODEL, max_tokens=2000, system=system, messages=[{'role': 'user', 'content': content}])
-                attachment_events.extend(parse_and_validate(message, tz))
+                parsed = parse_and_validate(message, tz)
+                logger.debug("step1: got %d events from attachment | media_type=%s filename=%s", len(parsed), media_type, filename)
+                attachment_events.extend(parsed)
                 total_in += message.usage.input_tokens
                 total_out += message.usage.output_tokens
             except ValueError as exc:
@@ -71,6 +78,7 @@ def _extract_from_attachments(attachments, system, body, user_instructions, user
 
 
 def _reconcile(attachment_events, non_visual, body, user_instructions, language, user_timezone, today, tz, system, total_in, total_out):
+    logger.debug("reconcile: starting | attachment_events=%d non_visual=%d body_len=%d", len(attachment_events), len(non_visual), len(body or ''))
     recon_content = []
 
     for file_bytes, media_type, filename in non_visual:

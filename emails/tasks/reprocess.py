@@ -1,6 +1,7 @@
 # emails/tasks/reprocess.py
 import logging
 
+from django.utils import timezone
 from procrastinate.contrib.django import app
 
 from emails.models import ScanJob
@@ -30,7 +31,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int) ->
 
     if not prompt.strip():
         events_qs.delete()
-        ScanJob.objects.filter(pk=job_pk).update(status=ScanJob.STATUS_DONE, notes='User cleared pending events.')
+        ScanJob.objects.filter(pk=job_pk).update(status=ScanJob.STATUS_DONE, notes='User cleared pending events.', updated_at=timezone.now())
         return
 
     full_text = (
@@ -38,7 +39,7 @@ def reprocess_events(user_id: int, event_ids: list, prompt: str, job_pk: int) ->
         + f"\n\nUser instruction: {prompt}"
     )
 
-    ScanJob.objects.filter(pk=job_pk).update(status=ScanJob.STATUS_PROCESSING)
+    ScanJob.objects.filter(pk=job_pk).update(status=ScanJob.STATUS_PROCESSING, updated_at=timezone.now())
     outcome = process_text(user, full_text, source_email_id=source_email_id, scan_job=job)
     events_qs.delete()
     _apply_outcome(job_pk, outcome)

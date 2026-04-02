@@ -2,6 +2,7 @@
 import logging
 
 from django.conf import settings
+from django.utils import timezone
 from procrastinate.contrib.django import app
 
 from emails.models import ScanJob
@@ -28,23 +29,26 @@ def process_inbound_email(job_id: int, user_id: int, email_id: str, sender: str,
 
     is_blocked, block_note = _check_sender_rules(user, sender)
     if is_blocked:
-        ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_DONE, notes=block_note[:255])
+        ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_DONE, notes=block_note[:255], updated_at=timezone.now())
         return
 
     if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
-        ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_DONE, notes='Email already processed — skipped.')
+        ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_DONE, notes='Email already processed — skipped.', updated_at=timezone.now())
         return
 
-    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING)
+    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING, updated_at=timezone.now())
 
+    logger.debug("process_inbound_email: fetching email | job_id=%s email_id=%s", job_id, email_id)
     full_email = fetch_full_email(email_id)
     if not full_email:
         raise RuntimeError(f"fetch_full_email returned empty | job_id={job_id} email_id={email_id}")
 
     body = extract_email_text(full_email)
     attachments = extract_attachments(full_email)
+    logger.debug("process_inbound_email: extracted body=%d chars, %d attachments | job_id=%s", len(body or ''), len(attachments), job_id)
 
     outcome = process_email(user, body, attachments, sender=sender, source_email_id=message_id, scan_job=job)
+    logger.debug("process_inbound_email: outcome status=%s created=%d | job_id=%s", outcome.status, len(outcome.created), job_id)
 
     if not outcome.notes and not outcome.created and outcome.status == 'done':
         outcome.notes = 'No events found in this email.'
@@ -69,8 +73,10 @@ def process_uploaded_file(job_id: int, user_id: int, attachments: list, context:
     if user is None:
         return
 
-    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING)
+    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING, updated_at=timezone.now())
+    logger.debug("process_uploaded_file: starting | job_id=%s attachments=%d context_len=%d", job_id, len(attachments), len(context or ''))
     outcome = process_email(user, context or '', attachments, scan_job=job)
+    logger.debug("process_uploaded_file: outcome status=%s created=%d | job_id=%s", outcome.status, len(outcome.created), job_id)
 
     if not outcome.created and outcome.status == 'done':
         outcome.status = 'needs_review'
@@ -95,8 +101,10 @@ def process_text_as_upload(job_id: int, user_id: int, text: str) -> None:
     if user is None:
         return
 
-    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING)
+    ScanJob.objects.filter(pk=job_id).update(status=ScanJob.STATUS_PROCESSING, updated_at=timezone.now())
+    logger.debug("process_text_as_upload: starting | job_id=%s text_len=%d", job_id, len(text))
     outcome = process_text(user, text, scan_job=job)
+    logger.debug("process_text_as_upload: outcome status=%s created=%d | job_id=%s", outcome.status, len(outcome.created), job_id)
 
     if not outcome.created and outcome.status == 'done':
         outcome.status = 'needs_review'

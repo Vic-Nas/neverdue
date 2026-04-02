@@ -99,6 +99,7 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     from ..resolver import resolve_category, DISCARD
 
     if not events:
+        logger.debug("_save_events: no events to save | user=%s", user.pk)
         return [], False
 
     for event_data in events:
@@ -107,17 +108,27 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     for event_data in events:
         conflicts = _find_conflicts(user, event_data)
         if conflicts:
+            logger.debug("_save_events: conflict found for '%s' with %d existing events | user=%s", event_data.get('title', ''), len(conflicts), user.pk)
             _append_conflict_concern(event_data, conflicts)
 
     if any(e.get('status') == 'pending' for e in events):
+        root_concerns = [
+            e['concern'] for e in events
+            if e.get('status') == 'pending' and e.get('concern', '').strip()
+        ]
+        if root_concerns:
+            summary = '; '.join(root_concerns[:3])
+            batch_note = f'Other events in this batch needed attention: {summary}'
+        else:
+            batch_note = 'Other events in this batch needed attention.'
         for e in events:
             if e.get('status') == 'active':
                 e['status'] = 'pending'
                 existing = e.get('concern', '').strip()
-                batch_note = 'Other events in this batch needed attention.'
                 e['concern'] = f"{existing} {batch_note}".strip() if existing else batch_note
 
     has_pending = any(e.get('status') == 'pending' for e in events)
+    logger.debug("_save_events: saving %d events (has_pending=%s) | user=%s", len(events), has_pending, user.pk)
 
     created = []
     for event_data in events:
