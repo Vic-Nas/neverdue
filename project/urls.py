@@ -1,7 +1,7 @@
 # project/urls.py
 from django.urls import path, include
 import project.views as views
-import project.views_staff as staff_views
+import project.staff as staff_views
 
 urlpatterns = [
     # Staff dashboard — replaces django.contrib.admin

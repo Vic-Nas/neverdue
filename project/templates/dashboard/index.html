@@ -4,10 +4,10 @@
 {% load tz_display %}
 {% block title %}Dashboard — NeverDue{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-<link rel="stylesheet" href="{% static 'css/events.css' %}">
-<link rel="stylesheet" href="{% static 'css/categories.css' %}">
-<link rel="stylesheet" href="{% static 'css/email-inbox.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/email-inbox.css' %}">
 <style>
   /* ── Selection mode ── */
   .event-card { position: relative; }
@@ -218,5 +218,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/pages/dashboard.js' %}"></script>
 {% endblock %}

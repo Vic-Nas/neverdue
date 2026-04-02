@@ -4,9 +4,9 @@
 {% load tz_display %}
 {% block title %}Job {{ job.pk }} — NeverDue{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
-<link rel="stylesheet" href="{% static 'css/events.css' %}">
-<link rel="stylesheet" href="{% static 'css/queue.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/queue.css' %}">
 <style>
   .job-detail { max-width: 800px; }
   .job-detail__meta {
@@ -219,5 +219,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/queue_action.js' %}"></script>
+<script src="{% static 'js/pages/queue_action.js' %}"></script>
 {% endblock %}

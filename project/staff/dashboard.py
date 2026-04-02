@@ -1,18 +1,13 @@
-# project/views_staff.py
 import datetime
 import json
 from functools import wraps
 
 from django.db.models import Count, Q, Sum
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
-from django.contrib import messages
 
 from accounts.models import MonthlyUsage, User
 from emails.models import ScanJob
-from emails.tasks import _retry_jobs
 
 INPUT_CPM = 3.00
 OUTPUT_CPM = 15.00
@@ -43,21 +38,11 @@ def _date_range(days=30):
     return [(today - datetime.timedelta(days=i)) for i in range(days - 1, -1, -1)]
 
 
-def _parse_pks(request) -> list:
-    """Parse a list of job PKs from either JSON body or form POST."""
-    if request.content_type == "application/json":
-        import json as _json
-        data = _json.loads(request.body)
-        return data.get("pks", [])
-    return request.POST.getlist("pks")
-
-
 @staff_required
 def staff_dashboard(request):
     now   = timezone.now()
     today = now.date()
 
-    # ── Summary counts ──────────────────────────────────────────────────────
     counts = ScanJob.objects.aggregate(
         total_today  = Count('pk', filter=Q(created_at__date=today)),
         done_today   = Count('pk', filter=Q(status=ScanJob.STATUS_DONE, updated_at__date=today)),
@@ -67,7 +52,6 @@ def staff_dashboard(request):
         total_all    = Count('pk'),
     )
 
-    # ── LLM cost this month ─────────────────────────────────────────────────
     snap = MonthlyUsage.objects.filter(year=today.year, month=today.month).aggregate(
         inp=Sum('input_tokens'), out=Sum('output_tokens')
     )
@@ -76,7 +60,6 @@ def staff_dashboard(request):
     month_output = (snap['out'] or 0) + (roll['out'] or 0)
     month_cost   = _cost(month_input, month_output)
 
-    # ── Historical monthly cost (last 6 months) ─────────────────────────────
     hist = list(
         MonthlyUsage.objects
         .values('year', 'month')
@@ -87,10 +70,6 @@ def staff_dashboard(request):
     monthly_cost_labels = [f"{r['year']}-{r['month']:02d}" for r in hist]
     monthly_cost_values = [_cost(r['inp'] or 0, r['out'] or 0) for r in hist]
 
-    # ── 30-day breakdown from ScanJob ───────────────────────────────────────
-    # JobAttemptLog was removed — metrics now read from ScanJob.updated_at.
-    # This means retried+succeeded jobs won't appear as historical failures,
-    # but it avoids the deleted model dependency.
     cutoff     = now - datetime.timedelta(days=29)
     date_range = _date_range(30)
     date_strs  = [d.isoformat() for d in date_range]
@@ -116,7 +95,7 @@ def staff_dashboard(request):
             r = row['failure_reason']
             by_day_reason[d][r] = by_day_reason[d].get(r, 0) + row['n']
 
-    chart_labels = [d[5:] for d in date_strs]  # MM-DD
+    chart_labels = [d[5:] for d in date_strs]
 
     status_series = [
         {'name': 'Done',   'status': 'done',   'color': '#16a34a'},
@@ -148,7 +127,6 @@ def staff_dashboard(request):
         for reason in all_reasons
     ]
 
-    # ── Failed jobs grouped by reason (failure_signature removed) ──────────
     failed_groups = list(
         ScanJob.objects
         .filter(status=ScanJob.STATUS_FAILED)
@@ -157,7 +135,6 @@ def staff_dashboard(request):
         .order_by('-count')
     )
 
-    # ── Recent jobs table ───────────────────────────────────────────────────
     status_filter = request.GET.get('status', '')
     reason_filter = request.GET.get('reason', '')
     recent_qs = ScanJob.objects.select_related('user').order_by('-created_at')
@@ -187,68 +164,3 @@ def staff_dashboard(request):
         'failure_reason_choices':   ScanJob.FAILURE_REASON_CHOICES,
     }
     return render(request, 'staff/dashboard.html', ctx)
-
-
-@staff_required
-@require_POST
-def staff_retry_jobs(request):
-    reason  = request.POST.get('reason')
-    job_ids = request.POST.getlist('job_ids')
-
-    if reason:
-        jobs = list(ScanJob.objects.filter(status=ScanJob.STATUS_FAILED, failure_reason=reason))
-    elif job_ids:
-        jobs = list(ScanJob.objects.filter(pk__in=job_ids, status=ScanJob.STATUS_FAILED))
-    else:
-        jobs = []
-
-    _retry_jobs(jobs)
-    messages.success(request, f'Re-enqueued {len(jobs)} job(s).')
-    return redirect('staff_dashboard')
-
-
-@staff_required
-@require_POST
-def staff_retry_single(request, pk):
-    job = get_object_or_404(ScanJob, pk=pk, status=ScanJob.STATUS_FAILED)
-    _retry_jobs([job])
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'count': 1})
-    messages.success(request, f'Job {pk} re-enqueued.')
-    return redirect('staff_dashboard')
-
-
-@staff_required
-@require_POST
-def staff_delete_single(request, pk):
-    job = get_object_or_404(ScanJob, pk=pk)
-    job.delete()
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True})
-    messages.success(request, f'Job {pk} deleted.')
-    return redirect('staff_dashboard')
-
-
-@staff_required
-@require_POST
-def staff_bulk_retry(request):
-    pks = _parse_pks(request)
-    jobs = list(ScanJob.objects.filter(pk__in=pks, status=ScanJob.STATUS_FAILED))
-    _retry_jobs(jobs)
-
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'count': len(jobs)})
-    messages.success(request, f'Re-enqueued {len(jobs)} job(s).')
-    return redirect('staff_dashboard')
-
-
-@staff_required
-@require_POST
-def staff_bulk_delete(request):
-    pks = _parse_pks(request)
-    count, _ = ScanJob.objects.filter(pk__in=pks).delete()
-
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'ok': True, 'count': count})
-    messages.success(request, f'Deleted {count} job(s).')
-    return redirect('staff_dashboard')

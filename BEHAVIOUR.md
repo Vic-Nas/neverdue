@@ -64,7 +64,7 @@ filter and bulk-retry by root cause, and shows the user a meaningful message.
 
 `failure_signature` stores a short exception identifier (class + first line of message,
 e.g. `"AnthropicError: 529 overloaded"`) so `internal_error` jobs can be grouped by
-root cause in the admin and bulk-retried when a fix is deployed.
+root cause in the staff dashboard and bulk-retried when a fix is deployed.
 
 ### What must never happen
 
@@ -113,7 +113,7 @@ This keeps each job homogeneous: the user reviews the whole batch together,
 not a partial subset. Active events in the same batch get concern:
 "Other events in this batch needed attention."
 
-This rule applies at save time in `_save_events`, not at extraction time.
+This rule applies at save time in `llm/pipeline/saving.py:_save_events`, not at extraction time.
 
 ---
 
@@ -134,12 +134,12 @@ If something is unclear, mark it pending and explain why.
 1. User opens a `needs_review` job in the queue.
 2. User reads the pending events and their concerns.
 3. User writes a correction prompt (e.g. "repeat yearly until 2030-01-01").
-4. Frontend calls `reprocess_events.delay(user_id, event_ids, prompt, job_pk=job.pk)`.
-5. Worker sets job status → `processing`.
+4. Frontend calls `reprocess_events.defer(user_id, event_ids, prompt, job_pk=job.pk)` (via Procrastinate).
+5. Worker sets job status → `processing` (`emails/tasks/reprocess.py`).
 6. Worker reads and serializes event data (including `source_email_id`) from the
    pending events **before** doing anything else.
-7. Worker calls `process_text(user, prompt, source_email_id=preserved_id, scan_job=job)`.
-8. `_save_events` writes new events linked to the **same** job.
+7. Worker calls `process_text(user, prompt, source_email_id=preserved_id, scan_job=job)` (`llm/pipeline/entry.py`).
+8. `_save_events` (`llm/pipeline/saving.py`) writes new events linked to the **same** job.
 9. **Only after a successful LLM response**, worker deletes the pending events.
 10. If all new events are active → job → `done`.
 11. If any new events are pending → job → `needs_review` (user acts again).
@@ -157,7 +157,7 @@ If something is unclear, mark it pending and explain why.
 
 ## Conflict detection
 
-When `_save_events` processes a pending event, it checks for conflicts against
+When `_save_events` (`llm/pipeline/saving.py`) processes a new event, it checks for conflicts against
 existing active events for the same user:
 
 **Conflict conditions (either triggers):**
@@ -185,7 +185,7 @@ existing active events for the same user:
 
 ## Duplicate email guard
 
-`process_inbound_email` checks before processing:
+`process_inbound_email` (`emails/tasks/processing.py`) checks before processing:
 
 ```python
 if message_id and Event.objects.filter(user=user, source_email_id=message_id).exists():
