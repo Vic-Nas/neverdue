@@ -75,3 +75,10 @@ def cleanup_events(timestamp: int) -> None:
 
     job_cutoff = timezone.now() - timezone.timedelta(days=1)
     ScanJob.objects.filter(status=ScanJob.STATUS_DONE, updated_at__lt=job_cutoff).delete()
+
+    # Delete needs_review jobs after 30 days — the events they created
+    # still exist independently; the job row is only bookkeeping.
+    review_cutoff = timezone.now() - timezone.timedelta(days=30)
+    ScanJob.objects.filter(
+        status=ScanJob.STATUS_NEEDS_REVIEW, updated_at__lt=review_cutoff,
+    ).delete()
