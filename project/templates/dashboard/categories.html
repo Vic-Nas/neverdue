@@ -5,6 +5,25 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
+<style>
+  body.cat-selecting .cat-card { cursor: pointer; }
+  body.cat-selecting .cat-card__checkbox { display: inline-block !important; }
+  .cat-card--selected { background: var(--color-primary-subtle, #eef2ff); }
+  .bulk-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar__count { font-weight: 600; font-size: 0.9rem; flex: 1; }
+  .bulk-bar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -16,6 +35,9 @@
       <p class="page__sub">Organise events and set reminder rules per category.</p>
     </div>
     <div class="page__actions">
+      {% if categories|length > 1 %}
+        <button type="button" class="btn-ghost btn" id="cat-select-toggle">Select</button>
+      {% endif %}
       {% if not request.user.is_pro and categories|length >= 3 %}
         <a href="{% url 'billing:plans' %}" class="btn-primary">Upgrade for more →</a>
       {% else %}
@@ -25,9 +47,20 @@
   </div>
 
   {% if categories %}
+
+  <div class="bulk-bar" id="cat-bulk-bar"
+    data-bulk-url="{% url 'dashboard:categories_bulk_delete' %}">
+    <span class="bulk-bar__count"><span id="cat-selected-count">0</span> selected</span>
+    <div class="bulk-bar__actions">
+      <button type="button" class="btn-ghost btn btn--sm" id="cat-select-all-btn">Select all</button>
+      <button type="button" class="btn-ghost btn btn--sm btn--danger" id="cat-bulk-delete-btn">Delete</button>
+    </div>
+  </div>
+
   <div class="cat-list">
     {% for cat in categories %}
-    <div class="cat-card">
+    <div class="cat-card" data-cat-id="{{ cat.pk }}">
+      <input type="checkbox" class="cat-card__checkbox" value="{{ cat.pk }}" hidden>
       <div class="cat-card__header">
         <div class="cat-card__name">
           <span class="cat-card__dot" {% if cat.color %}style="background:{{ cat.color }}"{% endif %}></span>
@@ -77,4 +110,8 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/categories.js' %}"></script>
 {% endblock %}
