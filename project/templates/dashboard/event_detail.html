@@ -7,6 +7,19 @@
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
+<style>
+  .concern-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    color: #7f1d1d;
+    font-size: 0.9rem;
+  }
+  .concern-banner strong { color: #dc2626; }
+  .concern-banner p { margin: 4px 0 0; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -27,6 +40,13 @@
   </div>
 
   <h1 class="page__title">{{ event.title }}</h1>
+
+  {% if event.status == 'pending' and event.pending_concern %}
+  <div class="concern-banner">
+    <strong>⚠ Needs attention</strong>
+    <p>{{ event.pending_concern }}</p>
+  </div>
+  {% endif %}
 
   <div class="detail-dates">
     <div class="detail-date">

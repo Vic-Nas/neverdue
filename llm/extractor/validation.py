@@ -47,14 +47,18 @@ def _validate_event(event: dict, tz) -> dict | None:
         except (ValueError, TypeError):
             return dt_str
 
+    year_was_fixed = False
+
     def _fix_past_year(dt_str: str) -> str:
         """If the LLM returned a date in a past year, bump it to the current year."""
+        nonlocal year_was_fixed
         try:
             dt = datetime.fromisoformat(dt_str)
             now = datetime.now(tz=tz)
             dt_aware = dt.replace(tzinfo=tz) if dt.tzinfo is None else dt
             if dt_aware < now and dt_aware.year < now.year:
                 dt = dt.replace(year=now.year)
+                year_was_fixed = True
             return dt.isoformat() if dt.tzinfo else dt.strftime('%Y-%m-%dT%H:%M:%S')
         except (ValueError, TypeError):
             return dt_str
@@ -91,6 +95,11 @@ def _validate_event(event: dict, tz) -> dict | None:
 
     status = event.get('status', 'active').strip().lower()
     if status not in ('active', 'pending'):
+        status = 'active'
+
+    # If we corrected a past year, the LLM's "pending" was likely because
+    # the date appeared to be in the past — promote to active.
+    if year_was_fixed and status == 'pending':
         status = 'active'
 
     concern = event.get('concern', '').strip() if status == 'pending' else ''
