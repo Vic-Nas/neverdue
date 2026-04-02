@@ -32,15 +32,12 @@
     {% csrf_token %}
 
     <div class="upload-dropzone" id="dropzone">
-      <input type="file" name="files" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" multiple hidden>
+      <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf,.txt" multiple hidden>
       <div class="upload-dropzone__icon">📄</div>
-      <p class="upload-dropzone__text">Drag and drop your file here</p>
+      <p class="upload-dropzone__text">Drag and drop files here</p>
       <button type="button" class="upload-dropzone__browse" id="browse-btn" onclick="document.getElementById('file-input').click()">Browse files</button>
       <p class="upload-dropzone__hint">JPG, PNG, PDF, TXT — max 10 MB each</p>
-      <div class="upload-dropzone__preview" id="file-preview" hidden>
-        <span class="upload-dropzone__filename" id="file-name"></span>
-        <button type="button" class="upload-dropzone__clear" onclick="clearFile()">✕</button>
-      </div>
+      <ul class="upload-file-list" id="file-list"></ul>
     </div>
 
     <div class="form-group">
