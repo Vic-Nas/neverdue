@@ -42,10 +42,15 @@ def _retry_jobs(jobs: list) -> None:
                     from .processing import process_text_as_upload
                     process_text_as_upload.defer(job_id=job.pk, user_id=job.user_id, text=job.upload_text)
                 else:
+                    import json as _json
                     from .processing import process_uploaded_file
+                    try:
+                        attachments = _json.loads(job.file_b64)
+                    except (ValueError, TypeError):
+                        attachments = [[job.file_b64, job.media_type, job.filename]]
                     process_uploaded_file.defer(
-                        job_id=job.pk, user_id=job.user_id, file_b64=job.file_b64,
-                        media_type=job.media_type, context=job.upload_context, filename=job.filename,
+                        job_id=job.pk, user_id=job.user_id,
+                        attachments=attachments, context=job.upload_context,
                     )
             else:
                 logger.error("emails._retry_jobs: unknown source | job_id=%s source=%s", job.pk, job.source)

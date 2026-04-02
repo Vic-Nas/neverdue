@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 
 from django.contrib.auth.decorators import login_required
@@ -24,21 +25,22 @@ def upload(request):
                     'error': 'Please provide a file or a prompt.',
                 })
             if files:
+                attachments = []
                 for uploaded in files:
                     content_type = uploaded.content_type or 'application/octet-stream'
-                    file_bytes = uploaded.read()
-                    file_b64 = base64.b64encode(file_bytes).decode('utf-8')
+                    file_b64 = base64.b64encode(uploaded.read()).decode('utf-8')
                     filename = uploaded.name or ''
-                    job = ScanJob.objects.create(
-                        user=request.user, source=ScanJob.SOURCE_UPLOAD,
-                        status=ScanJob.STATUS_QUEUED, file_b64=file_b64,
-                        media_type=content_type, upload_context=context, filename=filename,
-                    )
-                    process_uploaded_file.defer(
-                        job_id=job.id, user_id=request.user.pk,
-                        file_b64=file_b64, media_type=content_type,
-                        context=context, filename=filename,
-                    )
+                    attachments.append([file_b64, content_type, filename])
+                job = ScanJob.objects.create(
+                    user=request.user, source=ScanJob.SOURCE_UPLOAD,
+                    status=ScanJob.STATUS_QUEUED,
+                    file_b64=json.dumps(attachments),
+                    upload_context=context,
+                )
+                process_uploaded_file.defer(
+                    job_id=job.id, user_id=request.user.pk,
+                    attachments=attachments, context=context,
+                )
             else:
                 job = ScanJob.objects.create(
                     user=request.user, source=ScanJob.SOURCE_UPLOAD,
