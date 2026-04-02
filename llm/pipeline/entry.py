@@ -22,10 +22,12 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     user_instructions = collect_prompt_injections(user, sender)
 
     try:
+        logger.debug("process_text: calling extract_events | user=%s text_len=%d", user.pk, len(text))
         events, input_tokens, output_tokens = extract_events(
             text, language=language, user_timezone=user_timezone,
             user_instructions=user_instructions,
         )
+        logger.debug("process_text: extracted %d events | user=%s", len(events), user.pk)
     except ValueError as exc:
         logger.error("llm.process_text: extraction error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error')
@@ -63,11 +65,13 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
 
     user_instructions = collect_prompt_injections(user, sender)
     try:
+        logger.debug("process_email: calling extract_events_from_email | user=%s body_len=%d attachments=%d", user.pk, len(body or ''), len(decoded_attachments))
         events, input_tokens, output_tokens = extract_events_from_email(
             body=body or '', attachments=decoded_attachments,
             language=language, user_timezone=user_timezone,
             user_instructions=user_instructions,
         )
+        logger.debug("process_email: extracted %d events | user=%s", len(events), user.pk)
     except ValueError as exc:
         logger.error("llm.process_email: extraction error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=notes)

@@ -3,6 +3,7 @@ import logging
 from fnmatch import fnmatch
 
 from django.db.models import F
+from django.utils import timezone
 from procrastinate.contrib.django import app
 from procrastinate import RetryStrategy
 
@@ -50,6 +51,7 @@ def _load_user(user_id: int, job_id: int):
             status=ScanJob.STATUS_FAILED,
             failure_reason=ScanJob.REASON_INTERNAL_ERROR,
             notes='User account not found.',
+            updated_at=timezone.now(),
         )
         return None
 
@@ -59,6 +61,7 @@ def _apply_outcome(job_id: int, outcome) -> None:
         status=outcome.status,
         failure_reason=outcome.failure_reason[:30] if outcome.failure_reason else '',
         notes=outcome.notes[:255] if outcome.notes else '',
+        updated_at=timezone.now(),
     )
 
 
