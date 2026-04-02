@@ -11,7 +11,7 @@
   if (!input || !dropzone) return;
 
   input.addEventListener('change', function () {
-    if (input.files.length) showFile(input.files[0]);
+    if (input.files.length) showFiles(input.files);
   });
 
   dropzone.addEventListener('dragover', function (e) {
@@ -26,10 +26,9 @@
   dropzone.addEventListener('drop', function (e) {
     e.preventDefault();
     dropzone.classList.remove('upload-dropzone--active');
-    var file = e.dataTransfer.files[0];
-    if (file) {
+    if (e.dataTransfer.files.length) {
       input.files = e.dataTransfer.files;
-      showFile(file);
+      showFiles(input.files);
     }
   });
 
@@ -48,8 +47,12 @@
     });
   }
 
-  function showFile(file) {
-    if (fileName)  fileName.textContent = file.name;
+  function showFiles(files) {
+    if (fileName) {
+      var names = [];
+      for (var i = 0; i < files.length; i++) names.push(files[i].name);
+      fileName.textContent = names.join(', ');
+    }
     if (preview)   preview.hidden = false;
     if (errorEl)   errorEl.hidden = true;
   }
