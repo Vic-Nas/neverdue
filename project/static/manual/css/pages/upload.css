@@ -129,25 +129,40 @@
   margin-top: 0.15rem;
 }
 
-/* ── File preview ── */
-.upload-dropzone__preview {
+/* ── File list ── */
+.upload-file-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  width: 100%;
   display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  background: var(--accent-muted);
-  padding: 0.5rem 0.9rem;
-  border-radius: 6px;
-  margin-top: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.upload-dropzone__filename {
+.upload-file-list:empty {
+  display: none;
+}
+
+.upload-file-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  background: var(--accent-muted);
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+}
+
+.upload-file-list__name {
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--text);
   word-break: break-all;
+  min-width: 0;
 }
 
-.upload-dropzone__clear {
+.upload-file-list__remove {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -157,9 +172,10 @@
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.upload-dropzone__clear:hover {
+.upload-file-list__remove:hover {
   color: var(--danger);
   background: rgba(192,57,43,0.08);
 }
