@@ -1,3 +1,4 @@
+// project/static/manual/js/pages/dashboard.js
 (function () {
   var bulkBar = document.getElementById('bulk-bar');
   if (!bulkBar) return;

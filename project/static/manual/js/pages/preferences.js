@@ -1,3 +1,4 @@
+// project/static/manual/js/pages/preferences.js
 (function () {
   var autoDelete = document.getElementById('auto_delete');
   if (!autoDelete) return;

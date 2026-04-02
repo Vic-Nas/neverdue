@@ -1,3 +1,4 @@
+// project/static/manual/js/pages/rules.js
 (function () {
   var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   var pageEl = document.querySelector('.page[data-rule-add-url]');

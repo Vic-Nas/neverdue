@@ -1,4 +1,4 @@
-/* static/manual/js/upload.js */
+// project/static/manual/js/pages/upload.js
 
 (function () {
   var input    = document.getElementById('file-input');

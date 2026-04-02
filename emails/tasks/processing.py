@@ -1,3 +1,4 @@
+# emails/tasks/processing.py
 import logging
 
 from django.conf import settings

@@ -1,3 +1,4 @@
+# llm/extractor/image.py
 import base64
 import logging
 
