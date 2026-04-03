@@ -236,6 +236,17 @@
     {% endif %}
   </div>
 
+  {# ── Delete job ── #}
+  <div class="job-section" style="border-top:1px solid var(--color-border,#e5e7eb);padding-top:24px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" class="btn btn-danger" id="delete-job-btn"
+        data-delete-url="{% url 'dashboard:queue_job_delete' pk=job.pk %}"
+        data-queue-url="{% url 'dashboard:queue' %}">Delete job</button>
+      <span id="delete-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+    </div>
+    <p class="form-hint" style="margin-top:6px;">Permanently removes this job and any stored data (email body, attachments). Events already created are kept.</p>
+  </div>
+
 </div>
 {% endblock %}
 

@@ -44,4 +44,24 @@
       });
     });
   }
+
+  // Delete: remove job and stored data.
+  var deleteBtn = document.getElementById('delete-job-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', function () {
+      if (!confirm('Delete this job? Any stored email body and attachments will be permanently removed. Events already created are kept.')) return;
+      window.neverdue.submitWithStatus({
+        btn:          deleteBtn,
+        statusEl:     document.getElementById('delete-status'),
+        url:          deleteBtn.dataset.deleteUrl,
+        body:         {},
+        csrf:         CSRF,
+        originalText: 'Delete job',
+        successText:  'Deleted.',
+        onSuccess: function () {
+          setTimeout(function () { window.location.href = deleteBtn.dataset.queueUrl; }, 800);
+        },
+      });
+    });
+  }
 })();

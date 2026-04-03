@@ -104,3 +104,30 @@ def queue_job_retry(request, pk):
     except Exception:
         logger.exception("queue_job_retry error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def queue_job_delete(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    from emails.models import ScanJob
+    job = get_object_or_404(ScanJob, pk=pk, user=request.user)
+    job.delete()
+    return JsonResponse({'ok': True})
+
+
+@login_required
+def queue_jobs_bulk_delete(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = _json.loads(request.body)
+        pks = data.get('ids', [])
+        if not pks or not isinstance(pks, list):
+            return JsonResponse({'ok': False, 'error': 'No jobs selected'}, status=400)
+        from emails.models import ScanJob
+        deleted, _ = ScanJob.objects.filter(pk__in=pks, user=request.user).delete()
+        return JsonResponse({'ok': True, 'deleted': deleted})
+    except Exception:
+        logger.exception("queue_jobs_bulk_delete error for user=%s", request.user.pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)

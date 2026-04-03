@@ -375,3 +375,20 @@
     display: none;
   }
 }
+
+/* ── Bulk action bar ── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+/* ── Select-mode checkbox column ── */
+.queue-select-col { width: 36px; text-align: center; }
+.queue-row-cb { cursor: pointer; }
