@@ -26,6 +26,20 @@ class TestRuleAdd:
         assert resp.json()['ok']
         assert Rule.objects.filter(user=user, pattern='exam').exists()
 
+    def test_add_keyword_no_category(self, auth_client, user):
+        """Categorize action with no category = leave uncategorized."""
+        resp = auth_client.post(
+            reverse('dashboard:rule_add'),
+            json.dumps({
+                'rule_type': 'keyword', 'pattern': 'exam',
+                'action': 'categorize', 'category_id': None,
+            }),
+            content_type='application/json',
+        )
+        assert resp.json()['ok']
+        rule = Rule.objects.get(user=user, pattern='exam')
+        assert rule.category is None
+
     def test_add_prompt_rule(self, auth_client):
         resp = auth_client.post(
             reverse('dashboard:rule_add'),

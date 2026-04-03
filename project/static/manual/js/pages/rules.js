@@ -1,6 +1,12 @@
 // project/static/manual/js/pages/rules.js
 (function () {
-  var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  function getCsrf() {
+    // Try meta tag first, fall back to csrftoken cookie
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content && meta.content !== 'NOTPROVIDED') return meta.content;
+    var match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? match[1] : '';
+  }
   var pageEl = document.querySelector('.page[data-rule-add-url]');
   var ADD_URL = pageEl ? pageEl.dataset.ruleAddUrl : '';
   var DELETE_URL_TPL = pageEl ? pageEl.dataset.ruleDeleteUrlTpl : '';
@@ -63,13 +69,14 @@
     var actionSelects = document.querySelectorAll('#rule-fields-sender select[name="action"], #rule-fields-keyword select[name="action"]');
     actionSelects.forEach(function (sel) {
       var isSender = sel.closest('#rule-fields-sender') !== null;
+      var needsReset = false;
       sel.querySelectorAll('option').forEach(function (opt) {
         if (opt.value === 'allow' || opt.value === 'block') {
           opt.hidden = !isSender || type !== 'sender';
+          if (opt.value === sel.value && opt.hidden) needsReset = true;
         }
       });
-      // Reset to first visible option if current value is now hidden
-      if (opt && (opt.value === 'allow' || opt.value === 'block') && type !== 'sender') {
+      if (needsReset) {
         sel.value = 'categorize';
         toggleCatGroup(sel);
       }
@@ -110,20 +117,28 @@
 
     fetch(ADD_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
       body: JSON.stringify(data),
+      credentials: 'same-origin',
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) {
+          return r.text().then(function (t) {
+            try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'Server error (' + r.status + ')' }; }
+          });
+        }
+        return r.json();
+      })
       .then(function (res) {
         if (res.ok) {
           location.reload();
         } else {
-          alert('Error: ' + res.error);
+          alert('Error: ' + (res.error || 'Unknown error'));
           btn.disabled = false;
         }
       })
-      .catch(function () {
-        alert('Network error.');
+      .catch(function (err) {
+        alert('Network error: ' + err.message);
         btn.disabled = false;
       });
   }
@@ -140,7 +155,7 @@
   function deleteRule(pk, row) {
     fetch(DELETE_URL_TPL.replace('__PK__', pk), {
       method: 'POST',
-      headers: { 'X-CSRFToken': CSRF },
+      headers: { 'X-CSRFToken': getCsrf() },
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
