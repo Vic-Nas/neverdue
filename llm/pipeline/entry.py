@@ -2,7 +2,7 @@
 import base64
 import logging
 
-from ..extractor import extract_events, extract_events_from_email
+from ..extractor import extract_events, extract_events_from_email, LLMAPIError
 from ..resolver import resolve_category, collect_prompt_injections, DISCARD
 from .outcome import ProcessingOutcome
 from .saving import _check_and_increment_scans, _fire_usage, _save_events, GCalUnavailableError
@@ -28,6 +28,9 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
             user_instructions=user_instructions,
         )
         logger.debug("process_text: extracted %d events | user=%s", len(events), user.pk)
+    except LLMAPIError as exc:
+        logger.error("llm.process_text: API error | user=%s error=%s", user.pk, exc)
+        return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=str(exc))
     except ValueError as exc:
         logger.error("llm.process_text: extraction error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error')
@@ -76,6 +79,9 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             user_instructions=user_instructions,
         )
         logger.debug("process_email: extracted %d events | user=%s", len(events), user.pk)
+    except LLMAPIError as exc:
+        logger.error("llm.process_email: API error | user=%s error=%s", user.pk, exc)
+        return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=str(exc))
     except ValueError as exc:
         logger.error("llm.process_email: extraction error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=notes)

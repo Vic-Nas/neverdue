@@ -1,7 +1,9 @@
 import json
+import pytest
 from unittest.mock import patch, MagicMock
 from llm.extractor.image import extract_events_from_image
 from llm.extractor.email import extract_events_from_email
+from llm.extractor.client import LLMAPIError
 
 
 def _mock_api_response(events):
@@ -54,3 +56,12 @@ class TestExtractEmail:
             attachments=[(b'text content', 'text/plain', 'notes.txt')],
         )
         assert mock_api.call_count == 1
+
+    @patch('llm.extractor.email.call_api', side_effect=LLMAPIError('quota'))
+    def test_api_error_propagates(self, mock_api):
+        """LLMAPIError is NOT swallowed — it propagates to the pipeline."""
+        with pytest.raises(LLMAPIError):
+            extract_events_from_email(
+                body='body',
+                attachments=[(b'img', 'image/jpeg', 'f.jpg')],
+            )
