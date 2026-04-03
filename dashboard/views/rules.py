@@ -50,9 +50,6 @@ def rule_add(request):
         if action in (Rule.ACTION_ALLOW, Rule.ACTION_BLOCK) and rule_type != Rule.TYPE_SENDER:
             return JsonResponse({'ok': False, 'error': 'Allow and block actions are only valid for sender rules.'}, status=400)
 
-        if action == Rule.ACTION_CATEGORIZE and not category_id:
-            return JsonResponse({'ok': False, 'error': 'A category is required for categorize action.'}, status=400)
-
         category = None
         if category_id:
             category = get_object_or_404(Category, pk=category_id, user=request.user)
