@@ -115,6 +115,10 @@ def _save_active_event(user, event_data, category, scan_job):
         except Exception as exc:
             logger.error("dashboard.write_event_to_calendar: gcal push failed | user=%s error=%s", user.pk, exc)
             raise GCalUnavailableError(str(exc)) from exc
+    else:
+        desc = event_data.get('description', '')
+        note = 'Not synced to Google Calendar (disabled in Preferences).'
+        event_data['description'] = f'{desc}\n\n{note}'.strip() if desc else note
 
     try:
         return Event.objects.create(
