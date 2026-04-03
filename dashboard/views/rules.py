@@ -40,7 +40,8 @@ def rule_add(request):
         if rule_type == Rule.TYPE_PROMPT:
             if not prompt_text:
                 return JsonResponse({'ok': False, 'error': 'Prompt text is required.'}, status=400)
-            Rule.objects.create(user=request.user, rule_type=rule_type, pattern=pattern, prompt_text=prompt_text)
+            rule = Rule.objects.create(user=request.user, rule_type=rule_type, pattern=pattern, prompt_text=prompt_text)
+            logger.info("rule_add: created prompt rule | user=%s rule_id=%s", request.user.pk, rule.pk)
             return JsonResponse({'ok': True})
 
         if not action:
@@ -57,6 +58,7 @@ def rule_add(request):
             category = get_object_or_404(Category, pk=category_id, user=request.user)
 
         Rule.objects.create(user=request.user, rule_type=rule_type, pattern=pattern, action=action, category=category)
+        logger.info("rule_add: created %s rule | user=%s pattern=%s action=%s", rule_type, request.user.pk, pattern, action)
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("rule_add error for user=%s", request.user.pk)
