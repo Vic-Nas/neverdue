@@ -83,13 +83,33 @@ class TestWriteEventToCalendar:
         assert result.gcal_link == 'https://cal.google.com/event/abc'
 
     @patch('dashboard.gcal.client._service', side_effect=Exception('no token'))
-    def test_active_no_token_returns_none(self, mock_svc, user):
+    def test_active_no_token_saves_locally(self, mock_svc, user):
+        """Events must save to DB even when GCal token is unavailable."""
         result = write_event_to_calendar(user, {
-            'title': 'X',
+            'title': 'Saved Without GCal',
             'start': '2026-08-01T09:00:00+00:00',
             'end': '2026-08-01T10:00:00+00:00',
         })
-        assert result is None
+        assert result is not None
+        assert result.status == 'active'
+        assert result.title == 'Saved Without GCal'
+        assert result.google_event_id is None
+        assert result.gcal_link == ''
+
+    @patch('dashboard.gcal.client._service')
+    def test_active_gcal_push_fails_saves_locally(self, mock_svc, user):
+        """GCal insert raises but event still saves to DB."""
+        svc = MagicMock()
+        svc.events().insert().execute.side_effect = Exception('GCal API error')
+        mock_svc.return_value = svc
+        result = write_event_to_calendar(user, {
+            'title': 'GCal Failed',
+            'start': '2026-09-01T09:00:00+00:00',
+            'end': '2026-09-01T10:00:00+00:00',
+        })
+        assert result is not None
+        assert result.status == 'active'
+        assert result.google_event_id is None
 
 
 @pytest.mark.django_db

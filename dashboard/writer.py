@@ -117,27 +117,31 @@ def _save_pending_event(user, event_data, category, scan_job):
 
 def _save_active_event(user, event_data, category, scan_job):
     from dashboard.gcal.client import _service
+
+    google_event_id = None
+    gcal_link = ''
+
     try:
         svc = _service(user)
-    except Exception:
-        logger.warning("dashboard.write_event_to_calendar: token unavailable | user=%s", user.pk)
-        return None
-
-    body = _build_gcal_body_from_dict(user, event_data, category)
-    try:
+        body = _build_gcal_body_from_dict(user, event_data, category)
         google_event = svc.events().insert(calendarId='primary', body=body).execute()
+        google_event_id = google_event.get('id')
+        gcal_link = google_event.get('htmlLink', '')
     except Exception as exc:
-        logger.error("dashboard.write_event_to_calendar: gcal push failed | user=%s error=%s", user.pk, exc)
-        return None
+        logger.warning("dashboard.write_event_to_calendar: gcal unavailable, saving locally | user=%s error=%s", user.pk, exc)
 
-    return Event.objects.create(
-        user=user, category=category,
-        title=event_data['title'], description=event_data.get('description', ''),
-        start=event_data['start'], end=event_data['end'],
-        recurrence_freq=event_data.get('recurrence_freq') or None,
-        recurrence_until=event_data.get('recurrence_until') or None,
-        google_event_id=google_event.get('id'),
-        source_email_id=event_data.get('source_email_id'),
-        status='active', gcal_link=google_event.get('htmlLink', ''),
-        scan_job=scan_job,
-    )
+    try:
+        return Event.objects.create(
+            user=user, category=category,
+            title=event_data['title'], description=event_data.get('description', ''),
+            start=event_data['start'], end=event_data['end'],
+            recurrence_freq=event_data.get('recurrence_freq') or None,
+            recurrence_until=event_data.get('recurrence_until') or None,
+            google_event_id=google_event_id,
+            source_email_id=event_data.get('source_email_id'),
+            status='active', gcal_link=gcal_link,
+            scan_job=scan_job,
+        )
+    except Exception as exc:
+        logger.error("dashboard.write_event_to_calendar: db save failed | user=%s error=%s", user.pk, exc)
+        return None

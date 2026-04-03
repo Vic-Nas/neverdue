@@ -95,7 +95,10 @@ def queue_job_retry(request, pk):
     try:
         from emails.models import ScanJob
         from emails.tasks import _retry_jobs
-        job = get_object_or_404(ScanJob, pk=pk, user=request.user, status=ScanJob.STATUS_FAILED)
+        job = get_object_or_404(
+            ScanJob, pk=pk, user=request.user,
+            status__in=[ScanJob.STATUS_FAILED, ScanJob.STATUS_NEEDS_REVIEW],
+        )
         _retry_jobs([job])
         return JsonResponse({'ok': True})
     except Exception:
