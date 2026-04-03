@@ -56,6 +56,90 @@
 
   var lastJobs = null;
 
+  // ─── Select mode ──────────────────────────────────────────────────────────
+
+  var selectMode = false;
+  var selectedIds = new Set();
+  var bulkBar = document.getElementById('queue-bulk-bar');
+  var selectedCountEl = document.getElementById('queue-selected-count');
+  var bulkDeleteBtn = document.getElementById('queue-bulk-delete');
+  var cancelSelectBtn = document.getElementById('queue-cancel-select');
+  var enterSelectBtn = document.getElementById('queue-enter-select');
+  var selectAllCb = document.getElementById('queue-select-all');
+  var selectColHeaders = document.querySelectorAll('.queue-select-col');
+
+  function updateSelectedCount() {
+    if (selectedCountEl) selectedCountEl.textContent = selectedIds.size + ' selected';
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedIds.size === 0;
+  }
+
+  function enterSelectMode() {
+    selectMode = true;
+    selectedIds.clear();
+    if (bulkBar) bulkBar.hidden = false;
+    if (enterSelectBtn) enterSelectBtn.hidden = true;
+    selectColHeaders.forEach(function (h) { h.hidden = false; });
+    if (lastJobs) render(lastJobs);
+    updateSelectedCount();
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    selectedIds.clear();
+    if (bulkBar) bulkBar.hidden = true;
+    if (enterSelectBtn) enterSelectBtn.hidden = false;
+    selectColHeaders.forEach(function (h) { h.hidden = true; });
+    if (selectAllCb) selectAllCb.checked = false;
+    if (lastJobs) render(lastJobs);
+  }
+
+  if (enterSelectBtn) enterSelectBtn.addEventListener('click', enterSelectMode);
+  if (cancelSelectBtn) cancelSelectBtn.addEventListener('click', exitSelectMode);
+
+  if (selectAllCb) {
+    selectAllCb.addEventListener('change', function () {
+      var cbs = tbody.querySelectorAll('.queue-row-cb');
+      cbs.forEach(function (cb) {
+        cb.checked = selectAllCb.checked;
+        var id = parseInt(cb.dataset.jobId, 10);
+        if (selectAllCb.checked) selectedIds.add(id); else selectedIds.delete(id);
+      });
+      updateSelectedCount();
+    });
+  }
+
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', function () {
+      if (selectedIds.size === 0) return;
+      if (!confirm('Delete ' + selectedIds.size + ' job' + (selectedIds.size !== 1 ? 's' : '') + '? Stored data will be permanently removed. Events already created are kept.')) return;
+      var CSRF = document.querySelector('meta[name="csrf-token"]').content;
+      bulkDeleteBtn.disabled = true;
+      bulkDeleteBtn.textContent = 'Deleting…';
+      fetch('/dashboard/queue/bulk-delete/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        credentials: 'same-origin',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            exitSelectMode();
+            poll();
+          } else {
+            alert(data.error || 'Delete failed.');
+            bulkDeleteBtn.disabled = false;
+            bulkDeleteBtn.textContent = 'Delete selected';
+          }
+        })
+        .catch(function () {
+          alert('Network error.');
+          bulkDeleteBtn.disabled = false;
+          bulkDeleteBtn.textContent = 'Delete selected';
+        });
+    });
+  }
+
   function applyFilters(jobs) {
     return jobs.filter(function (j) {
       if (filterStatus && j.status !== filterStatus) return false;
@@ -93,6 +177,7 @@
     }
     emptyMsg.hidden = true;
     table.hidden = false;
+    if (enterSelectBtn) enterSelectBtn.hidden = false;
     tbody.innerHTML = '';
 
     visible.forEach(function (j) {
@@ -131,7 +216,11 @@
 
       var isDurationVisible = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
 
-      tr.innerHTML =
+      var cbCell = selectMode
+        ? '<td><input type="checkbox" class="queue-row-cb" data-job-id="' + j.id + '"' + (selectedIds.has(j.id) ? ' checked' : '') + '></td>'
+        : '';
+
+      tr.innerHTML = cbCell +
         '<td>' + sourceCell + attentionBadge + '</td>' +
         '<td class="queue-from" data-label="From">' + (j.from_address || '—') + '</td>' +
         '<td class="queue-notes" data-label="Notes">' + notesCell + '</td>' +
@@ -139,13 +228,25 @@
         '<td data-label="Duration">' + (isDurationVisible ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
         '<td data-label="Started">' + fmt(j.created_at) + '</td>';
 
-      if (isTerminal) {
+      if (isTerminal && !selectMode) {
         tr.classList.add('queue-row--clickable');
         tr.addEventListener('click', function (e) {
           if (e.target.tagName !== 'A') {
             window.location.href = '/dashboard/queue/' + j.id + '/';
           }
         });
+      }
+
+      // In select mode, wire up checkbox
+      if (selectMode) {
+        var cb = tr.querySelector('.queue-row-cb');
+        if (cb) {
+          cb.addEventListener('change', function () {
+            var id = parseInt(cb.dataset.jobId, 10);
+            if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+            updateSelectedCount();
+          });
+        }
       }
 
       tbody.appendChild(tr);
