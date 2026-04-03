@@ -162,9 +162,17 @@
       </div>
 
       <div class="form-group">
-        <button type="button" class="btn btn-danger" id="revoke-google-btn"
-          data-url="{% url 'accounts:revoke_google' %}">Revoke Google permissions</button>
-        <p class="form-hint">Disconnects your Google account and disables calendar sync. You can reconnect anytime by logging in with Google again.</p>
+        {% if request.user.google_refresh_token %}
+        <button type="button" class="btn btn-danger" id="google-permissions-btn"
+          data-action="revoke"
+          data-revoke-url="{% url 'accounts:revoke_google' %}"
+          data-restore-url="{% url 'accounts:google_login' %}">Revoke Google permissions</button>
+        <p class="form-hint" id="google-permissions-hint">Disconnects your Google account and disables calendar sync. You can reconnect anytime.</p>
+        {% else %}
+        <a href="{% url 'accounts:google_login' %}" class="btn btn-primary" id="google-permissions-btn"
+          data-action="restore">Restore Google permissions</a>
+        <p class="form-hint" id="google-permissions-hint">Reconnect your Google account to enable calendar sync.</p>
+        {% endif %}
       </div>
     </div>
 

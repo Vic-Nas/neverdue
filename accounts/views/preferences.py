@@ -47,8 +47,7 @@ def preferences(request):
         auto_delete = request.POST.get('auto_delete_past_events') == 'on'
         retention_days = request.POST.get('past_event_retention_days', '30').strip()
         delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
-        wants_gcal = request.POST.get('save_to_gcal') == 'on'
-        save_to_gcal = wants_gcal and bool(request.user.google_refresh_token)
+        save_to_gcal = request.POST.get('save_to_gcal') == 'on'
         timezone_str = request.POST.get('timezone', 'UTC').strip()
 
         try:
