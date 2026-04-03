@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 from llm.extractor.text import extract_events
+from llm.extractor.client import LLMAPIError
 
 
 def _mock_api_response(events):
@@ -29,7 +30,7 @@ class TestExtractText:
         assert events[0]['title'] == 'Exam'
         assert inp == 100
 
-    @patch('llm.extractor.text.call_api', side_effect=ValueError('API error'))
-    def test_raises_on_error(self, mock_api):
-        with pytest.raises(ValueError):
+    @patch('llm.extractor.text.call_api', side_effect=LLMAPIError('quota exceeded'))
+    def test_raises_on_api_error(self, mock_api):
+        with pytest.raises(LLMAPIError):
             extract_events('text')

@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from llm.pipeline.entry import process_text
+from llm.extractor.client import LLMAPIError
 from dashboard.writer import GCalUnavailableError
 
 
@@ -29,6 +30,13 @@ class TestProcessText:
         outcome = process_text(user, 'text')
         assert outcome.status == 'failed'
         assert outcome.failure_reason == 'llm_error'
+
+    @patch('llm.pipeline.entry.extract_events', side_effect=LLMAPIError('quota exceeded'))
+    def test_api_error_fails_with_notes(self, mock_extract, user):
+        outcome = process_text(user, 'text')
+        assert outcome.status == 'failed'
+        assert outcome.failure_reason == 'llm_error'
+        assert 'quota exceeded' in outcome.notes
 
     def test_scan_limit(self, user):
         from django.utils import timezone as tz

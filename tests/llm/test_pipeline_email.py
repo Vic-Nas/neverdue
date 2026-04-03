@@ -2,6 +2,7 @@ import pytest
 import base64
 from unittest.mock import patch, MagicMock
 from llm.pipeline.entry import process_email
+from llm.extractor.client import LLMAPIError
 
 
 SAMPLE_EVENT = {
@@ -31,3 +32,10 @@ class TestProcessEmail:
                 with patch('llm.pipeline.saving._fire_usage'):
                     outcome = process_email(user, 'body', [att])
         assert 'Upgrade' in outcome.notes or outcome.status in ('done', 'needs_review')
+
+    @patch('llm.pipeline.entry.extract_events_from_email', side_effect=LLMAPIError('quota exceeded'))
+    def test_api_error_fails_with_notes(self, mock_extract, user):
+        outcome = process_email(user, 'body', [])
+        assert outcome.status == 'failed'
+        assert outcome.failure_reason == 'llm_error'
+        assert 'quota exceeded' in outcome.notes
