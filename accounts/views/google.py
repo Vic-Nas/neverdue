@@ -48,12 +48,19 @@ def google_login(request):
         scopes=SCOPES,
         redirect_uri=request.build_absolute_uri(reverse("accounts:google_callback")),
     )
-    flow.oauth2session.access_type = "offline"
-    flow.oauth2session.prompt = "consent"
-    authorization_url, state = flow.authorization_url(
-        code_challenge=code_challenge,
-        code_challenge_method="S256",
-    )
+
+    auth_kwargs = {
+        "access_type": "offline",
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    # Only force the consent screen when we need a new refresh token
+    # (e.g. after the user revoked Google permissions).  Normal logins
+    # skip it — Google reuses the existing grant silently.
+    if request.session.pop("force_consent", False):
+        auth_kwargs["prompt"] = "consent"
+
+    authorization_url, state = flow.authorization_url(**auth_kwargs)
     request.session["oauth_state"] = state
     request.session["pkce_verifier"] = code_verifier
     return redirect(authorization_url)
@@ -97,6 +104,12 @@ def google_callback(request):
         user.google_refresh_token = creds.refresh_token
     user.token_expiry = timezone.now() + timedelta(seconds=3600)
     user.save(update_fields=["google_calendar_token", "google_refresh_token", "token_expiry"])
+
+    # No refresh token from Google AND none stored — we need to redo
+    # the flow with prompt=consent so Google issues a new one.
+    if not user.google_refresh_token:
+        request.session["force_consent"] = True
+        return redirect("accounts:google_login")
 
     auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
 
