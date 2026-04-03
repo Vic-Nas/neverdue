@@ -34,15 +34,3 @@ def in_user_tz(value, user):
         return value.astimezone(tz).replace(tzinfo=None)  # strip tzinfo so |date won't reconvert
 
     return value
-
-
-@register.simple_tag(takes_context=True)
-def user_tz_name(context):
-    """
-    Returns the user's timezone display string, e.g. "America/Toronto".
-    Usage: {% user_tz_name %}
-    """
-    request = context.get('request')
-    if request and request.user.is_authenticated:
-        return getattr(request.user, 'timezone', 'UTC') or 'UTC'
-    return 'UTC'

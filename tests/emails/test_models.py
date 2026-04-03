@@ -17,11 +17,3 @@ class TestScanJob:
         )
         job.refresh_from_db()
         assert abs(job.duration_seconds - 30) < 1
-
-    def test_pending_events_property(self, user):
-        job = ScanJob.objects.create(user=user, source='upload')
-        assert job.pending_events.count() == 0
-
-    def test_active_events_property(self, user):
-        job = ScanJob.objects.create(user=user, source='upload')
-        assert job.active_events.count() == 0

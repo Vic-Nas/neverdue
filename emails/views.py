@@ -87,18 +87,3 @@ def inbound(request):
         # Return 200 so Resend does not retry — failure is logged for manual recovery.
 
     return HttpResponse('OK', status=200)
-
-
-def send_email(to, subject, html):
-    """Send a transactional email via Resend."""
-    import resend
-    resend.api_key = settings.RESEND_API_KEY
-    try:
-        resend.Emails.send({
-            'from': settings.RESEND_FROM_EMAIL,
-            'to': [to],
-            'subject': subject,
-            'html': html,
-        })
-    except Exception:
-        pass

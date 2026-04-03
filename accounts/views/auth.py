@@ -1,10 +1,6 @@
 # accounts/views/auth.py
-import logging
-
 from django.contrib.auth import logout as auth_logout
 from django.shortcuts import redirect, render
-
-logger = logging.getLogger(__name__)
 
 
 def login(request):

@@ -85,11 +85,3 @@ class ScanJob(models.Model):
     def duration_seconds(self):
         """Wall-clock seconds from creation to last update. Meaningful once done/failed."""
         return (self.updated_at - self.created_at).total_seconds()
-
-    @property
-    def pending_events(self):
-        return self.events.filter(status='pending')
-
-    @property
-    def active_events(self):
-        return self.events.filter(status='active')

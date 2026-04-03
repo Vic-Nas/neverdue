@@ -44,16 +44,6 @@ class User(AbstractUser):
     def is_pro(self):
         return hasattr(self, 'subscription') and self.subscription.is_pro
 
-    @property
-    def can_scan(self):
-        if self.is_pro:
-            return True
-        return self.monthly_scans < 30
-
-    @property
-    def can_upload_image(self):
-        return self.is_pro
-
 
 class MonthlyUsage(models.Model):
     """
@@ -78,9 +68,3 @@ class MonthlyUsage(models.Model):
 
     def __str__(self):
         return f"{self.user.username} — {self.year}-{self.month:02d}"
-
-    @property
-    def cost_usd(self) -> float:
-        input_cost = (self.input_tokens / 1_000_000) * float(self.input_cost_per_million)
-        output_cost = (self.output_tokens / 1_000_000) * float(self.output_cost_per_million)
-        return round(input_cost + output_cost, 6)
