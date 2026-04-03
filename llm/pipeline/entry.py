@@ -5,7 +5,7 @@ import logging
 from ..extractor import extract_events, extract_events_from_email
 from ..resolver import resolve_category, collect_prompt_injections, DISCARD
 from .outcome import ProcessingOutcome
-from .saving import _check_and_increment_scans, _fire_usage, _save_events
+from .saving import _check_and_increment_scans, _fire_usage, _save_events, GCalUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,11 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
         return ProcessingOutcome(status='failed', failure_reason='llm_error')
 
     _fire_usage(user, input_tokens, output_tokens)
-    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+    try:
+        created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+    except GCalUnavailableError:
+        return ProcessingOutcome(status='failed', failure_reason='gcal_disconnected',
+            notes='Google Calendar is not connected. Reconnect or disable sync in Preferences.')
     return ProcessingOutcome(created=created, status='needs_review' if has_pending else 'done')
 
 
@@ -77,5 +81,9 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=notes)
 
     _fire_usage(user, input_tokens, output_tokens)
-    created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+    try:
+        created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+    except GCalUnavailableError:
+        return ProcessingOutcome(status='failed', failure_reason='gcal_disconnected',
+            notes='Google Calendar is not connected. Reconnect or disable sync in Preferences.')
     return ProcessingOutcome(created=created, notes=notes, status='needs_review' if has_pending else 'done')

@@ -14,8 +14,5 @@ def login(request):
 
 
 def logout(request):
-    if request.user.is_authenticated and request.user.revoke_google_on_logout:
-        from accounts.utils import revoke_google_token
-        revoke_google_token(request.user)
     auth_logout(request)
     return redirect('accounts:login')

@@ -118,6 +118,8 @@
         This email contains attachments that require a Pro plan to process. Upgrade to Pro and the job will be retried automatically.
       {% elif job.failure_reason == 'llm_error' %}
         There was an error communicating with the AI service. You can retry this job manually once the issue is resolved.
+      {% elif job.failure_reason == 'gcal_disconnected' %}
+        Google Calendar is not connected. <a href="{% url 'accounts:preferences' %}">Reconnect your Google account</a> or disable calendar sync in Preferences, then retry.
       {% else %}
         An unexpected error occurred. You can retry this job manually.
       {% endif %}

@@ -11,6 +11,7 @@ urlpatterns = [
     path('auth/google/callback/', views.google_callback, name='google_callback'),
     path('username/', views.username_pick, name='username_pick'),
     path('preferences/', views.preferences, name='preferences'),
+    path('preferences/revoke-google/', views.revoke_google, name='revoke_google'),
     path('tz/auto/', views.set_timezone_auto, name='set_timezone_auto'),
     path('tz/set/', views.set_timezone_manual, name='set_timezone_manual'),
 ]
