@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone as dt_tz
 from django.template import Template, Context
-from dashboard.templatetags.tz_display import in_user_tz, user_tz_name
+from dashboard.templatetags.tz_display import in_user_tz
 
 
 class TestInUserTz:

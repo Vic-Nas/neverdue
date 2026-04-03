@@ -95,12 +95,12 @@ def _append_conflict_concern(event_data: dict, conflicts: list) -> dict:
     return event_data
 
 
-def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, bool]:
+def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, bool, int]:
     from ..resolver import resolve_category, DISCARD
 
     if not events:
         logger.debug("_save_events: no events to save | user=%s", user.pk)
-        return [], False
+        return [], False, 0
 
     for event_data in events:
         event_data['source_email_id'] = source_email_id
@@ -123,9 +123,12 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     logger.debug("_save_events: saving %d events (has_pending=%s) | user=%s", len(events), has_pending, user.pk)
 
     created = []
+    discarded = 0
     for event_data in events:
         category = resolve_category(user, event_data, sender)
         if category is DISCARD:
+            discarded += 1
+            logger.debug("_save_events: discarded '%s' by rule | user=%s", event_data.get('title', ''), user.pk)
             continue
         if category is None:
             category = _get_or_create_uncategorized(user)
@@ -133,4 +136,4 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
         if event:
             created.append(event)
 
-    return created, has_pending
+    return created, has_pending, discarded

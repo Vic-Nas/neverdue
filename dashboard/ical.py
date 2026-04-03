@@ -1,5 +1,5 @@
 # dashboard/ical.py
-from icalendar import Calendar, Event as VEvent, vText, vInt
+from icalendar import Calendar, Event as VEvent, vText
 from datetime import datetime, timezone as dt_timezone
 
 

@@ -54,3 +54,14 @@ class TestProcessText:
         outcome = process_text(user, 'text')
         assert outcome.status == 'failed'
         assert outcome.failure_reason == 'gcal_disconnected'
+
+    @patch('llm.pipeline.saving._fire_usage')
+    @patch('llm.pipeline.entry.extract_events')
+    def test_discard_rule_returns_done(self, mock_extract, _fire, user):
+        from dashboard.models import Rule
+        Rule.objects.create(user=user, rule_type='keyword', pattern='exam', action='discard')
+        mock_extract.return_value = ([SAMPLE_EVENT], 100, 50)
+        outcome = process_text(user, 'Exam on June 15')
+        assert outcome.status == 'done'
+        assert 'discarded by rule' in outcome.notes
+        assert len(outcome.created) == 0

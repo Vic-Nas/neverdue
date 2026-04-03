@@ -1,7 +1,6 @@
 # emails/tasks/retry.py
 import logging
 
-from django.conf import settings
 from django.utils import timezone
 from procrastinate.contrib.django import app
 from procrastinate import RetryStrategy

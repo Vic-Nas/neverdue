@@ -3,7 +3,7 @@ import base64
 import logging
 
 from ..extractor import extract_events, extract_events_from_email, LLMAPIError
-from ..resolver import resolve_category, collect_prompt_injections, DISCARD
+from ..resolver import collect_prompt_injections
 from .outcome import ProcessingOutcome
 from .saving import _check_and_increment_scans, _fire_usage, _save_events, GCalUnavailableError
 
@@ -37,11 +37,14 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
 
     _fire_usage(user, input_tokens, output_tokens)
     try:
-        created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+        created, has_pending, discarded = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     except GCalUnavailableError:
         return ProcessingOutcome(status='failed', failure_reason='gcal_disconnected',
             notes='Google Calendar is not connected. Reconnect or disable sync in Preferences.')
-    return ProcessingOutcome(created=created, status='needs_review' if has_pending else 'done')
+    if not created and discarded:
+        return ProcessingOutcome(status='done', notes=f'{discarded} event{"s" if discarded != 1 else ""} discarded by rule.')
+    discard_note = f'{discarded} event{"s" if discarded != 1 else ""} discarded by rule.' if discarded else ''
+    return ProcessingOutcome(created=created, notes=discard_note, status='needs_review' if has_pending else 'done')
 
 
 def process_email(user, body: str, attachments: list, sender: str = '', source_email_id: str = '', scan_job=None) -> ProcessingOutcome:
@@ -88,8 +91,11 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
 
     _fire_usage(user, input_tokens, output_tokens)
     try:
-        created, has_pending = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
+        created, has_pending, discarded = _save_events(user, events, sender=sender, source_email_id=source_email_id, scan_job=scan_job)
     except GCalUnavailableError:
         return ProcessingOutcome(status='failed', failure_reason='gcal_disconnected',
             notes='Google Calendar is not connected. Reconnect or disable sync in Preferences.')
+    if not created and discarded:
+        discard_note = f'{discarded} event{"s" if discarded != 1 else ""} discarded by rule.'
+        return ProcessingOutcome(status='done', notes=f'{discard_note} {notes}'.strip())
     return ProcessingOutcome(created=created, notes=notes, status='needs_review' if has_pending else 'done')

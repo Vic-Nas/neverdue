@@ -1,35 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from dashboard.writer import _build_gcal_body, _build_gcal_body_from_dict
-
-
-@pytest.mark.django_db
-class TestBuildGcalBody:
-    def test_basic_event(self, user):
-        cat = MagicMock(gcal_color_id='3', priority=2, reminders=None)
-        event = MagicMock(
-            title='Exam', description='Final',
-            start=MagicMock(isoformat=lambda: '2026-06-01T09:00:00+00:00'),
-            end=MagicMock(isoformat=lambda: '2026-06-01T10:00:00+00:00'),
-            recurrence_freq=None, user=user, category=cat, color='',
-        )
-        body = _build_gcal_body(event)
-        assert body['summary'] == 'Exam'
-        assert body['description'] == 'Final'
-        assert 'recurrence' not in body
-
-    def test_with_recurrence(self, user):
-        cat = MagicMock(gcal_color_id='', priority=2, reminders=None)
-        event = MagicMock(
-            title='Class', description='',
-            start=MagicMock(isoformat=lambda: '2026-06-01T09:00:00+00:00'),
-            end=MagicMock(isoformat=lambda: '2026-06-01T10:00:00+00:00'),
-            recurrence_freq='WEEKLY', recurrence_until=None,
-            user=user, category=cat, color='',
-        )
-        body = _build_gcal_body(event)
-        assert 'recurrence' in body
-        assert 'FREQ=WEEKLY' in body['recurrence'][0]
+from dashboard.writer import _build_gcal_body_from_dict
 
 
 @pytest.mark.django_db
