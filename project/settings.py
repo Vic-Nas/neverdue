@@ -39,6 +39,10 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'WARNING',
         },
+        'anthropic': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+        },
         'httpx': {
             'handlers': ['console'],
             'level': 'WARNING',
