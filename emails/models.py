@@ -36,6 +36,7 @@ class ScanJob(models.Model):
     REASON_PRO_REQUIRED = 'pro_required'
     REASON_INTERNAL_ERROR = 'internal_error'
     REASON_DISCARDED_BY_RULE = 'discarded_by_rule'
+    REASON_GCAL_DISCONNECTED = 'gcal_disconnected'
 
     FAILURE_REASON_CHOICES = [
         (REASON_LLM_ERROR, 'LLM error'),
@@ -43,6 +44,7 @@ class ScanJob(models.Model):
         (REASON_PRO_REQUIRED, 'Pro plan required'),
         (REASON_INTERNAL_ERROR, 'Internal error'),
         (REASON_DISCARDED_BY_RULE, 'Discarded by rule'),
+        (REASON_GCAL_DISCONNECTED, 'Google Calendar disconnected'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scan_jobs')

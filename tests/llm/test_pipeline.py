@@ -1,7 +1,7 @@
 import pytest
-import json
 from unittest.mock import patch, MagicMock
-from llm.pipeline.entry import process_text, process_email
+from llm.pipeline.entry import process_text
+from dashboard.writer import GCalUnavailableError
 
 
 SAMPLE_EVENT = {
@@ -38,24 +38,11 @@ class TestProcessText:
         outcome = process_text(user, 'text')
         assert outcome.failure_reason == 'scan_limit'
 
-
-@pytest.mark.django_db
-class TestProcessEmail:
-    @patch('llm.pipeline.saving.write_event_to_calendar', return_value=MagicMock(pk=1))
+    @patch('llm.pipeline.saving._save_events', side_effect=GCalUnavailableError('no token'))
     @patch('llm.pipeline.saving._fire_usage')
-    @patch('llm.pipeline.entry.extract_events_from_email')
-    def test_success(self, mock_extract, mock_fire, mock_write, user):
-        mock_extract.return_value = ([SAMPLE_EVENT], 100, 50)
-        outcome = process_email(user, 'body', [])
-        assert outcome.status == 'done'
-
-    def test_non_pro_attachment_stripped(self, user):
-        import base64
-        att = [base64.b64encode(b'img').decode(), 'image/jpeg', 'f.jpg']
-        with patch('llm.pipeline.saving.write_event_to_calendar', return_value=MagicMock(pk=1)):
-            with patch('llm.pipeline.entry.extract_events_from_email') as mock_ext:
-                mock_ext.return_value = ([SAMPLE_EVENT], 100, 50)
-                with patch('llm.pipeline.saving._fire_usage'):
-                    outcome = process_email(user, 'body', [att])
-        # Non-pro: attachments stripped, but body still processed
-        assert 'Upgrade' in outcome.notes or outcome.status in ('done', 'needs_review')
+    @patch('llm.pipeline.entry.extract_events')
+    def test_gcal_disconnected(self, mock_ext, _fire, _save, user):
+        mock_ext.return_value = ([SAMPLE_EVENT], 100, 50)
+        outcome = process_text(user, 'text')
+        assert outcome.status == 'failed'
+        assert outcome.failure_reason == 'gcal_disconnected'

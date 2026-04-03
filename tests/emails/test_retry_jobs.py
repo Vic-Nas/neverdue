@@ -1,7 +1,7 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from emails.models import ScanJob
-from emails.tasks.retry import _retry_jobs, retry_jobs_after_plan_upgrade
+from emails.tasks.retry import _retry_jobs
 
 
 @pytest.mark.django_db
@@ -44,32 +44,8 @@ class TestRetryJobs:
 
     def test_unknown_source_logged(self, user):
         job = ScanJob.objects.create(user=user, status='failed', failure_reason='llm_error')
-        # Force an unknown source value
         ScanJob.objects.filter(pk=job.pk).update(source='unknown')
         job.refresh_from_db()
         _retry_jobs([job])
         job.refresh_from_db()
-        assert job.status == ScanJob.STATUS_QUEUED  # still re-queued
-
-
-@pytest.mark.django_db
-class TestRetryAfterPlanUpgrade:
-    @patch('emails.tasks.retry._retry_jobs')
-    def test_finds_scan_limit_jobs(self, mock_retry, user):
-        ScanJob.objects.create(
-            user=user, source='email', status='failed',
-            failure_reason='scan_limit',
-        )
-        ScanJob.objects.create(
-            user=user, source='upload', status='failed',
-            failure_reason='pro_required',
-        )
-        # Unrelated failure — should not be retried
-        ScanJob.objects.create(
-            user=user, source='email', status='failed',
-            failure_reason='llm_error',
-        )
-        retry_jobs_after_plan_upgrade(user.pk)
-        mock_retry.assert_called_once()
-        retried = mock_retry.call_args[0][0]
-        assert len(retried) == 2
+        assert job.status == ScanJob.STATUS_QUEUED

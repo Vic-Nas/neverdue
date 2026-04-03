@@ -150,15 +150,21 @@
     </div>
 
     <div class="form-section">
-      <h2 class="form-section__title">Privacy</h2>
+      <h2 class="form-section__title">Google Calendar</h2>
 
       <div class="form-group form-group--checkbox">
         <div class="checkbox-row">
-          <input type="checkbox" name="revoke_google_on_logout" id="revoke_google_on_logout"
-            {% if request.user.revoke_google_on_logout %}checked{% endif %}>
-          <label for="revoke_google_on_logout">Revoke Google permissions on logout</label>
+          <input type="checkbox" name="save_to_gcal" id="save_to_gcal"
+            {% if request.user.save_to_gcal %}checked{% endif %}>
+          <label for="save_to_gcal">Sync events to Google Calendar</label>
         </div>
-        <p class="form-hint">When enabled, NeverDue will revoke its access to your Google account each time you log out. You will be asked to re-authorize on your next login.</p>
+        <p class="form-hint">When enabled, every new event will be pushed to your Google Calendar. Disable this if you only want events stored in NeverDue.</p>
+      </div>
+
+      <div class="form-group">
+        <button type="button" class="btn btn-danger" id="revoke-google-btn"
+          data-url="{% url 'accounts:revoke_google' %}">Revoke Google permissions</button>
+        <p class="form-hint">Disconnects your Google account and disables calendar sync. You can reconnect anytime by logging in with Google again.</p>
       </div>
     </div>
 

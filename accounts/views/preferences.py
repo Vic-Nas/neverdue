@@ -1,9 +1,13 @@
 # accounts/views/preferences.py
+import logging
 import zoneinfo
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+
+logger = logging.getLogger(__name__)
 
 LANGUAGES = [
     'English', 'Français', 'Español', 'Deutsch',
@@ -43,7 +47,8 @@ def preferences(request):
         auto_delete = request.POST.get('auto_delete_past_events') == 'on'
         retention_days = request.POST.get('past_event_retention_days', '30').strip()
         delete_gcal = request.POST.get('delete_from_gcal_on_cleanup') == 'on'
-        revoke_on_logout = request.POST.get('revoke_google_on_logout') == 'on'
+        wants_gcal = request.POST.get('save_to_gcal') == 'on'
+        save_to_gcal = wants_gcal and bool(request.user.google_refresh_token)
         timezone_str = request.POST.get('timezone', 'UTC').strip()
 
         try:
@@ -63,7 +68,7 @@ def preferences(request):
         request.user.auto_delete_past_events = auto_delete
         request.user.past_event_retention_days = retention_days
         request.user.delete_from_gcal_on_cleanup = delete_gcal
-        request.user.revoke_google_on_logout = revoke_on_logout
+        request.user.save_to_gcal = save_to_gcal
         request.user.timezone = timezone_str
         request.user.timezone_auto_detected = False
         request.user.priority_color_low    = priority_color_low
@@ -72,7 +77,7 @@ def preferences(request):
         request.user.priority_color_urgent = priority_color_urgent
         request.user.save(update_fields=[
             'language', 'auto_delete_past_events', 'past_event_retention_days',
-            'delete_from_gcal_on_cleanup', 'revoke_google_on_logout',
+            'delete_from_gcal_on_cleanup', 'save_to_gcal',
             'timezone', 'timezone_auto_detected',
             'priority_color_low', 'priority_color_medium',
             'priority_color_high', 'priority_color_urgent',
@@ -93,3 +98,15 @@ def preferences(request):
         'gcal_colors': GCAL_COLORS,
         'priority_levels': priority_levels,
     })
+
+
+@login_required
+def revoke_google(request):
+    """Revoke Google permissions and disable GCal sync."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    from accounts.utils import revoke_google_token
+    revoke_google_token(request.user)
+    request.user.save_to_gcal = False
+    request.user.save(update_fields=['save_to_gcal'])
+    return JsonResponse({'ok': True})

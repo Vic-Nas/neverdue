@@ -115,20 +115,25 @@ def _save_pending_event(user, event_data, category, scan_job):
         return None
 
 
-def _save_active_event(user, event_data, category, scan_job):
-    from dashboard.gcal.client import _service
+class GCalUnavailableError(Exception):
+    """Raised when save_to_gcal is True but the Google token is missing."""
 
+
+def _save_active_event(user, event_data, category, scan_job):
     google_event_id = None
     gcal_link = ''
 
-    try:
-        svc = _service(user)
-        body = _build_gcal_body_from_dict(user, event_data, category)
-        google_event = svc.events().insert(calendarId='primary', body=body).execute()
-        google_event_id = google_event.get('id')
-        gcal_link = google_event.get('htmlLink', '')
-    except Exception as exc:
-        logger.warning("dashboard.write_event_to_calendar: gcal unavailable, saving locally | user=%s error=%s", user.pk, exc)
+    if user.save_to_gcal:
+        from dashboard.gcal.client import _service
+        try:
+            svc = _service(user)
+            body = _build_gcal_body_from_dict(user, event_data, category)
+            google_event = svc.events().insert(calendarId='primary', body=body).execute()
+            google_event_id = google_event.get('id')
+            gcal_link = google_event.get('htmlLink', '')
+        except Exception as exc:
+            logger.error("dashboard.write_event_to_calendar: gcal push failed | user=%s error=%s", user.pk, exc)
+            raise GCalUnavailableError(str(exc)) from exc
 
     try:
         return Event.objects.create(

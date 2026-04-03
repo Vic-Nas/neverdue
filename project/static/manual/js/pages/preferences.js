@@ -33,4 +33,28 @@
       if (details) details.removeAttribute('open');
     });
   });
+
+  // Revoke Google permissions button
+  var revokeBtn = document.getElementById('revoke-google-btn');
+  if (revokeBtn) {
+    revokeBtn.addEventListener('click', function () {
+      if (!confirm('This will disconnect your Google account and disable calendar sync. Continue?')) return;
+      var url = revokeBtn.getAttribute('data-url');
+      var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+      var csrf = csrfEl ? csrfEl.value : '';
+      fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            var cb = document.getElementById('save_to_gcal');
+            if (cb) cb.checked = false;
+            revokeBtn.textContent = 'Revoked';
+            revokeBtn.disabled = true;
+          } else {
+            alert(data.error || 'Failed to revoke.');
+          }
+        })
+        .catch(function () { alert('Network error. Try again.'); });
+    });
+  }
 })();

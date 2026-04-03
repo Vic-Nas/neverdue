@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from dashboard.writer import write_event_to_calendar
+from dashboard.writer import write_event_to_calendar, GCalUnavailableError
 
 logger = logging.getLogger(__name__)
 
