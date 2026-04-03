@@ -136,6 +136,25 @@
   </div>
   {% endif %}
 
+  {# ── Needs-review job with no events — offer retry ── #}
+  {% if job.status == 'needs_review' and not pending_events and not active_events %}
+  <div class="failure-box" style="background:#fffbeb;border-color:#fde68a;">
+    <div class="failure-box__title" style="color:#92400e;">Nothing was saved</div>
+    <div class="failure-box__reason" style="color:#78350f;">
+      Events may have been extracted but could not be saved. You can retry this job to try again.
+      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>{% endif %}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" class="btn-primary" id="retry-btn"
+        data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
+        data-queue-url="{% url 'dashboard:queue' %}">
+        Retry job
+      </button>
+      <span id="retry-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+    </div>
+  </div>
+  {% endif %}
+
   {# ── Pending events — needs attention ── #}
   {% if pending_events %}
   <div class="job-section">
