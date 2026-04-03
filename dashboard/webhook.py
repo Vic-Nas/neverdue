@@ -28,7 +28,7 @@ def gcal_webhook(request):
     try:
         user = User.objects.get(gcal_channel_id=channel_id)
     except User.DoesNotExist:
-        logger.error("dashboard.gcal_webhook: channel not found | channel_id=%s", channel_id)
+        logger.debug("dashboard.gcal_webhook: stale channel ignored | channel_id=%s", channel_id)
         return HttpResponse(status=200)
 
     _sync_changed_events(user)
