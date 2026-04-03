@@ -377,6 +377,7 @@
 }
 
 /* ── Bulk action bar ── */
+.bulk-bar[hidden] { display: none; }
 .bulk-bar {
   display: flex;
   align-items: center;
