@@ -21,40 +21,70 @@
     <h2>2. Information we collect</h2>
     <p>When you use NeverDue, we collect the following:</p>
     <ul>
-      <li><strong>Account information</strong> — your name, email address, and Google account identifier, obtained when you sign in with Google.</li>
-      <li><strong>Email content</strong> — emails forwarded to your NeverDue address are processed to extract calendar events. We do not store the raw email content after processing.</li>
+      <li><strong>Google account information</strong> — your name, email address, Google account identifier, and OAuth tokens (access and refresh tokens) used to authenticate you and access Google Calendar on your behalf.</li>
+      <li><strong>Email content</strong> — emails forwarded to your NeverDue address are processed to extract calendar events. Raw email content is discarded immediately after processing and is not stored.</li>
       <li><strong>Uploaded files</strong> — images, PDFs, and text files you upload for event extraction are processed and immediately discarded. We do not store them.</li>
-      <li><strong>Calendar data</strong> — event titles, dates, and descriptions extracted from your emails or uploads, stored to sync with your Google Calendar.</li>
-      <li><strong>Usage data</strong> — scan counts and subscription status to enforce plan limits.</li>
-      <li><strong>Payment information</strong> — handled entirely by Stripe. We do not store card details.</li>
+      <li><strong>Calendar data</strong> — event titles, dates, descriptions, and category information extracted from your emails or uploads, stored to sync with your Google Calendar.</li>
+      <li><strong>Usage data</strong> — scan counts, subscription status, and preference settings to enforce plan limits and personalize the service.</li>
+      <li><strong>Payment information</strong> — handled entirely by Stripe. We do not store card numbers or payment credentials.</li>
     </ul>
 
-    <h2>3. How we use your information</h2>
+    <h2>3. Google user data</h2>
+    <p>NeverDue's use of Google user data complies with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+    <h3>What Google data we access</h3>
+    <ul>
+      <li><strong>Google profile (OpenID, email, name)</strong> — used solely for authentication. We do not use your profile information for any other purpose.</li>
+      <li><strong>Google Calendar (read/write)</strong> — used solely to create, update, and delete calendar events on your behalf. We do not read or analyze your existing calendar events.</li>
+    </ul>
+    <h3>How Google data is stored and protected</h3>
+    <ul>
+      <li>OAuth tokens are stored encrypted at rest in our database, hosted on Railway's infrastructure within secure, access-controlled environments.</li>
+      <li>All communication between NeverDue and Google APIs occurs over HTTPS/TLS.</li>
+      <li>Tokens are scoped to the minimum permissions required (Calendar read/write and basic profile).</li>
+      <li>You can revoke Google access at any time from your NeverDue preferences or from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google account settings</a>. Revoking access immediately invalidates all stored tokens.</li>
+    </ul>
+    <h3>Who we share Google data with</h3>
+    <p>We do <strong>not</strong> sell, rent, trade, or disclose your Google user data to any third party. Google user data is shared only with the following services, strictly as necessary to provide the NeverDue service:</p>
+    <ul>
+      <li><strong>Google Calendar API</strong> — to write and manage events on your behalf.</li>
+      <li><strong>Anthropic</strong> — email and file content (not Google tokens or profile data) is sent to Anthropic's API for AI-powered event extraction. Anthropic processes this data per their <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">privacy policy</a> and does not use it for model training.</li>
+    </ul>
+    <p>No other third party receives your Google user data. Specifically, Google user data is never shared with advertising services, analytics providers, or data brokers.</p>
+
+    <h2>4. How we use your information</h2>
     <ul>
       <li>To provide the NeverDue service — extracting events and writing them to your Google Calendar</li>
+      <li>To authenticate you via Google Sign-In</li>
       <li>To manage your account and subscription</li>
       <li>To send transactional emails (account-related notifications only)</li>
-      <li>To display relevant advertising via Google AdSense</li>
+      <li>To display relevant advertising via Google AdSense (advertising does not use your Google user data or email content)</li>
     </ul>
 
-    <h2>4. Google Calendar access</h2>
-    <p>With your permission, NeverDue writes events to your Google Calendar on your behalf. We request only the minimum necessary access. You can revoke this access at any time from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google account settings</a>.</p>
-
-    <h2>5. Third-party services</h2>
-    <p>We use the following third-party services, each with their own privacy policies:</p>
+    <h2>5. Data protection</h2>
+    <p>We implement the following measures to protect your data:</p>
     <ul>
-      <li><strong>Google</strong> — OAuth authentication and Calendar API</li>
-      <li><strong>Mailgun</strong> — inbound email processing</li>
-      <li><strong>Stripe</strong> — payment processing</li>
-      <li><strong>Anthropic</strong> — AI-powered event extraction</li>
-      <li><strong>Google AdSense</strong> — advertising (free tier)</li>
-      <li><strong>Resend</strong> — transactional email delivery</li>
+      <li><strong>Encryption in transit</strong> — all data transmitted between your browser, our servers, and third-party APIs is encrypted using TLS.</li>
+      <li><strong>Encryption at rest</strong> — our database is hosted on Railway with encryption at rest enabled for all stored data, including OAuth tokens.</li>
+      <li><strong>Minimal data retention</strong> — raw email content and uploaded files are processed in memory and discarded immediately. We do not retain source material after event extraction.</li>
+      <li><strong>Access control</strong> — only the application accesses stored data programmatically. There is no manual or administrative access to user tokens or email content.</li>
+      <li><strong>Token revocation</strong> — you can revoke Google OAuth tokens at any time, which immediately clears all stored Google credentials from our database.</li>
     </ul>
 
-    <h2>6. Data retention</h2>
-    <p>We retain your account data for as long as your account is active. You may request deletion of your account and associated data at any time by contacting us at <a href="mailto:privacy@service.neverdue.ca">privacy@service.neverdue.ca</a>. Extracted event data stored in our database will be deleted within 30 days of your request.</p>
+    <h2>6. Third-party services</h2>
+    <p>We use the following third-party services to operate NeverDue. Each processes only the data necessary for its specific function:</p>
+    <ul>
+      <li><strong>Google</strong> — OAuth authentication and Calendar API. Receives your authentication credentials and calendar event data. <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a></li>
+      <li><strong>Anthropic</strong> — AI-powered event extraction. Receives email body text and file content for processing. Does not receive Google tokens or profile data. <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Privacy Policy</a></li>
+      <li><strong>Stripe</strong> — payment processing. Receives payment information directly from your browser. We never handle or store card details. <a href="https://stripe.com/privacy" target="_blank" rel="noopener">Privacy Policy</a></li>
+      <li><strong>Resend</strong> — inbound email receiving and transactional email delivery. Receives forwarded emails and sends account notifications. <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></li>
+      <li><strong>Railway</strong> — application hosting and database. Hosts our infrastructure in secure, access-controlled environments. <a href="https://railway.com/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a></li>
+      <li><strong>Google AdSense</strong> — advertising on the free tier. AdSense may set cookies for ad personalization. It does not receive your Google user data, email content, or calendar data from us. <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">Privacy Policy</a></li>
+    </ul>
 
-    <h2>7. Your rights under Quebec's Law 25 (Act 25)</h2>
+    <h2>7. Data retention</h2>
+    <p>We retain your account data for as long as your account is active. Extracted event data (titles, dates, descriptions) is retained in our database to support event management features. You may request deletion of your account and all associated data at any time by contacting us at <a href="mailto:privacy@service.neverdue.ca">privacy@service.neverdue.ca</a>. All data will be permanently deleted within 30 days of your request.</p>
+
+    <h2>8. Your rights under Quebec's Law 25 (Act 25)</h2>
     <p>As a Quebec resident, you have the right to:</p>
     <ul>
       <li>Access personal information we hold about you</li>
@@ -65,13 +95,13 @@
     </ul>
     <p>To exercise any of these rights, contact us at <a href="mailto:privacy@service.neverdue.ca">privacy@service.neverdue.ca</a>.</p>
 
-    <h2>8. Cookies</h2>
+    <h2>9. Cookies</h2>
     <p>We use session cookies necessary for authentication. Google AdSense may set additional cookies for advertising purposes. You can manage cookie preferences through your browser settings.</p>
 
-    <h2>9. Changes to this policy</h2>
+    <h2>10. Changes to this policy</h2>
     <p>We may update this policy from time to time. We will notify you of significant changes by email or by posting a notice on the site.</p>
 
-    <h2>10. Contact</h2>
+    <h2>11. Contact</h2>
     <p>For any privacy-related questions, contact us at <a href="mailto:privacy@service.neverdue.ca">privacy@service.neverdue.ca</a>.</p>
 
   </div>
