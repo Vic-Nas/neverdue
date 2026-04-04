@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date
 
 from dashboard.models import Category, Event
 
@@ -48,6 +49,10 @@ def event_edit(request, pk=None):
             description = data.get('description', '').strip()
             category_id = data.get('category_id')
             color = data.get('color', '').strip()
+            recurrence_freq = data.get('recurrence_freq') or None
+            recurrence_until_str = data.get('recurrence_until') or ''
+            raw_reminders = data.get('reminders', [])
+            reminders = [int(m) for m in raw_reminders if isinstance(m, (int, float)) and int(m) > 0]
 
             if not title or not start_str or not end_str:
                 return JsonResponse({'ok': False, 'error': 'Title, start, and end are required.'}, status=400)
@@ -74,6 +79,9 @@ def event_edit(request, pk=None):
             event.description = description
             event.category = category
             event.color = color
+            event.recurrence_freq = recurrence_freq
+            event.recurrence_until = parse_date(recurrence_until_str) if recurrence_until_str else None
+            event.reminders = reminders
 
             if was_pending:
                 event.status = 'active'
