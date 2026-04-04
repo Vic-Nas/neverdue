@@ -6,71 +6,6 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
-<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
-<link rel="stylesheet" href="{% static 'css/pages/email-inbox.css' %}">
-<style>
-  /* ── Selection mode ── */
-  .event-card { position: relative; }
-
-  .event-card__checkbox {
-    display: none;
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-    accent-color: var(--color-primary, #4f46e5);
-    z-index: 2;
-  }
-
-  body.selecting .event-card__checkbox { display: block; }
-  body.selecting .event-card__date { margin-left: 32px; }
-  body.selecting .event-card { cursor: pointer; }
-
-  .event-card--selected { background: var(--color-primary-subtle, #eef2ff); }
-
-  /* ── Bulk action bar ── */
-  .bulk-bar {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--color-surface, #fff);
-    border: 1px solid var(--color-border, #e5e7eb);
-    border-radius: 10px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  .bulk-bar.visible { display: flex; }
-  .bulk-bar__count { font-weight: 600; font-size: 0.9rem; flex: 1; }
-  .bulk-bar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-  /* Reprocess drawer */
-  .reprocess-drawer {
-    display: none;
-    margin-top: 10px;
-    width: 100%;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .reprocess-drawer.open { display: flex; }
-  .reprocess-drawer textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border, #e5e7eb);
-    font-size: 0.9rem;
-    resize: vertical;
-    font-family: inherit;
-    box-sizing: border-box;
-  }
-  .reprocess-drawer__hint {
-    font-size: 0.8rem;
-    color: var(--color-muted, #6b7280);
-  }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -80,7 +15,7 @@
   <div class="page__header--row">
     <div>
       <h1 class="page__title">Upcoming</h1>
-      <p class="page__sub">{{ active_events|length }} event{{ active_events|length|pluralize }} scheduled</p>
+      <p class="page__sub">{{ total_count }} event{{ total_count|pluralize }} scheduled</p>
     </div>
     <div class="page__actions">
       {% if active_events %}
@@ -101,44 +36,15 @@
   </div>
   {% endif %}
 
-  {# ── Your NeverDue inbox address ── #}
-  <div class="section-block inbox-section">
-    <div class="section-block__header">
-      <h2 class="section-block__title">Your NeverDue inbox</h2>
-    </div>
-    <div class="inbox-address-box">
-      <span id="inbox-address" class="inbox-address-text">{{ request.user.username }}@user.{{ DOMAIN }}</span>
-      <button class="btn-ghost btn btn--sm" onclick="copyInboxAddress()">Copy</button>
-    </div>
-    <p class="inbox-hint">Forward any email to this address and it will be scanned for deadlines and calendar events.</p>
-
-    <div class="forwarding-setup">
-      <p>Set up forwarding in <a href="https://gmail.com" target="_blank" rel="noopener">Gmail</a>, <a href="https://outlook.com" target="_blank" rel="noopener">Outlook</a>, <a href="https://icloud.com/mail" target="_blank" rel="noopener">Apple Mail</a>, or <a href="https://mail.yahoo.com" target="_blank" rel="noopener">Yahoo</a> — <a href="{% url 'help' %}">see the setup guide →</a></p>
-    </div>
+  {# ── Inbox address — compact single row ── #}
+  <div class="inbox-row">
+    <span class="inbox-row__label">Your inbox:</span>
+    <code id="inbox-address" class="inbox-row__addr">{{ request.user.username }}@user.{{ DOMAIN }}</code>
+    <button type="button" class="btn-ghost btn btn--sm" id="copy-inbox-btn">Copy</button>
+    <a href="{% url 'help' %}" class="inbox-row__help">Setup guide →</a>
   </div>
 
-  {# Scan usage bar (free users only) #}
-  {% if scans_used is not None %}
-  <div class="scan-banner">
-    <div class="scan-banner__top">
-      <span>{{ scans_used }}/{{ scans_total }} scans used this month</span>
-      {% if last_event %}
-      <span class="scan-banner__last">Last event added {{ last_event.created_at|timesince }} ago</span>
-      {% endif %}
-      {% if scans_used >= 25 %}
-      <a href="{% url 'billing:plans' %}" class="btn-primary btn--sm">Upgrade →</a>
-      {% endif %}
-    </div>
-    <div class="scan-bar">
-      <div class="scan-bar__fill {% if scans_pct >= 90 %}scan-bar__fill--danger{% elif scans_pct >= 70 %}scan-bar__fill--warn{% endif %}"
-           style="width:{{ scans_pct }}%"></div>
-    </div>
-  </div>
-  {% elif last_event %}
-  <p class="scan-last">Last event added {{ last_event.created_at|timesince }} ago</p>
-  {% endif %}
-
-  {# ── Bulk action bar (above sort + list) ── #}
+  {# ── Bulk action bar ── #}
   <div class="bulk-bar" id="bulk-bar"
     data-bulk-url="{% url 'dashboard:events_bulk_action' %}"
     data-export-url="{% url 'dashboard:events_export' %}">
@@ -160,12 +66,17 @@
     </div>
   </div>
 
-  {# ── Sort controls ── #}
-  <div class="sort-bar">
-    <span class="sort-bar__label">Sort by</span>
-    <a href="?sort=added" class="sort-bar__opt {% if sort == 'added' or not sort %}sort-bar__opt--active{% endif %}">Date added</a>
-    <a href="?sort=start" class="sort-bar__opt {% if sort == 'start' %}sort-bar__opt--active{% endif %}">Start date</a>
-    <a href="?sort=category" class="sort-bar__opt {% if sort == 'category' %}sort-bar__opt--active{% endif %}">Category</a>
+  {# ── Search + Sort bar ── #}
+  <div class="toolbar">
+    <form class="toolbar__search" method="get" action="">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search events…" class="toolbar__search-input">
+      {% if sort != 'start' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+    </form>
+    <div class="toolbar__sort">
+      <a href="?sort=start{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'start' %}toolbar__opt--active{% endif %}">Date</a>
+      <a href="?sort=added{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'added' %}toolbar__opt--active{% endif %}">Newest</a>
+      <a href="?sort=category{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'category' %}toolbar__opt--active{% endif %}">Category</a>
+    </div>
   </div>
 
   {# ── Active event list ── #}
@@ -205,12 +116,30 @@
     {% endfor %}
   </div>
 
+  {# ── Pagination ── #}
+  {% if page_obj.has_other_pages %}
+  <nav class="pagination">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if sort != 'start' %}&sort={{ sort }}{% endif %}{% if q %}&q={{ q }}{% endif %}" class="pagination__link">← Previous</a>
+    {% endif %}
+    <span class="pagination__info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if sort != 'start' %}&sort={{ sort }}{% endif %}{% if q %}&q={{ q }}{% endif %}" class="pagination__link">Next →</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
   {% else %}
   <div class="empty-state">
+    {% if q %}
+    <p class="empty-state__text">No events match "{{ q }}".</p>
+    <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Clear search</a>
+    {% else %}
     <p class="empty-state__text">No upcoming events. Add one manually or set up email forwarding.</p>
     <div class="empty-state__actions">
       <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 

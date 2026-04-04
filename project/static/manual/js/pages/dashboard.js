@@ -1,4 +1,19 @@
 // project/static/manual/js/pages/dashboard.js
+
+// ── Copy inbox address ──
+(function () {
+  var btn = document.getElementById('copy-inbox-btn');
+  var addr = document.getElementById('inbox-address');
+  if (!btn || !addr) return;
+  btn.addEventListener('click', function () {
+    navigator.clipboard.writeText(addr.textContent.trim()).then(function () {
+      btn.textContent = 'Copied!';
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
+})();
+
+// ── Select mode & bulk actions ──
 (function () {
   var bulkBar = document.getElementById('bulk-bar');
   if (!bulkBar) return;

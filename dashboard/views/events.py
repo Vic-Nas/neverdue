@@ -16,10 +16,38 @@ logger = logging.getLogger(__name__)
 @login_required
 def index(request):
     try:
-        active_events = Event.objects.filter(
+        qs = Event.objects.filter(
             user=request.user, status='active',
-        ).select_related('category').order_by('start')
-        return render(request, 'dashboard/index.html', {'active_events': active_events})
+        ).select_related('category')
+
+        # Search
+        q = request.GET.get('q', '').strip()
+        if q:
+            qs = qs.filter(title__icontains=q)
+
+        # Sort
+        sort = request.GET.get('sort', 'start')
+        if sort == 'added':
+            qs = qs.order_by('-created_at')
+        elif sort == 'category':
+            qs = qs.order_by('category__name', 'start')
+        else:
+            sort = 'start'
+            qs = qs.order_by('start')
+
+        # Pagination
+        from django.core.paginator import Paginator
+        page_num = request.GET.get('page', '1')
+        paginator = Paginator(qs, 25)
+        page = paginator.get_page(page_num)
+
+        return render(request, 'dashboard/index.html', {
+            'active_events': page.object_list,
+            'page_obj': page,
+            'sort': sort,
+            'q': q,
+            'total_count': paginator.count,
+        })
     except Exception:
         logger.exception("index error for user=%s", request.user.pk)
         return HttpResponse('Dashboard unavailable.', status=500)
