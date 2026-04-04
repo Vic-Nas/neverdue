@@ -84,7 +84,7 @@
   <div class="event-list" id="event-list">
     {% for event in active_events %}
     <div class="event-card-wrap">
-      <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card" data-id="{{ event.pk }}">
+      <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card{% if event.color %} event-card--colored{% endif %}" data-id="{{ event.pk }}"{% if event.color %} style="--event-color:{{ event.color }}"{% endif %}>
         <input type="checkbox" class="event-card__checkbox" value="{{ event.pk }}" onclick="event.stopPropagation()">
 
         <div class="event-card__date">

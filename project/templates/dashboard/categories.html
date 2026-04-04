@@ -38,6 +38,18 @@
     </div>
   </div>
 
+  {# ── Search + Sort bar ── #}
+  <div class="toolbar">
+    <form class="toolbar__search" method="get" action="">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search categories…" class="toolbar__search-input">
+      {% if sort != 'name' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+    </form>
+    <div class="toolbar__sort">
+      <a href="?sort=name{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'name' %}toolbar__opt--active{% endif %}">A–Z</a>
+      <a href="?sort=priority{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'priority' %}toolbar__opt--active{% endif %}">Priority</a>
+    </div>
+  </div>
+
   <div class="cat-list">
     {% for cat in categories %}
     <div class="cat-card" data-cat-id="{{ cat.pk }}">
@@ -85,8 +97,13 @@
 
   {% else %}
   <div class="empty-state">
+    {% if q %}
+    <p class="empty-state__text">No categories match "{{ q }}".</p>
+    <a href="{% url 'dashboard:categories' %}" class="btn-ghost btn">Clear search</a>
+    {% else %}
     <p class="empty-state__text">No categories yet.</p>
     <a href="{% url 'dashboard:category_create' %}" class="btn-primary">Create your first category</a>
+    {% endif %}
   </div>
   {% endif %}
 
