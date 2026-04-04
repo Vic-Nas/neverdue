@@ -36,3 +36,29 @@ def patch_event_color(user, google_event_id: str, color_id: str) -> bool:
     except Exception as exc:
         logger.warning("dashboard.patch_event_color: failed | user=%s error=%s", user.pk, exc)
         return False
+
+
+def patch_event(user, google_event_id: str, body: dict) -> bool:
+    """Patch arbitrary fields on a GCal event."""
+    if not google_event_id:
+        return False
+    try:
+        svc = _service(user)
+        svc.events().patch(calendarId='primary', eventId=google_event_id, body=body).execute()
+        return True
+    except Exception as exc:
+        logger.warning("dashboard.patch_event: failed | user=%s gcal_id=%s error=%s", user.pk, google_event_id, exc)
+        return False
+
+
+def update_event(user, google_event_id: str, body: dict) -> bool:
+    """Full update of a GCal event (PUT)."""
+    if not google_event_id:
+        return False
+    try:
+        svc = _service(user)
+        svc.events().update(calendarId='primary', eventId=google_event_id, body=body).execute()
+        return True
+    except Exception as exc:
+        logger.warning("dashboard.update_event: failed | user=%s gcal_id=%s error=%s", user.pk, google_event_id, exc)
+        return False

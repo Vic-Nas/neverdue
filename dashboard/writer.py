@@ -36,11 +36,38 @@ def _resolve_color_id(user, category, event_color: str = '') -> str:
     return _priority_color_id(user, category.priority if category else 1)
 
 
+def _resolve_reminders(event_reminders: list, category) -> list[dict]:
+    """Return GCal-formatted reminder overrides.
+
+    *event_reminders* takes precedence; if empty, fall back to category.
+    Both are stored as ``[minutes, ...]`` (list of ints).
+    """
+    minutes_list = event_reminders or (category.reminders if category else [])
+    return [{'method': 'popup', 'minutes': int(m)} for m in minutes_list]
+
+
+def build_gcal_body(event) -> dict:
+    """Build a GCal API request body from an Event model instance."""
+    user = event.user
+    category = event.category
+    reminders = _resolve_reminders(event.reminders, category)
+
+    body = {
+        'summary': event.title,
+        'description': event.description or '',
+        'start': {'dateTime': event.start.strftime('%Y-%m-%dT%H:%M:%SZ'), 'timeZone': 'UTC'},
+        'end': {'dateTime': event.end.strftime('%Y-%m-%dT%H:%M:%SZ'), 'timeZone': 'UTC'},
+        'reminders': {'useDefault': False, 'overrides': reminders},
+        'colorId': _resolve_color_id(user, category, event.color),
+    }
+    if event.recurrence_freq:
+        body['recurrence'] = [_build_rrule(event.recurrence_freq, event.recurrence_until)]
+    return body
+
+
 def _build_gcal_body_from_dict(user, event_data: dict, category) -> dict:
     """Build GCal API request body from an event data dict (pre-save)."""
-    reminders = []
-    if category and category.reminders:
-        reminders = [{'method': 'popup', 'minutes': r['minutes']} for r in category.reminders]
+    reminders = _resolve_reminders([], category)
 
     body = {
         'summary': event_data['title'],

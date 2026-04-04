@@ -41,6 +41,7 @@ class Event(models.Model):
     pending_expires_at = models.DateField(null=True, blank=True)
     pending_concern = models.TextField(null=True, blank=True)
     color = models.CharField(max_length=20, blank=True, default='')
+    reminders = models.JSONField(default=list, blank=True)
     gcal_link = models.URLField(blank=True, default='')
     scan_job = models.ForeignKey(
         'emails.ScanJob', null=True, blank=True,

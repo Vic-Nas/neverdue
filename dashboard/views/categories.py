@@ -55,6 +55,7 @@ def category_edit(request, pk=None):
                 category = Category(user=request.user)
 
             old_color = category.gcal_color_id
+            old_reminders = list(category.reminders)
             category.name = name
             category.priority = priority
             category.gcal_color_id = gcal_color_id
@@ -64,6 +65,10 @@ def category_edit(request, pk=None):
             if gcal_color_id != old_color:
                 from dashboard.tasks import patch_category_colors
                 patch_category_colors.defer(user_id=request.user.pk, category_id=category.pk)
+
+            if reminders != old_reminders:
+                from dashboard.tasks import patch_category_reminders
+                patch_category_reminders.defer(user_id=request.user.pk, category_id=category.pk)
 
             return redirect('dashboard:categories')
 
