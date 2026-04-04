@@ -67,12 +67,12 @@
         <h3 class="form-section__title">Reminders</h3>
         <button type="button" class="btn-ghost btn btn--sm" onclick="addReminder()">+ Add reminder</button>
       </div>
-      <p class="form-hint form-hint--spaced">All events in this category will receive these reminders via Google Calendar.</p>
+      <p class="form-hint form-hint--spaced">All events in this category will receive these reminders via Google Calendar. Events with their own reminders are not affected.</p>
       <div id="reminders-list" class="reminders-list">
         {% if category.reminders %}
-          {% for reminder in category.reminders %}
+          {% for mins in category.reminders %}
           <div class="reminder-row">
-            <input type="number" name="reminders" value="{{ reminder.minutes }}" min="1" placeholder="Minutes before">
+            <input type="number" name="reminders" value="{{ mins }}" min="1" placeholder="Minutes before">
             <span class="reminder-row__label">minutes before</span>
             <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
           </div>
