@@ -15,8 +15,22 @@ logger = logging.getLogger(__name__)
 @login_required
 def categories(request):
     try:
-        cats = Category.objects.filter(user=request.user).order_by('name')
-        return render(request, 'dashboard/categories.html', {'categories': cats})
+        cats = Category.objects.filter(user=request.user)
+
+        q = request.GET.get('q', '').strip()
+        if q:
+            cats = cats.filter(name__icontains=q)
+
+        sort = request.GET.get('sort', 'name')
+        if sort == 'priority':
+            cats = cats.order_by('-priority', 'name')
+        else:
+            sort = 'name'
+            cats = cats.order_by('name')
+
+        return render(request, 'dashboard/categories.html', {
+            'categories': cats, 'q': q, 'sort': sort,
+        })
     except Exception:
         logger.exception("categories error for user=%s", request.user.pk)
         return HttpResponse('Categories unavailable.', status=500)

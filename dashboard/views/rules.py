@@ -14,9 +14,15 @@ logger = logging.getLogger(__name__)
 @login_required
 def rules(request):
     try:
-        rules_qs = Rule.objects.filter(user=request.user).select_related('category').order_by('rule_type', 'created_at')
+        rules_qs = Rule.objects.filter(user=request.user).select_related('category')
+
+        q = request.GET.get('q', '').strip()
+        if q:
+            rules_qs = rules_qs.filter(pattern__icontains=q)
+
+        rules_qs = rules_qs.order_by('rule_type', 'created_at')
         categories = Category.objects.filter(user=request.user).order_by('name')
-        return render(request, 'dashboard/rules.html', {'rules': rules_qs, 'categories': categories})
+        return render(request, 'dashboard/rules.html', {'rules': rules_qs, 'categories': categories, 'q': q})
     except Exception:
         logger.exception("rules error for user=%s", request.user.pk)
         return HttpResponse('Rules unavailable.', status=500)

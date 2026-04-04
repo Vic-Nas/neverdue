@@ -74,6 +74,11 @@
 .event-card__sep { color: var(--border); }
 .event-card__arrow { color: var(--text-muted); font-size: 1rem; flex-shrink: 0; }
 
+/* ── Personal-color accent (left border) ── */
+.event-card--colored {
+  border-left: 3px solid var(--event-color);
+}
+
 /* ── Selection mode (event cards) ── */
 .event-card__checkbox {
   display: none;

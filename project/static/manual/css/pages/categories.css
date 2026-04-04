@@ -8,8 +8,8 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: var(--cat-color, var(--accent-muted));
-  color: var(--accent);
+  background: color-mix(in srgb, var(--cat-color, var(--accent)) 15%, transparent);
+  color: var(--cat-color, var(--accent));
   letter-spacing: 0.02em;
 }
 

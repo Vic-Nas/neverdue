@@ -122,6 +122,14 @@
   {# ── Existing rules ── #}
   {% regroup rules by rule_type as rule_groups %}
   {% if rules %}
+
+  {# ── Search bar ── #}
+  <div class="toolbar">
+    <form class="toolbar__search" method="get" action="">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search rules…" class="toolbar__search-input">
+    </form>
+  </div>
+
   <div class="section-block">
 
     {% for group in rule_groups %}
@@ -157,7 +165,12 @@
   </div>
   {% else %}
   <div class="empty-state">
+    {% if q %}
+    <p class="empty-state__text">No rules match "{{ q }}".</p>
+    <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Clear search</a>
+    {% else %}
     <p class="empty-state__text">No rules yet.</p>
+    {% endif %}
   </div>
   {% endif %}
 

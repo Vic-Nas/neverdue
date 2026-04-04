@@ -37,9 +37,11 @@
 
   var filterStatus = '';
   var filterSource = '';
+  var filterSearch = '';
 
   var filterStatusEl = document.getElementById('queue-filter-status');
   var filterSourceEl = document.getElementById('queue-filter-source');
+  var filterSearchEl = document.getElementById('queue-search');
 
   if (filterStatusEl) {
     filterStatusEl.addEventListener('change', function () {
@@ -50,6 +52,12 @@
   if (filterSourceEl) {
     filterSourceEl.addEventListener('change', function () {
       filterSource = filterSourceEl.value;
+      if (lastJobs) render(lastJobs);
+    });
+  }
+  if (filterSearchEl) {
+    filterSearchEl.addEventListener('input', function () {
+      filterSearch = filterSearchEl.value.toLowerCase().trim();
       if (lastJobs) render(lastJobs);
     });
   }
@@ -144,6 +152,10 @@
     return jobs.filter(function (j) {
       if (filterStatus && j.status !== filterStatus) return false;
       if (filterSource && j.source !== filterSource) return false;
+      if (filterSearch) {
+        var haystack = ((j.from_address || '') + ' ' + (j.notes || '') + ' ' + (j.source || '')).toLowerCase();
+        if (haystack.indexOf(filterSearch) === -1) return false;
+      }
       return true;
     });
   }
