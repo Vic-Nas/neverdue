@@ -80,6 +80,12 @@ def event_edit(request, pk=None):
                 event.pending_expires_at = None
 
             event.save()
+
+            # Push changes to GCal asynchronously
+            if event.google_event_id and request.user.save_to_gcal:
+                from dashboard.tasks import sync_event_to_gcal
+                sync_event_to_gcal.defer(event_id=event.pk)
+
             return JsonResponse({'ok': True, 'pk': event.pk})
 
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
