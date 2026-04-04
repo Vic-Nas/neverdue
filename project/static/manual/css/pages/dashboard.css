@@ -162,6 +162,17 @@
 .toolbar__opt:hover { background: var(--border); color: var(--text); }
 .toolbar__opt--active { background: var(--accent); color: #fff; }
 .toolbar__opt--active:hover { background: var(--accent-light); color: #fff; }
+.toolbar__filter-select {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.toolbar__filter-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ── Pagination ── */
 .pagination {
