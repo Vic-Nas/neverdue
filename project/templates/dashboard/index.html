@@ -6,6 +6,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -73,9 +74,8 @@
       {% if sort != 'start' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     </form>
     <div class="toolbar__sort">
-      <a href="?sort=start{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'start' %}toolbar__opt--active{% endif %}">Date</a>
+      <a href="?sort=start{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'start' %}toolbar__opt--active{% endif %}">Closest</a>
       <a href="?sort=added{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'added' %}toolbar__opt--active{% endif %}">Newest</a>
-      <a href="?sort=category{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'category' %}toolbar__opt--active{% endif %}">Category</a>
     </div>
   </div>
 
