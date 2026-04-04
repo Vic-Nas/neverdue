@@ -29,8 +29,6 @@ def index(request):
         sort = request.GET.get('sort', 'start')
         if sort == 'added':
             qs = qs.order_by('-created_at')
-        elif sort == 'category':
-            qs = qs.order_by('category__name', 'start')
         else:
             sort = 'start'
             qs = qs.order_by('start')

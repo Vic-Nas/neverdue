@@ -122,3 +122,88 @@
 .cat-card__name-link:hover {
   text-decoration: underline;
 }
+
+/* ──────────────────────────────────────────────────────────────── */
+/* Shared list-page components: toolbar, pagination, bulk bar      */
+/* Available to any page that imports dashboard.css                 */
+/* ──────────────────────────────────────────────────────────────── */
+
+/* ── Toolbar: search + sort ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.toolbar__search { flex: 1; min-width: 140px; }
+.toolbar__search-input {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+.toolbar__search-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.toolbar__search-input::placeholder { color: var(--text-muted); }
+.toolbar__sort { display: flex; gap: 0.25rem; }
+.toolbar__opt {
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.toolbar__opt:hover { background: var(--border); color: var(--text); }
+.toolbar__opt--active { background: var(--accent); color: #fff; }
+.toolbar__opt--active:hover { background: var(--accent-light); color: #fff; }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+}
+.pagination__link { font-weight: 600; color: var(--accent); }
+.pagination__link:hover { color: var(--accent-light); }
+.pagination__info { color: var(--text-muted); }
+
+/* ── Bulk action bar ── */
+.bulk-bar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.bulk-bar.visible { display: flex; }
+.bulk-bar__count { font-weight: 600; font-size: 0.9rem; flex: 1; }
+.bulk-bar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Reprocess drawer (used in event bulk bar + queue job detail) */
+.reprocess-drawer { display: none; margin-top: 10px; width: 100%; flex-direction: column; gap: 8px; }
+.reprocess-drawer.open { display: flex; }
+.reprocess-drawer textarea {
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border); font-size: 0.9rem;
+  resize: vertical; font-family: inherit; box-sizing: border-box;
+}
+.reprocess-drawer__hint { font-size: 0.8rem; color: var(--text-muted); }
+
+/* ── Responsive (shared list components) ── */
+@media (max-width: 480px) {
+  .toolbar { flex-direction: column; }
+  .toolbar__sort { width: 100%; justify-content: center; }
+}
