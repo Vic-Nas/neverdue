@@ -5,38 +5,8 @@
 {% block title %}{% if event %}Edit event{% else %}New event{% endif %} — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
-<style>
-  .prompt-edit-section {
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--color-border, #e5e7eb);
-  }
-  .prompt-edit-section__title {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 4px;
-  }
-  .prompt-edit-section__sub {
-    font-size: 0.85rem;
-    color: var(--color-muted, #6b7280);
-    margin: 0 0 14px;
-  }
-  .prompt-edit-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-  }
-  .prompt-edit-row textarea {
-    flex: 1;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border, #e5e7eb);
-    font-size: 0.9rem;
-    font-family: inherit;
-    resize: vertical;
-  }
-</style>
 {% endblock %}
 
 {% block content %}

@@ -233,6 +233,37 @@ body.selecting .event-card { cursor: pointer; }
 .reminder-list li { font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text); }
 .reminder-list li::before { content: '🔔'; font-size: 0.8rem; }
 
+/* ── Concern banner (pending events) ── */
+.concern-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  color: #7f1d1d;
+  font-size: 0.9rem;
+}
+.concern-banner strong { color: #dc2626; }
+.concern-banner p { margin: 4px 0 0; }
+
+/* ── AI prompt edit section (event edit) ── */
+.prompt-edit-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.prompt-edit-section__title { font-size: 1rem; font-weight: 600; margin: 0 0 4px; }
+.prompt-edit-section__sub { font-size: 0.85rem; color: var(--text-muted); margin: 0 0 14px; }
+.prompt-edit-row { display: flex; gap: 8px; align-items: flex-start; }
+.prompt-edit-row textarea {
+  flex: 1; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border); font-size: 0.9rem;
+  font-family: inherit; resize: vertical;
+}
+
+/* ── Concern text (queue job pending events) ── */
+.concern-text { font-size: 0.8rem; color: #ef4444; margin-top: 2px; }
+
 /* ── Empty state ── */
 .empty-state { padding: 3rem 1rem; text-align: center; }
 .empty-state__text { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem; }

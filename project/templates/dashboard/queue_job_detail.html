@@ -7,84 +7,6 @@
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/queue.css' %}">
-<style>
-  .job-detail { max-width: 800px; }
-  .job-detail__meta {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    font-size: 0.875rem;
-    color: var(--color-muted, #6b7280);
-    margin-bottom: 24px;
-    align-items: center;
-  }
-  .job-detail__meta strong { color: var(--color-text, #111); }
-  .job-section { margin-bottom: 32px; }
-  .job-section__title {
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-muted, #6b7280);
-    margin-bottom: 12px;
-  }
-  .job-section__title--attention { color: #ef4444; }
-  .concern-text {
-    font-size: 0.8rem;
-    color: #ef4444;
-    margin-top: 2px;
-  }
-  .reprocess-box {
-    background: var(--color-surface, #fff);
-    border: 1px solid var(--color-border, #e5e7eb);
-    border-radius: 10px;
-    padding: 16px;
-  }
-  .reprocess-box__label {
-    font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 8px;
-    display: block;
-  }
-  .reprocess-box textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border, #e5e7eb);
-    font-size: 0.9rem;
-    resize: vertical;
-    font-family: inherit;
-    box-sizing: border-box;
-    margin-bottom: 10px;
-  }
-  .reprocess-box__hint {
-    font-size: 0.8rem;
-    color: var(--color-muted, #6b7280);
-    margin-bottom: 12px;
-  }
-  .empty-section {
-    color: var(--color-muted, #6b7280);
-    font-size: 0.9rem;
-  }
-  .failure-box {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 24px;
-  }
-  .failure-box__title {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #dc2626;
-    margin-bottom: 6px;
-  }
-  .failure-box__reason {
-    font-size: 0.85rem;
-    color: #7f1d1d;
-    margin-bottom: 12px;
-  }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -123,16 +45,16 @@
       {% else %}
         An unexpected error occurred. You can retry this job manually.
       {% endif %}
-      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>{% endif %}
+      {% if job.notes %}<br><span class="failure-box__note">{{ job.notes }}</span>{% endif %}
     </div>
     {% if job.failure_reason != 'scan_limit' and job.failure_reason != 'pro_required' %}
-    <div style="display:flex;gap:8px;align-items:center;">
+    <div class="failure-box__actions">
       <button type="button" class="btn-primary" id="retry-btn"
         data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}">
         Retry job
       </button>
-      <span id="retry-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+      <span id="retry-status" class="failure-box__status"></span>
     </div>
     {% endif %}
   </div>
@@ -140,19 +62,19 @@
 
   {# ── Needs-review job with no events — offer retry ── #}
   {% if job.status == 'needs_review' and not pending_events and not active_events %}
-  <div class="failure-box" style="background:#fffbeb;border-color:#fde68a;">
-    <div class="failure-box__title" style="color:#92400e;">Nothing was saved</div>
-    <div class="failure-box__reason" style="color:#78350f;">
+  <div class="failure-box failure-box--warning">
+    <div class="failure-box__title">Nothing was saved</div>
+    <div class="failure-box__reason">
       Events may have been extracted but could not be saved. You can retry this job to try again.
-      {% if job.notes %}<br><span style="color:#6b7280;">{{ job.notes }}</span>{% endif %}
+      {% if job.notes %}<br><span class="failure-box__note">{{ job.notes }}</span>{% endif %}
     </div>
-    <div style="display:flex;gap:8px;align-items:center;">
+    <div class="failure-box__actions">
       <button type="button" class="btn-primary" id="retry-btn"
         data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}">
         Retry job
       </button>
-      <span id="retry-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+      <span id="retry-status" class="failure-box__status"></span>
     </div>
   </div>
   {% endif %}
@@ -163,7 +85,7 @@
     <div class="job-section__title job-section__title--attention">
       ⚠ {{ pending_events|length }} event{{ pending_events|length|pluralize }} need{{ pending_events|length|pluralize:"s," }} attention
     </div>
-    <div class="event-list" style="margin-bottom:20px;">
+    <div class="event-list event-list--spaced">
       {% for event in pending_events %}
       <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card">
         <div class="event-card__date">
@@ -190,12 +112,12 @@
       </p>
       <textarea id="reprocess-prompt" rows="3"
         placeholder="e.g. 'Weekly until April 25 2026' or 'These are one-time events, no recurrence'"></textarea>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div class="failure-box__actions">
         <button type="button" class="btn-primary" id="reprocess-btn"
         data-reprocess-url="{% url 'dashboard:queue_job_reprocess' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}"
         data-pending-ids="[{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">Re-process</button>
-        <span id="reprocess-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+        <span id="reprocess-status" class="failure-box__status"></span>
       </div>
     </div>
   </div>
@@ -237,14 +159,14 @@
   </div>
 
   {# ── Delete job ── #}
-  <div class="job-section" style="border-top:1px solid var(--color-border,#e5e7eb);padding-top:24px;">
-    <div style="display:flex;gap:8px;align-items:center;">
+  <div class="job-section job-section--bordered">
+    <div class="failure-box__actions">
       <button type="button" class="btn btn-danger" id="delete-job-btn"
         data-delete-url="{% url 'dashboard:queue_job_delete' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}">Delete job</button>
-      <span id="delete-status" style="font-size:0.85rem;color:var(--color-muted,#6b7280);"></span>
+      <span id="delete-status" class="failure-box__status"></span>
     </div>
-    <p class="form-hint" style="margin-top:6px;">Permanently removes this job and any stored data (email body, attachments). Events already created are kept.</p>
+    <p class="form-hint job-section__hint">Permanently removes this job and any stored data (email body, attachments). Events already created are kept.</p>
   </div>
 
 </div>

@@ -7,19 +7,6 @@
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/events.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
-<style>
-  .concern-banner {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    color: #7f1d1d;
-    font-size: 0.9rem;
-  }
-  .concern-banner strong { color: #dc2626; }
-  .concern-banner p { margin: 4px 0 0; }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -76,24 +63,27 @@
   </div>
   {% endif %}
 
-  {% if event.category and event.category.reminders %}
+  {% with reminders=event.reminders %}
+  {% if reminders %}
   <div class="section-block">
     <h3>Reminders</h3>
     <ul class="reminder-list">
-      {% for reminder in event.category.reminders %}
-      <li>
-        {% with m=reminder.minutes %}
-          {% if m >= 10080 %}{{ m|divisibleby:10080|yesno:""|add:""}}{{ m }} min before
-          {% elif m >= 1440 %}{{ m|floatformat:0 }} min ({{ m|divisibleby:1440 }} day{{ m|pluralize }}) before
-          {% elif m >= 60 %}{{ m }} min ({{ m|divisibleby:60 }} hr) before
-          {% else %}{{ m }} min before
-          {% endif %}
-        {% endwith %}
-      </li>
+      {% for mins in reminders %}
+      <li>{{ mins }} min before</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% elif event.category and event.category.reminders %}
+  <div class="section-block">
+    <h3>Reminders <span class="label-optional">(from category)</span></h3>
+    <ul class="reminder-list">
+      {% for mins in event.category.reminders %}
+      <li>{{ mins }} min before</li>
       {% endfor %}
     </ul>
   </div>
   {% endif %}
+  {% endwith %}
 
   {% if event.gcal_link %}
   <div class="page__footer-gcal">
