@@ -22,10 +22,20 @@
     <button type="button" class="btn-ghost btn btn--sm" id="queue-cancel-select">Cancel</button>
   </div>
 
-  {# ── Search bar ── #}
+  {# ── Search + filter bar ── #}
   <div class="toolbar">
     <div class="toolbar__search">
       <input type="text" id="queue-search" placeholder="Search jobs…" class="toolbar__search-input">
+    </div>
+    <div class="toolbar__sort">
+      <select id="queue-filter-status" class="toolbar__filter-select">
+        <option value="">All statuses</option>
+        <option value="queued">Queued</option>
+        <option value="processing">Processing</option>
+        <option value="done">Done</option>
+        <option value="needs_review">Needs review</option>
+        <option value="failed">Failed</option>
+      </select>
     </div>
   </div>
 
