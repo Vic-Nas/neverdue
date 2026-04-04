@@ -393,3 +393,48 @@
 /* ── Select-mode checkbox column ── */
 .queue-select-col { width: 36px; text-align: center; }
 .queue-row-cb { cursor: pointer; }
+#queue-enter-select { margin-bottom: 8px; }
+
+/* ── Job detail page ── */
+.job-detail { max-width: 800px; }
+.job-detail__meta {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 0.875rem; color: var(--text-muted);
+  margin-bottom: 24px; align-items: center;
+}
+.job-detail__meta strong { color: var(--text); }
+.job-section { margin-bottom: 32px; }
+.job-section__title {
+  font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px;
+}
+.job-section__title--attention { color: #ef4444; }
+.reprocess-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.reprocess-box__label { font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; display: block; }
+.reprocess-box textarea {
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border); font-size: 0.9rem;
+  resize: vertical; font-family: inherit; box-sizing: border-box; margin-bottom: 10px;
+}
+.reprocess-box__hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; }
+.empty-section { color: var(--text-muted); font-size: 0.9rem; }
+.failure-box {
+  background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: var(--radius); padding: 16px; margin-bottom: 24px;
+}
+.failure-box--warning { background: #fffbeb; border-color: #fde68a; }
+.failure-box--warning .failure-box__title { color: #92400e; }
+.failure-box--warning .failure-box__reason { color: #78350f; }
+.failure-box__title { font-weight: 600; font-size: 0.9rem; color: #dc2626; margin-bottom: 6px; }
+.failure-box__reason { font-size: 0.85rem; color: #7f1d1d; margin-bottom: 12px; }
+.failure-box__actions { display: flex; gap: 8px; align-items: center; }
+.failure-box__status { font-size: 0.85rem; color: var(--text-muted); }
+.failure-box__note { color: var(--text-muted); }
+.job-section--bordered { border-top: 1px solid var(--border); padding-top: 24px; }
+.job-section__hint { margin-top: 6px; }
+.event-list--spaced { margin-bottom: 20px; }

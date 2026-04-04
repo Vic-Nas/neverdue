@@ -126,7 +126,7 @@
 
     {% for group in rule_groups %}
     {% with type=group.grouper %}
-    <p class="label-upper" style="margin-bottom:0.5rem{% if not forloop.first %};margin-top:1rem{% endif %}">
+    <p class="label-upper rule-group-label{% if not forloop.first %} rule-group-label--spaced{% endif %}">
       {% if type == 'sender' %}Sender{% elif type == 'keyword' %}Keyword{% elif type == 'prompt' %}Prompt injection{% endif %}
     </p>
     {% for rule in group.list %}
@@ -135,7 +135,7 @@
         {% if type == 'sender' %}Sender{% elif type == 'keyword' %}Keyword{% elif type == 'prompt' %}Prompt{% endif %}
       </span>
       {% if type == 'prompt' %}
-        {% if rule.pattern %}<code class="rule-pattern">{{ rule.pattern }}</code>{% else %}<em class="rule-pattern" style="color:var(--text-muted)">all senders</em>{% endif %}
+        {% if rule.pattern %}<code class="rule-pattern">{{ rule.pattern }}</code>{% else %}<em class="rule-pattern rule-pattern--muted">all senders</em>{% endif %}
         <span class="rule-action-label rule-prompt-preview">{{ rule.prompt_text|truncatechars:80 }}</span>
       {% else %}
         <code class="rule-pattern">{{ rule.pattern }}</code>
