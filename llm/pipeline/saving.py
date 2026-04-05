@@ -95,12 +95,18 @@ def _append_conflict_concern(event_data: dict, conflicts: list) -> dict:
     return event_data
 
 
-def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, bool, int]:
+def _save_events(user, events: list, sender: str = '', source_email_id: str = '', scan_job=None) -> tuple[list, bool, list]:
+    """
+    Returns (created, has_pending, discarded_events).
+
+    discarded_events is a list of dicts, one per discarded event:
+      {'title': str, 'rule_pk': int, 'rule_type': str, 'rule_pattern': str}
+    """
     from ..resolver import resolve_category, DISCARD
 
     if not events:
         logger.debug("_save_events: no events to save | user=%s", user.pk)
-        return [], False, 0
+        return [], False, []
 
     for event_data in events:
         event_data['source_email_id'] = source_email_id
@@ -123,17 +129,29 @@ def _save_events(user, events: list, sender: str = '', source_email_id: str = ''
     logger.debug("_save_events: saving %d events (has_pending=%s) | user=%s", len(events), has_pending, user.pk)
 
     created = []
-    discarded = 0
+    discarded_events = []  # {'title', 'rule_pk', 'rule_type', 'rule_pattern'}
     for event_data in events:
-        category = resolve_category(user, event_data, sender)
-        if category is DISCARD:
-            discarded += 1
-            logger.debug("_save_events: discarded '%s' by rule | user=%s", event_data.get('title', ''), user.pk)
+        result = resolve_category(user, event_data, sender)
+        # Discard rule fired — result is (DISCARD, rule)
+        if isinstance(result, tuple) and result[0] is DISCARD:
+            _, rule = result
+            title = event_data.get('title', '(untitled)')
+            discarded_events.append({
+                'title': title,
+                'rule_pk': rule.pk,
+                'rule_type': rule.get_rule_type_display(),
+                'rule_pattern': rule.pattern or '',
+            })
+            logger.debug(
+                "_save_events: discarded '%s' by %s rule (pk=%s pattern=%r) | user=%s",
+                title, rule.rule_type, rule.pk, rule.pattern, user.pk,
+            )
             continue
+        category = result
         if category is None:
             category = _get_or_create_uncategorized(user)
         event = write_event_to_calendar(user, event_data, category, scan_job=scan_job)
         if event:
             created.append(event)
 
-    return created, has_pending, discarded
+    return created, has_pending, discarded_events

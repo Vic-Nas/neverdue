@@ -72,6 +72,11 @@ class ScanJob(models.Model):
     filename = models.CharField(max_length=255, blank=True, default='')    # upload source (file)
     upload_text = models.TextField(blank=True, default='')                 # upload source (text)
 
+    # Events discarded by a sender or keyword rule during this job.
+    # List of dicts: [{'title': str, 'rule_pk': int, 'rule_type': str, 'rule_pattern': str}]
+    # Populated by _apply_outcome; empty list when no events were discarded.
+    discarded_events = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

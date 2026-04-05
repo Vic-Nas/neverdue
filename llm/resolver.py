@@ -8,8 +8,11 @@ _PRIORITY_HINTS: list[tuple[int, list[str]]] = [
     (2, ['cours', 'course', 'lecture', 'class', 'seminar', 'tutorial', 'work', 'travail']),
 ]
 
-# Sentinel returned by resolve_category when a discard rule matches.
-# Caller must check: if category is DISCARD: skip this event entirely.
+# Sentinel returned (as the first element of a tuple) by resolve_category when a
+# discard rule matches.  Callers must check:
+#   result = resolve_category(...)
+#   if isinstance(result, tuple) and result[0] is DISCARD:
+#       _, rule = result   # rule is the Rule instance that fired
 DISCARD = object()
 
 
@@ -49,14 +52,15 @@ def collect_prompt_injections(user, sender: str = '') -> str:
     return '\n'.join(injections)
 
 
-def resolve_category(user, event: dict, sender: str = '') -> 'Category | object | None':
+def resolve_category(user, event: dict, sender: str = '') -> 'Category | tuple | None':
     """
     Resolve the best category for an event, or signal that it should be discarded.
 
     Returns:
-      - Category instance  → assign this category
-      - DISCARD sentinel   → skip this event entirely (discard rule matched)
-      - None               → leave uncategorized (caller assigns Uncategorized)
+      - Category instance          → assign this category
+      - (DISCARD, Rule) tuple      → skip this event entirely (discard rule matched);
+                                     the Rule instance identifies which rule fired
+      - None                       → leave uncategorized (caller assigns Uncategorized)
 
     Priority:
       1. Sender rules — pattern is substring of sender address
@@ -72,7 +76,7 @@ def resolve_category(user, event: dict, sender: str = '') -> 'Category | object 
     for rule in rules.filter(rule_type=Rule.TYPE_SENDER):
         if rule.pattern and sender_lower and rule.pattern.lower() in sender_lower:
             if rule.action == Rule.ACTION_DISCARD:
-                return DISCARD
+                return DISCARD, rule
             if rule.action == Rule.ACTION_CATEGORIZE and rule.category_id:
                 return rule.category
 
@@ -81,7 +85,7 @@ def resolve_category(user, event: dict, sender: str = '') -> 'Category | object 
     for rule in rules.filter(rule_type=Rule.TYPE_KEYWORD):
         if rule.pattern and rule.pattern.lower() in searchable:
             if rule.action == Rule.ACTION_DISCARD:
-                return DISCARD
+                return DISCARD, rule
             if rule.action == Rule.ACTION_CATEGORIZE and rule.category_id:
                 return rule.category
 
