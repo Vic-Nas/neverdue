@@ -20,9 +20,23 @@ def rules(request):
         if q:
             rules_qs = rules_qs.filter(pattern__icontains=q)
 
-        rules_qs = rules_qs.order_by('rule_type', 'created_at')
+        sort = request.GET.get('sort', 'type')
+        if sort == 'newest':
+            rules_qs = rules_qs.order_by('-created_at')
+        else:
+            sort = 'type'
+            rules_qs = rules_qs.order_by('rule_type', 'created_at')
+
+        from django.core.paginator import Paginator
+        paginator = Paginator(rules_qs, 25)
+        page = paginator.get_page(request.GET.get('page', '1'))
+
         categories = Category.objects.filter(user=request.user).order_by('name')
-        return render(request, 'dashboard/rules.html', {'rules': rules_qs, 'categories': categories, 'q': q})
+        return render(request, 'dashboard/rules.html', {
+            'rules': page.object_list, 'page_obj': page,
+            'categories': categories, 'q': q, 'sort': sort,
+            'total_count': paginator.count,
+        })
     except Exception:
         logger.exception("rules error for user=%s", request.user.pk)
         return HttpResponse('Rules unavailable.', status=500)
@@ -78,4 +92,21 @@ def rule_delete(request, pk):
         return JsonResponse({'ok': True})
     except Exception:
         logger.exception("rule_delete error for user=%s pk=%s", request.user.pk, pk)
+        return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def rules_bulk_delete(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = _json.loads(request.body)
+        ids = data.get('ids', [])
+        if not ids:
+            return JsonResponse({'ok': False, 'error': 'No rules selected.'}, status=400)
+        deleted, _ = Rule.objects.filter(pk__in=ids, user=request.user).delete()
+        logger.info("rules_bulk_delete: deleted %d rules | user=%s", deleted, request.user.pk)
+        return JsonResponse({'ok': True, 'deleted': deleted})
+    except Exception:
+        logger.exception("rules_bulk_delete error for user=%s", request.user.pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)

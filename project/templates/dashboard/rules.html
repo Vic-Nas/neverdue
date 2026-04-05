@@ -8,13 +8,20 @@
 {% endblock %}
 
 {% block content %}
-<div class="page"
+<div class="page page--wide"
   data-rule-add-url="{% url 'dashboard:rule_add' %}"
   data-rule-delete-url-tpl="/dashboard/rules/__PK__/delete/">
 
-  <div class="page__header">
-    <h1 class="page__title">Rules</h1>
-    <p class="page__sub">Automatically categorize or discard events, or inject custom instructions into AI extraction.</p>
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">Rules</h1>
+      <p class="page__sub">Automatically categorize or discard events, or inject custom instructions into AI extraction.</p>
+    </div>
+    <div class="page__actions">
+      {% if total_count > 1 %}
+        <button type="button" class="btn-ghost btn" id="rule-select-toggle">Select</button>
+      {% endif %}
+    </div>
   </div>
 
   {# ── Unified add-rule form ── #}
@@ -120,29 +127,38 @@
   </div>
 
   {# ── Existing rules ── #}
-  {% regroup rules by rule_type as rule_groups %}
   {% if rules %}
 
-  {# ── Search bar ── #}
+  {# ── Bulk action bar ── #}
+  <div class="bulk-bar" id="rule-bulk-bar"
+    data-bulk-url="{% url 'dashboard:rules_bulk_delete' %}">
+    <span class="bulk-bar__count"><span id="rule-selected-count">0</span> selected</span>
+    <div class="bulk-bar__actions">
+      <button type="button" class="btn-ghost btn btn--sm" id="rule-select-all-btn">Select all</button>
+      <button type="button" class="btn-ghost btn btn--sm btn--danger" id="rule-bulk-delete-btn">Delete</button>
+    </div>
+  </div>
+
+  {# ── Search + Sort bar ── #}
   <div class="toolbar">
     <form class="toolbar__search" method="get" action="">
       <input type="text" name="q" value="{{ q }}" placeholder="Search rules…" class="toolbar__search-input">
+      {% if sort != 'type' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
     </form>
+    <div class="toolbar__sort">
+      <a href="?sort=type{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'type' %}toolbar__opt--active{% endif %}">By type</a>
+      <a href="?sort=newest{% if q %}&q={{ q }}{% endif %}" class="toolbar__opt {% if sort == 'newest' %}toolbar__opt--active{% endif %}">Newest</a>
+    </div>
   </div>
 
-  <div class="section-block">
-
-    {% for group in rule_groups %}
-    {% with type=group.grouper %}
-    <p class="label-upper rule-group-label{% if not forloop.first %} rule-group-label--spaced{% endif %}">
-      {% if type == 'sender' %}Sender{% elif type == 'keyword' %}Keyword{% elif type == 'prompt' %}Prompt injection{% endif %}
-    </p>
-    {% for rule in group.list %}
+  <div class="rule-list">
+    {% for rule in rules %}
     <div class="rule-row" data-rule-id="{{ rule.pk }}">
-      <span class="rule-type-badge rule-type-badge--{{ type }}">
-        {% if type == 'sender' %}Sender{% elif type == 'keyword' %}Keyword{% elif type == 'prompt' %}Prompt{% endif %}
+      <input type="checkbox" class="rule-row__checkbox" value="{{ rule.pk }}" hidden>
+      <span class="rule-type-badge rule-type-badge--{{ rule.rule_type }}">
+        {% if rule.rule_type == 'sender' %}Sender{% elif rule.rule_type == 'keyword' %}Keyword{% elif rule.rule_type == 'prompt' %}Prompt{% endif %}
       </span>
-      {% if type == 'prompt' %}
+      {% if rule.rule_type == 'prompt' %}
         {% if rule.pattern %}<code class="rule-pattern">{{ rule.pattern }}</code>{% else %}<em class="rule-pattern rule-pattern--muted">all senders</em>{% endif %}
         <span class="rule-action-label rule-prompt-preview">{{ rule.prompt_text|truncatechars:80 }}</span>
       {% else %}
@@ -159,10 +175,10 @@
       <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
     </div>
     {% endfor %}
-    {% endwith %}
-    {% endfor %}
-
   </div>
+
+  {% include 'partials/pagination.html' %}
+
   {% else %}
   <div class="empty-state">
     {% if q %}

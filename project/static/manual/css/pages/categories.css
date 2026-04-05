@@ -258,3 +258,14 @@ body.cat-selecting .cat-card__checkbox { display: inline-block; }
 .rule-group-label { margin-bottom: 0.5rem; }
 .rule-group-label--spaced { margin-top: 1rem; }
 .rule-pattern--muted { color: var(--text-muted); }
+
+/* ── Rule list + selection mode ── */
+.rule-list { display: flex; flex-direction: column; }
+.rule-row__checkbox {
+  width: 18px; height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+body.selecting-rules .rule-row__checkbox { display: inline-block !important; }
+body.selecting-rules .rule-delete-btn { display: none; }

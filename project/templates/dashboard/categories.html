@@ -16,10 +16,10 @@
       <p class="page__sub">Organise events and set reminder rules per category.</p>
     </div>
     <div class="page__actions">
-      {% if categories|length > 1 %}
+      {% if total_count > 1 %}
         <button type="button" class="btn-ghost btn" id="cat-select-toggle">Select</button>
       {% endif %}
-      {% if not request.user.is_pro and categories|length >= 3 %}
+      {% if not request.user.is_pro and total_count >= 3 %}
         <a href="{% url 'billing:plans' %}" class="btn-primary">Upgrade for more →</a>
       {% else %}
         <a href="{% url 'dashboard:category_create' %}" class="btn-primary">+ New category</a>
@@ -94,6 +94,8 @@
     </div>
     {% endfor %}
   </div>
+
+  {% include 'partials/pagination.html' %}
 
   {% else %}
   <div class="empty-state">

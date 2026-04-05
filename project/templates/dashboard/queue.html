@@ -10,9 +10,14 @@
 {% block content %}
 <div class="queue-page">
 
-  <div class="queue-page__header">
-    <h1 class="queue-page__title">Processing queue</h1>
-    <p class="queue-page__sub">Recent jobs. Completed jobs are cleaned up daily — failed jobs stay until resolved.</p>
+  <div class="page__header--row">
+    <div>
+      <h1 class="queue-page__title">Processing queue</h1>
+      <p class="queue-page__sub">Recent jobs. Completed jobs are cleaned up daily — failed jobs stay until resolved.</p>
+    </div>
+    <div class="page__actions">
+      <button type="button" class="btn-ghost btn" id="queue-enter-select" hidden>Select</button>
+    </div>
   </div>
 
   {# ── Bulk actions bar (hidden until select mode) ── #}
@@ -41,7 +46,6 @@
 
   <div id="queue-list">
     <p class="queue-empty" id="queue-empty-msg" hidden>No recent jobs.</p>
-    <button type="button" class="btn-ghost btn btn--sm" id="queue-enter-select" hidden>Select jobs</button>
     <table class="queue-table" id="queue-table" hidden>
       <thead>
         <tr>

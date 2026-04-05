@@ -171,4 +171,77 @@
       deleteRule(btn.dataset.pk, row);
     });
   });
+
+  // ─── Select mode / bulk delete ─────────────────────────────────────────────
+
+  var selectToggle = document.getElementById('rule-select-toggle');
+  var bulkBar = document.getElementById('rule-bulk-bar');
+  var selectedCountEl = document.getElementById('rule-selected-count');
+  var bulkDeleteBtn = document.getElementById('rule-bulk-delete-btn');
+  var selectAllBtn = document.getElementById('rule-select-all-btn');
+  var selecting = false;
+
+  function updateCount() {
+    var cbs = document.querySelectorAll('.rule-row__checkbox:checked');
+    if (selectedCountEl) selectedCountEl.textContent = cbs.length;
+  }
+
+  function enterSelectMode() {
+    selecting = true;
+    document.body.classList.add('selecting-rules');
+    document.querySelectorAll('.rule-row__checkbox').forEach(function (cb) { cb.hidden = false; });
+    if (bulkBar) bulkBar.classList.add('visible');
+    if (selectToggle) selectToggle.textContent = 'Cancel';
+    updateCount();
+  }
+
+  function exitSelectMode() {
+    selecting = false;
+    document.body.classList.remove('selecting-rules');
+    document.querySelectorAll('.rule-row__checkbox').forEach(function (cb) { cb.hidden = true; cb.checked = false; });
+    if (bulkBar) bulkBar.classList.remove('visible');
+    if (selectToggle) selectToggle.textContent = 'Select';
+    updateCount();
+  }
+
+  if (selectToggle) {
+    selectToggle.addEventListener('click', function () {
+      selecting ? exitSelectMode() : enterSelectMode();
+    });
+  }
+
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', function () {
+      var cbs = document.querySelectorAll('.rule-row__checkbox');
+      var allChecked = Array.from(cbs).every(function (c) { return c.checked; });
+      cbs.forEach(function (c) { c.checked = !allChecked; });
+      updateCount();
+    });
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('rule-row__checkbox')) updateCount();
+  });
+
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', function () {
+      var ids = Array.from(document.querySelectorAll('.rule-row__checkbox:checked')).map(function (c) { return parseInt(c.value, 10); });
+      if (!ids.length) return;
+      if (!confirm('Delete ' + ids.length + ' rule' + (ids.length !== 1 ? 's' : '') + '?')) return;
+      var url = bulkBar.dataset.bulkUrl;
+      bulkDeleteBtn.disabled = true;
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({ ids: ids }),
+        credentials: 'same-origin',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) location.reload();
+          else { alert(data.error || 'Delete failed.'); bulkDeleteBtn.disabled = false; }
+        })
+        .catch(function () { alert('Network error.'); bulkDeleteBtn.disabled = false; });
+    });
+  }
 })();

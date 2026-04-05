@@ -179,12 +179,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.35rem;
   margin-top: 1.5rem;
   font-size: 0.85rem;
 }
-.pagination__link { font-weight: 600; color: var(--accent); }
-.pagination__link:hover { color: var(--accent-light); }
+.pagination__link {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 32px; border-radius: 6px;
+  font-weight: 600; color: var(--accent); text-decoration: none;
+}
+.pagination__link:hover { background: var(--border); color: var(--accent-light); }
+.pagination__num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 32px; border-radius: 6px;
+  font-weight: 500; color: var(--text-muted); text-decoration: none;
+}
+.pagination__num:hover { background: var(--border); color: var(--text); }
+.pagination__num--active {
+  background: var(--accent); color: #fff; font-weight: 600;
+}
+.pagination__ellipsis { color: var(--text-muted); padding: 0 0.15rem; }
 .pagination__info { color: var(--text-muted); }
 
 /* ── Bulk action bar ── */

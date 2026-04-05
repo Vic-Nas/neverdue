@@ -28,8 +28,13 @@ def categories(request):
             sort = 'name'
             cats = cats.order_by('name')
 
+        from django.core.paginator import Paginator
+        paginator = Paginator(cats, 25)
+        page = paginator.get_page(request.GET.get('page', '1'))
+
         return render(request, 'dashboard/categories.html', {
-            'categories': cats, 'q': q, 'sort': sort,
+            'categories': page.object_list, 'page_obj': page,
+            'q': q, 'sort': sort, 'total_count': paginator.count,
         })
     except Exception:
         logger.exception("categories error for user=%s", request.user.pk)

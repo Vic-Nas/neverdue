@@ -30,6 +30,7 @@ urlpatterns = [
     path('queue/<int:pk>/delete/',    views.queue_job_delete,    name='queue_job_delete'),
     path('queue/bulk-delete/',        views.queue_jobs_bulk_delete, name='queue_jobs_bulk_delete'),
     path('rules/', views.rules, name='rules'),
+    path('rules/bulk-delete/', views.rules_bulk_delete, name='rules_bulk_delete'),
     path('rules/add/', views.rule_add, name='rule_add'),
     path('rules/<int:pk>/delete/', views.rule_delete, name='rule_delete'),
     path('upload/', views.upload, name='upload'),
