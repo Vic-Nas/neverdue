@@ -152,14 +152,14 @@
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
-  function deleteRule(pk, row) {
+  function deleteRule(pk, card) {
     fetch(DELETE_URL_TPL.replace('__PK__', pk), {
       method: 'POST',
       headers: { 'X-CSRFToken': getCsrf() },
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (data.ok) row.remove();
+        if (data.ok) card.remove();
         else alert('Error: ' + data.error);
       })
       .catch(function () { alert('Network error.'); });
@@ -167,8 +167,8 @@
 
   document.querySelectorAll('.rule-delete-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var row = btn.closest('.rule-row');
-      deleteRule(btn.dataset.pk, row);
+      var card = btn.closest('.rule-card');
+      deleteRule(btn.dataset.pk, card);
     });
   });
 
@@ -181,24 +181,33 @@
   var selectAllBtn = document.getElementById('rule-select-all-btn');
   var selecting = false;
 
+  function getCheckboxes() {
+    return document.querySelectorAll('.rule-card__checkbox');
+  }
+
+  function getChecked() {
+    return Array.from(getCheckboxes()).filter(function (c) { return c.checked; });
+  }
+
   function updateCount() {
-    var cbs = document.querySelectorAll('.rule-row__checkbox:checked');
-    if (selectedCountEl) selectedCountEl.textContent = cbs.length;
+    var count = getChecked().length;
+    if (selectedCountEl) selectedCountEl.textContent = count;
+    if (selectAllBtn) selectAllBtn.textContent = count === getCheckboxes().length ? 'Deselect all' : 'Select all';
   }
 
   function enterSelectMode() {
     selecting = true;
     document.body.classList.add('selecting-rules');
-    document.querySelectorAll('.rule-row__checkbox').forEach(function (cb) { cb.hidden = false; });
     if (bulkBar) bulkBar.classList.add('visible');
-    if (selectToggle) selectToggle.textContent = 'Cancel';
+    if (selectToggle) selectToggle.textContent = 'Done';
     updateCount();
   }
 
   function exitSelectMode() {
     selecting = false;
     document.body.classList.remove('selecting-rules');
-    document.querySelectorAll('.rule-row__checkbox').forEach(function (cb) { cb.hidden = true; cb.checked = false; });
+    getCheckboxes().forEach(function (c) { c.checked = false; });
+    document.querySelectorAll('.rule-card--selected').forEach(function (el) { el.classList.remove('rule-card--selected'); });
     if (bulkBar) bulkBar.classList.remove('visible');
     if (selectToggle) selectToggle.textContent = 'Select';
     updateCount();
@@ -210,22 +219,45 @@
     });
   }
 
+  // Click card to toggle checkbox in select mode
+  document.querySelectorAll('.rule-card').forEach(function (card) {
+    card.addEventListener('click', function (e) {
+      if (!selecting) return;
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      var cb = card.querySelector('.rule-card__checkbox');
+      if (cb) {
+        cb.checked = !cb.checked;
+        card.classList.toggle('rule-card--selected', cb.checked);
+        updateCount();
+      }
+    });
+  });
+
+  getCheckboxes().forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var card = cb.closest('.rule-card');
+      if (card) card.classList.toggle('rule-card--selected', cb.checked);
+      updateCount();
+    });
+  });
+
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', function () {
-      var cbs = document.querySelectorAll('.rule-row__checkbox');
+      var cbs = getCheckboxes();
       var allChecked = Array.from(cbs).every(function (c) { return c.checked; });
-      cbs.forEach(function (c) { c.checked = !allChecked; });
+      cbs.forEach(function (c) {
+        c.checked = !allChecked;
+        var card = c.closest('.rule-card');
+        if (card) card.classList.toggle('rule-card--selected', c.checked);
+      });
       updateCount();
     });
   }
 
-  document.addEventListener('change', function (e) {
-    if (e.target.classList.contains('rule-row__checkbox')) updateCount();
-  });
-
   if (bulkDeleteBtn) {
     bulkDeleteBtn.addEventListener('click', function () {
-      var ids = Array.from(document.querySelectorAll('.rule-row__checkbox:checked')).map(function (c) { return parseInt(c.value, 10); });
+      var ids = getChecked().map(function (c) { return parseInt(c.value, 10); });
       if (!ids.length) return;
       if (!confirm('Delete ' + ids.length + ' rule' + (ids.length !== 1 ? 's' : '') + '?')) return;
       var url = bulkBar.dataset.bulkUrl;
