@@ -63,7 +63,10 @@ def queue_job_detail(request, pk):
         pending_events = [e for e in events if e.status == 'pending']
         active_events = [e for e in events if e.status == 'active']
         return render(request, 'dashboard/queue_job_detail.html', {
-            'job': job, 'pending_events': pending_events, 'active_events': active_events,
+            'job': job,
+            'pending_events': pending_events,
+            'active_events': active_events,
+            'discarded_events': job.discarded_events or [],
         })
     except Exception:
         logger.exception("queue_job_detail error for user=%s pk=%s", request.user.pk, pk)

@@ -63,6 +63,9 @@ def _apply_outcome(job_id: int, outcome) -> None:
         notes=outcome.notes[:255] if outcome.notes else '',
         updated_at=timezone.now(),
     )
+    # Persist discarded event details so the job detail page can display them.
+    if outcome.discarded_events:
+        updates['discarded_events'] = outcome.discarded_events
     # Purge raw inputs once processing succeeds — no reason to keep
     # images / text in the DB after extraction.  Failed jobs keep them
     # so retry can re-dispatch.
