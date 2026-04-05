@@ -16,7 +16,7 @@
       <p class="page__sub">Organise events and set reminder rules per category.</p>
     </div>
     <div class="page__actions">
-      {% if total_count > 1 %}
+      {% if total_count %}
         <button type="button" class="btn-ghost btn" id="cat-select-toggle">Select</button>
       {% endif %}
       {% if not request.user.is_pro and total_count >= 3 %}
@@ -53,9 +53,9 @@
   <div class="cat-list">
     {% for cat in categories %}
     <div class="cat-card" data-cat-id="{{ cat.pk }}">
-      <input type="checkbox" class="cat-card__checkbox" value="{{ cat.pk }}" hidden>
       <div class="cat-card__header">
         <div class="cat-card__name">
+          <input type="checkbox" class="cat-card__checkbox" value="{{ cat.pk }}">
           <span class="cat-card__dot" {% if cat.color %}style="background:{{ cat.color }}"{% endif %}></span>
           <a href="{% url 'dashboard:category_detail' pk=cat.pk %}" class="cat-card__name-link">{{ cat.name }}</a>
           <span class="priority-badge priority-badge--{{ cat.priority }}">{{ cat.get_priority_display }}</span>

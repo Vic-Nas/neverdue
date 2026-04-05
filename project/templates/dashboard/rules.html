@@ -18,7 +18,7 @@
       <p class="page__sub">Automatically categorize or discard events, or inject custom instructions into AI extraction.</p>
     </div>
     <div class="page__actions">
-      {% if total_count > 1 %}
+      {% if total_count %}
         <button type="button" class="btn-ghost btn" id="rule-select-toggle">Select</button>
       {% endif %}
     </div>
@@ -154,9 +154,9 @@
   <div class="rule-list">
     {% for rule in rules %}
     <div class="rule-card" data-rule-id="{{ rule.pk }}">
-      <input type="checkbox" class="rule-card__checkbox" value="{{ rule.pk }}">
       <div class="rule-card__header">
         <div class="rule-card__name">
+          <input type="checkbox" class="rule-card__checkbox" value="{{ rule.pk }}">
           <span class="rule-type-badge rule-type-badge--{{ rule.rule_type }}">
             {% if rule.rule_type == 'sender' %}Sender{% elif rule.rule_type == 'keyword' %}Keyword{% elif rule.rule_type == 'prompt' %}Prompt{% endif %}
           </span>
@@ -167,6 +167,7 @@
           {% endif %}
         </div>
         <div class="rule-card__actions">
+          <a href="{% url 'dashboard:rule_edit' pk=rule.pk %}" class="btn-ghost btn btn--sm">Edit</a>
           <button class="btn-ghost btn btn--sm btn-ghost--danger rule-delete-btn" data-pk="{{ rule.pk }}">Delete</button>
         </div>
       </div>
