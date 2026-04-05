@@ -44,6 +44,9 @@ def rules(request):
 
 @login_required
 def rule_add(request):
+    if request.method == 'GET':
+        categories = Category.objects.filter(user=request.user).order_by('name')
+        return render(request, 'dashboard/rule_add.html', {'categories': categories})
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
     try:

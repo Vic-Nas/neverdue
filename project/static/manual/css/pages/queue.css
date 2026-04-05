@@ -319,6 +319,12 @@
     text-overflow: unset;
   }
 
+  /* Always hide checkbox col in card mode (select mode uses tap-to-select on card) */
+  .queue-table td.queue-select-col,
+  body.selecting-queue .queue-table td.queue-select-col {
+    display: none !important;
+  }
+
   /* Add a label before each cell using data-label attributes */
   .queue-table td::before {
     content: attr(data-label);
@@ -379,7 +385,9 @@
 /* ── Select-mode checkbox column (unified body-class approach) ── */
 .queue-select-col { display: none; width: 36px; text-align: center; }
 .queue-row-cb { cursor: pointer; accent-color: var(--accent); }
-body.selecting-queue .queue-select-col { display: table-cell; }
+body.selecting-queue .queue-select-col { display: table-cell !important; }
+/* Hide select col label prefix in card mode */
+body.selecting-queue .queue-select-col::before { display: none !important; }
 
 /* ── Job detail page ── */
 .job-detail { max-width: 800px; }

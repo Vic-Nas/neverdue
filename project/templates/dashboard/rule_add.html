@@ -1,0 +1,140 @@
+{# project/templates/dashboard/rule_add.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Add rule — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+
+  <div class="form-page__header">
+    <h1 class="form-page__title">Add rule</h1>
+  </div>
+
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+
+  <p class="form-hint form-hint--spaced">Choose a rule type to get started.</p>
+
+  <div class="form-group">
+    <label for="rule-type-select">Rule type</label>
+    <select id="rule-type-select" name="rule_type">
+      <option value="">— select a type —</option>
+      <option value="sender">Sender — match on email address</option>
+      <option value="keyword">Keyword — match title or description</option>
+      <option value="prompt">Prompt injection — add AI instructions</option>
+    </select>
+  </div>
+
+  {# Fields: Sender #}
+  <div class="rule-fields" id="rule-fields-sender" hidden>
+    <p class="form-hint">Match on the sender's email address. E.g. <code>@university.ca</code> or <code>prof@school.edu</code>.</p>
+    <form class="rule-add-form category-form" data-rule-type="sender"
+          data-add-url="{% url 'dashboard:rule_add' %}"
+          data-cancel-url="{% url 'dashboard:rules' %}">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sender pattern</label>
+          <input type="text" name="pattern" placeholder="e.g. @university.ca" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Action</label>
+          <select name="action">
+            <option value="categorize">Assign to category</option>
+            <option value="discard">Discard</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row cat-select-group">
+        <div class="form-group">
+          <label>Category</label>
+          <select name="category_id">
+            <option value="">— leave uncategorized —</option>
+            {% for cat in categories %}<option value="{{ cat.pk }}">{{ cat.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Add sender rule</button>
+        <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {# Fields: Keyword #}
+  <div class="rule-fields" id="rule-fields-keyword" hidden>
+    <p class="form-hint">Match on a word or phrase in the event title or description.</p>
+    <form class="rule-add-form category-form" data-rule-type="keyword"
+          data-add-url="{% url 'dashboard:rule_add' %}"
+          data-cancel-url="{% url 'dashboard:rules' %}">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="form-group">
+          <label>Keyword</label>
+          <input type="text" name="pattern" placeholder="e.g. assignment" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Action</label>
+          <select name="action">
+            <option value="categorize">Assign to category</option>
+            <option value="discard">Discard</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row cat-select-group">
+        <div class="form-group">
+          <label>Category</label>
+          <select name="category_id">
+            <option value="">— leave uncategorized —</option>
+            {% for cat in categories %}<option value="{{ cat.pk }}">{{ cat.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Add keyword rule</button>
+        <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {# Fields: Prompt injection #}
+  <div class="rule-fields" id="rule-fields-prompt" hidden>
+    <p class="form-hint">Inject custom instructions into AI extraction. Leave sender empty to apply to all emails.</p>
+    <form class="rule-add-form category-form" data-rule-type="prompt"
+          data-add-url="{% url 'dashboard:rule_add' %}"
+          data-cancel-url="{% url 'dashboard:rules' %}">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sender scope <span class="label-optional">(optional)</span></label>
+          <input type="text" name="prompt_pattern" placeholder="e.g. @university.ca — leave empty for all emails">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Instructions</label>
+          <textarea name="prompt_text" rows="4" placeholder="e.g. All events from this sender are in-person. Always set location to Main Campus." required></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Add prompt rule</button>
+        <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/rule_add.js' %}"></script>
+{% endblock %}

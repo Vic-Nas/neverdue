@@ -9,7 +9,6 @@
 
 {% block content %}
 <div class="page page--wide"
-  data-rule-add-url="{% url 'dashboard:rule_add' %}"
   data-rule-delete-url-tpl="/dashboard/rules/__PK__/delete/">
 
   <div class="page__header--row">
@@ -21,109 +20,8 @@
       {% if total_count %}
         <button type="button" class="btn-ghost btn" id="rule-select-toggle">Select</button>
       {% endif %}
+      <a href="{% url 'dashboard:rule_add' %}" class="btn-primary">+ New rule</a>
     </div>
-  </div>
-
-  {# ── Unified add-rule form ── #}
-  <div class="section-block">
-    <div class="section-block__header">
-      <h2 class="section-block__title">Add rule</h2>
-    </div>
-    <p class="form-hint form-hint--spaced">Choose a rule type to get started.</p>
-
-    <div class="form-group">
-      <label for="rule-type-select">Rule type</label>
-      <select id="rule-type-select" name="rule_type">
-        <option value="">— select a type —</option>
-        {# To add a new rule type: add an <option> here and a matching fields block below. #}
-        <option value="sender">Sender — match on email address</option>
-        <option value="keyword">Keyword — match title or description</option>
-        <option value="prompt">Prompt injection — add AI instructions</option>
-      </select>
-    </div>
-
-    {# Fields: Sender #}
-    <div class="rule-fields" id="rule-fields-sender" hidden>
-      <p class="form-hint">Match on the sender's email address. E.g. <code>@university.ca</code> or <code>prof@school.edu</code>.</p>
-      <form class="rule-add-form" data-rule-type="sender">
-        {% csrf_token %}
-        <div class="form-group">
-          <label>Sender pattern</label>
-          <input type="text" name="pattern" placeholder="e.g. @university.ca" required>
-        </div>
-        <div class="form-group">
-          <label>Action</label>
-          <select name="action">
-            <option value="categorize">Assign to category</option>
-            <option value="discard">Discard</option>
-          </select>
-        </div>
-        <div class="form-group cat-select-group">
-          <label>Category</label>
-          <select name="category_id">
-            <option value="">— leave uncategorized —</option>
-            {% for cat in categories %}<option value="{{ cat.pk }}">{{ cat.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Add sender rule</button>
-        </div>
-      </form>
-    </div>
-
-    {# Fields: Keyword #}
-    <div class="rule-fields" id="rule-fields-keyword" hidden>
-      <p class="form-hint">Match on a word or phrase in the event title or description.</p>
-      <form class="rule-add-form" data-rule-type="keyword">
-        {% csrf_token %}
-        <div class="form-group">
-          <label>Keyword</label>
-          <input type="text" name="pattern" placeholder="e.g. assignment" required>
-        </div>
-        <div class="form-group">
-          <label>Action</label>
-          <select name="action">
-            <option value="categorize">Assign to category</option>
-            <option value="discard">Discard</option>
-          </select>
-        </div>
-        <div class="form-group cat-select-group">
-          <label>Category</label>
-          <select name="category_id">
-            <option value="">— leave uncategorized —</option>
-            {% for cat in categories %}<option value="{{ cat.pk }}">{{ cat.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Add keyword rule</button>
-        </div>
-      </form>
-    </div>
-
-    {# Fields: Prompt injection #}
-    <div class="rule-fields" id="rule-fields-prompt" hidden>
-      <p class="form-hint">Inject custom instructions into AI extraction. Leave sender empty to apply to all emails.</p>
-      <form class="rule-add-form" data-rule-type="prompt">
-        {% csrf_token %}
-        <div class="form-group">
-          <label>Sender scope <span class="label-optional">(optional)</span></label>
-          <input type="text" name="prompt_pattern" placeholder="e.g. @university.ca — leave empty for all emails">
-        </div>
-        <div class="form-group">
-          <label>Instructions</label>
-          <textarea name="prompt_text" rows="3" placeholder="e.g. All events from this sender are in-person. Always set location to Main Campus." required></textarea>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Add prompt rule</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- To add a new rule type:
-         1. Add an <option value="mytype"> to #rule-type-select above.
-         2. Add a <div class="rule-fields" id="rule-fields-mytype" hidden> block here.
-         3. Add a collectData entry in RULE_TYPES in rules.js. -->
-
   </div>
 
   {# ── Existing rules ── #}
@@ -200,6 +98,7 @@
     <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Clear search</a>
     {% else %}
     <p class="empty-state__text">No rules yet.</p>
+    <a href="{% url 'dashboard:rule_add' %}" class="btn-primary">Add your first rule</a>
     {% endif %}
   </div>
   {% endif %}
