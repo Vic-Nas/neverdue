@@ -32,6 +32,7 @@ urlpatterns = [
     path('rules/', views.rules, name='rules'),
     path('rules/bulk-delete/', views.rules_bulk_delete, name='rules_bulk_delete'),
     path('rules/add/', views.rule_add, name='rule_add'),
+    path('rules/<int:pk>/edit/', views.rule_edit, name='rule_edit'),
     path('rules/<int:pk>/delete/', views.rule_delete, name='rule_delete'),
     path('upload/', views.upload, name='upload'),
     path('gcal/webhook/', webhook.gcal_webhook, name='gcal_webhook'),

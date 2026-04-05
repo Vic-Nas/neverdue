@@ -1,0 +1,105 @@
+{# project/templates/dashboard/rule_edit.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Edit rule — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/categories.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+
+  <div class="form-page__header">
+    <h1 class="form-page__title">Edit rule</h1>
+  </div>
+
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="category-form">
+    {% csrf_token %}
+
+    {# ── Rule type (read-only) ── #}
+    <div class="form-row">
+      <div class="form-group">
+        <label>Rule type</label>
+        <span class="rule-type-badge rule-type-badge--{{ rule.rule_type }}">
+          {{ rule.get_rule_type_display }}
+        </span>
+      </div>
+    </div>
+
+    {% if rule.rule_type == 'prompt' %}
+      {# ── Prompt rule fields ── #}
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pattern">Sender scope <span class="label-optional">(optional)</span></label>
+          <input type="text" id="pattern" name="pattern" value="{{ rule.pattern }}" placeholder="e.g. @university.ca — leave empty for all emails">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="prompt_text">Instructions</label>
+          <textarea id="prompt_text" name="prompt_text" rows="4" required>{{ rule.prompt_text }}</textarea>
+        </div>
+      </div>
+
+    {% else %}
+      {# ── Sender / Keyword rule fields ── #}
+      <div class="form-row">
+        <div class="form-group">
+          <label for="pattern">
+            {% if rule.rule_type == 'sender' %}Sender pattern{% else %}Keyword{% endif %}
+          </label>
+          <input type="text" id="pattern" name="pattern" value="{{ rule.pattern }}" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="action">Action</label>
+          <select id="action" name="action">
+            <option value="categorize" {% if rule.action == 'categorize' %}selected{% endif %}>Assign to category</option>
+            <option value="discard" {% if rule.action == 'discard' %}selected{% endif %}>Discard</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row cat-select-group" {% if rule.action != 'categorize' %}hidden{% endif %}>
+        <div class="form-group">
+          <label for="category_id">Category</label>
+          <select id="category_id" name="category_id">
+            <option value="">— leave uncategorized —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}" {% if rule.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Save changes</button>
+      <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Cancel</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var actionSel = document.getElementById('action');
+  var catGroup = document.querySelector('.cat-select-group');
+  if (actionSel && catGroup) {
+    actionSel.addEventListener('change', function () {
+      catGroup.hidden = actionSel.value !== 'categorize';
+    });
+  }
+})();
+</script>
+{% endblock %}

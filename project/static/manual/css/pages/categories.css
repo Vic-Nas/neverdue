@@ -52,19 +52,16 @@
   gap: 0.75rem;
 }
 
-/* ── Selection mode ── */
+/* ── Selection mode (shared pattern: checkbox in header flex row, hidden by default) ── */
 .cat-card__checkbox {
   display: none;
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
   cursor: pointer;
+  flex-shrink: 0;
 }
-body.cat-selecting .cat-card { cursor: pointer; padding-right: 3rem; }
+body.cat-selecting .cat-card { cursor: pointer; }
 body.cat-selecting .cat-card__checkbox { display: inline-block; }
 .cat-card--selected { background: var(--accent-muted); }
 
@@ -302,16 +299,13 @@ body.cat-selecting .cat-card__checkbox { display: inline-block; }
 
 .rule-card__checkbox {
   display: none;
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
   cursor: pointer;
+  flex-shrink: 0;
 }
-body.selecting-rules .rule-card { cursor: pointer; padding-right: 3rem; }
+body.selecting-rules .rule-card { cursor: pointer; }
 body.selecting-rules .rule-card__checkbox { display: inline-block; }
 .rule-card--selected { background: var(--accent-muted); }
-body.selecting-rules .rule-delete-btn { display: none; }
+body.selecting-rules .rule-card__actions { display: none; }

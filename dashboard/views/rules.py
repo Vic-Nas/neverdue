@@ -4,7 +4,7 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from dashboard.models import Category, Rule
 
@@ -93,6 +93,49 @@ def rule_delete(request, pk):
     except Exception:
         logger.exception("rule_delete error for user=%s pk=%s", request.user.pk, pk)
         return JsonResponse({'ok': False, 'error': 'Server error'}, status=500)
+
+
+@login_required
+def rule_edit(request, pk):
+    try:
+        rule = get_object_or_404(Rule, pk=pk, user=request.user)
+        categories = Category.objects.filter(user=request.user).order_by('name')
+
+        if request.method == 'POST':
+            pattern = request.POST.get('pattern', '').strip()
+            action = request.POST.get('action', '').strip()
+            category_id = request.POST.get('category_id', '').strip()
+            prompt_text = request.POST.get('prompt_text', '').strip()
+
+            if rule.rule_type == Rule.TYPE_PROMPT:
+                if not prompt_text:
+                    return render(request, 'dashboard/rule_edit.html', {
+                        'rule': rule, 'categories': categories,
+                        'error': 'Prompt text is required.',
+                    })
+                rule.pattern = pattern
+                rule.prompt_text = prompt_text
+            else:
+                if not pattern:
+                    return render(request, 'dashboard/rule_edit.html', {
+                        'rule': rule, 'categories': categories,
+                        'error': 'Pattern is required.',
+                    })
+                rule.pattern = pattern
+                rule.action = action
+                rule.category = None
+                if category_id:
+                    rule.category = get_object_or_404(Category, pk=category_id, user=request.user)
+
+            rule.save()
+            return redirect('dashboard:rules')
+
+        return render(request, 'dashboard/rule_edit.html', {
+            'rule': rule, 'categories': categories,
+        })
+    except Exception:
+        logger.exception("rule_edit error for user=%s pk=%s", request.user.pk, pk)
+        return HttpResponse('Could not save rule.', status=500)
 
 
 @login_required

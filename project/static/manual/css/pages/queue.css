@@ -110,21 +110,21 @@
   font-weight: 600;
 }
 
-/* Column widths */
-.queue-table th:nth-child(1),
-.queue-table td:nth-child(1) { width: 100px; }
-
+/* Column widths (col 1 = select checkbox, col 2+ = data) */
 .queue-table th:nth-child(2),
-.queue-table td:nth-child(2) { width: auto; }
+.queue-table td:nth-child(2) { width: 100px; }
 
 .queue-table th:nth-child(3),
-.queue-table td:nth-child(3) { width: 130px; }
+.queue-table td:nth-child(3) { width: auto; }
 
 .queue-table th:nth-child(4),
-.queue-table td:nth-child(4) { width: 90px; white-space: nowrap; }
+.queue-table td:nth-child(4) { width: 130px; }
 
 .queue-table th:nth-child(5),
-.queue-table td:nth-child(5) { width: 140px; white-space: nowrap; color: var(--text-muted); }
+.queue-table td:nth-child(5) { width: 90px; white-space: nowrap; }
+
+.queue-table th:nth-child(6),
+.queue-table td:nth-child(6) { width: 140px; white-space: nowrap; color: var(--text-muted); }
 
 .queue-from {
   color: var(--text-muted);
@@ -233,11 +233,11 @@
     gap: 0.5rem;
   }
 
-  /* Hide "From" and "Duration" columns on tablet */
-  .queue-table th:nth-child(2),
-  .queue-table td:nth-child(2),
-  .queue-table th:nth-child(5),
-  .queue-table td:nth-child(5) {
+  /* Hide "From" and "Duration" columns on tablet (col 3 = From, col 6 = Duration) */
+  .queue-table th:nth-child(3),
+  .queue-table td:nth-child(3),
+  .queue-table th:nth-child(6),
+  .queue-table td:nth-child(6) {
     display: none;
   }
 
@@ -376,13 +376,10 @@
   }
 }
 
-/* ── Bulk action bar (queue overrides; base in dashboard.css) ── */
-.bulk-bar[hidden] { display: none; }
-
-/* ── Select-mode checkbox column ── */
-.queue-select-col { width: 36px; text-align: center; }
-.queue-row-cb { cursor: pointer; }
-#queue-enter-select { margin-bottom: 8px; }
+/* ── Select-mode checkbox column (unified body-class approach) ── */
+.queue-select-col { display: none; width: 36px; text-align: center; }
+.queue-row-cb { cursor: pointer; accent-color: var(--accent); }
+body.selecting-queue .queue-select-col { display: table-cell; }
 
 /* ── Job detail page ── */
 .job-detail { max-width: 800px; }

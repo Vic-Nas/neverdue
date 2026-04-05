@@ -79,7 +79,6 @@
   var cancelSelectBtn = document.getElementById('queue-cancel-select');
   var enterSelectBtn = document.getElementById('queue-enter-select');
   var selectAllCb = document.getElementById('queue-select-all');
-  var selectColHeaders = document.querySelectorAll('.queue-select-col');
 
   function updateSelectedCount() {
     if (selectedCountEl) selectedCountEl.textContent = selectedIds.size + ' selected';
@@ -91,7 +90,7 @@
     selectedIds.clear();
     if (bulkBar) bulkBar.classList.add('visible');
     if (enterSelectBtn) enterSelectBtn.hidden = true;
-    selectColHeaders.forEach(function (h) { h.hidden = false; });
+    document.body.classList.add('selecting-queue');
     if (lastJobs) render(lastJobs);
     updateSelectedCount();
   }
@@ -101,7 +100,7 @@
     selectedIds.clear();
     if (bulkBar) bulkBar.classList.remove('visible');
     if (enterSelectBtn) enterSelectBtn.hidden = false;
-    selectColHeaders.forEach(function (h) { h.hidden = true; });
+    document.body.classList.remove('selecting-queue');
     if (selectAllCb) selectAllCb.checked = false;
     if (lastJobs) render(lastJobs);
   }
@@ -243,9 +242,7 @@
 
       var isDurationVisible = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
 
-      var cbCell = selectMode
-        ? '<td><input type="checkbox" class="queue-row-cb" data-job-id="' + j.id + '"' + (selectedIds.has(j.id) ? ' checked' : '') + '></td>'
-        : '';
+      var cbCell = '<td class="queue-select-col"><input type="checkbox" class="queue-row-cb" data-job-id="' + j.id + '"' + (selectMode && selectedIds.has(j.id) ? ' checked' : '') + '></td>';
 
       tr.innerHTML = cbCell +
         '<td>' + sourceCell + attentionBadge + '</td>' +
