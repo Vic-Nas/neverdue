@@ -85,3 +85,29 @@ class ScanJob(models.Model):
     def duration_seconds(self):
         """Wall-clock seconds from creation to last update. Meaningful once done/failed."""
         return (self.updated_at - self.created_at).total_seconds()
+
+
+class DailyJobStats(models.Model):
+    """
+    Per-day aggregate of ScanJob outcomes, snapshotted by cleanup_events before
+    rows are deleted. This lets the staff dashboard show historical charts even
+    after done/needs_review jobs are purged.
+
+    One row per (date, status, failure_reason) combination.
+    failure_reason is blank for non-failed statuses.
+
+    Written by cleanup_events; never modified after creation (append-only).
+    If cleanup runs more than once on the same day (e.g. after a crash),
+    counts are incremented via update_or_create to avoid double-counting.
+    """
+    date = models.DateField(db_index=True)
+    status = models.CharField(max_length=20)
+    failure_reason = models.CharField(max_length=30, blank=True, default='')
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('date', 'status', 'failure_reason')
+        ordering = ('-date',)
+
+    def __str__(self):
+        return f"DailyJobStats({self.date} {self.status} {self.failure_reason or '—'} × {self.count})"

@@ -1,13 +1,50 @@
 # emails/tasks/scheduled.py
 import logging
 
+from django.db.models import Count
 from django.utils import timezone
 from procrastinate.contrib.django import app
-from procrastinate import RetryStrategy
 
 from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
+
+
+def _snapshot_jobs_to_daily_stats(qs):
+    """
+    Aggregate a ScanJob queryset by (date, status, failure_reason) and upsert
+    into DailyJobStats. Call this immediately before bulk-deleting jobs so the
+    staff dashboard retains historical counts after cleanup.
+
+    Uses update_or_create so re-running cleanup on the same day is safe.
+    """
+    from emails.models import DailyJobStats
+
+    rows = (
+        qs
+        .extra(select={'day': 'DATE(updated_at)'})
+        .values('day', 'status', 'failure_reason')
+        .annotate(n=Count('pk'))
+    )
+    for row in rows:
+        DailyJobStats.objects.update_or_create(
+            date=row['day'],
+            status=row['status'],
+            failure_reason=row['failure_reason'] or '',
+            defaults={},  # nothing to update — we accumulate below
+        )
+        # Increment rather than overwrite so two cleanup runs don't double-count.
+        DailyJobStats.objects.filter(
+            date=row['day'],
+            status=row['status'],
+            failure_reason=row['failure_reason'] or '',
+        ).update(count=models_F('count') + row['n'])
+
+
+# Lazy import to avoid circular issues at module load time.
+def _F():
+    from django.db.models import F
+    return F
 
 
 @app.periodic(cron="0 0 1 * *")
@@ -52,18 +89,22 @@ def recover_stale_jobs(timestamp: int) -> None:
 @app.periodic(cron="0 2 * * *")
 @app.task
 def cleanup_events(timestamp: int) -> None:
+    from django.db.models import F
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal
     from accounts.models import User
+    from emails.models import DailyJobStats
 
     today = timezone.now().date()
 
+    # ── Expired pending events ────────────────────────────────────────────────
     expired_pending = Event.objects.filter(status='pending', pending_expires_at__lte=today)
     count = expired_pending.count()
     expired_pending.delete()
     if count:
         logger.info("emails.cleanup_events: deleted %s expired pending event(s)", count)
 
+    # ── Auto-delete past events (per user preference) ─────────────────────────
     for user in User.objects.filter(auto_delete_past_events=True):
         cutoff = timezone.now() - timezone.timedelta(days=user.past_event_retention_days)
         for event in Event.objects.filter(user=user, status='active', end__lt=cutoff):
@@ -72,12 +113,54 @@ def cleanup_events(timestamp: int) -> None:
                 delete_from_gcal(user, event.google_event_id)
             event.delete()
 
+    # ── Done jobs: snapshot then delete (done jobs deleted after 1 day) ───────
     job_cutoff = timezone.now() - timezone.timedelta(days=1)
-    ScanJob.objects.filter(status=ScanJob.STATUS_DONE, updated_at__lt=job_cutoff).delete()
+    done_qs = ScanJob.objects.filter(status=ScanJob.STATUS_DONE, updated_at__lt=job_cutoff)
 
-    # Delete needs_review jobs after 30 days — the events they created
-    # still exist independently; the job row is only bookkeeping.
+    done_rows = list(
+        done_qs
+        .extra(select={'day': 'DATE(updated_at)'})
+        .values('day', 'status', 'failure_reason')
+        .annotate(n=Count('pk'))
+    )
+    for row in done_rows:
+        obj, created = DailyJobStats.objects.get_or_create(
+            date=row['day'],
+            status=row['status'],
+            failure_reason=row['failure_reason'] or '',
+            defaults={'count': 0},
+        )
+        DailyJobStats.objects.filter(pk=obj.pk).update(count=F('count') + row['n'])
+
+    deleted_done, _ = done_qs.delete()
+    if deleted_done:
+        logger.info("emails.cleanup_events: snapshotted and deleted %s done job(s)", deleted_done)
+
+    # ── Needs-review jobs: snapshot then delete (after 30 days) ──────────────
+    # The events they created still exist independently; the job row is bookkeeping.
     review_cutoff = timezone.now() - timezone.timedelta(days=30)
-    ScanJob.objects.filter(
+    review_qs = ScanJob.objects.filter(
         status=ScanJob.STATUS_NEEDS_REVIEW, updated_at__lt=review_cutoff,
-    ).delete()
+    )
+
+    review_rows = list(
+        review_qs
+        .extra(select={'day': 'DATE(updated_at)'})
+        .values('day', 'status', 'failure_reason')
+        .annotate(n=Count('pk'))
+    )
+    for row in review_rows:
+        obj, created = DailyJobStats.objects.get_or_create(
+            date=row['day'],
+            status=row['status'],
+            failure_reason=row['failure_reason'] or '',
+            defaults={'count': 0},
+        )
+        DailyJobStats.objects.filter(pk=obj.pk).update(count=F('count') + row['n'])
+
+    deleted_review, _ = review_qs.delete()
+    if deleted_review:
+        logger.info(
+            "emails.cleanup_events: snapshotted and deleted %s needs_review job(s)",
+            deleted_review,
+        )
