@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from accounts.models import MonthlyUsage, User
-from emails.models import ScanJob
+from emails.models import DailyJobStats, ScanJob
 
 INPUT_CPM = 3.00
 OUTPUT_CPM = 15.00
@@ -44,6 +44,12 @@ def staff_dashboard(request):
     now   = timezone.now()
     today = now.date()
 
+    # ── Live counts (from ScanJob — still-alive rows only) ───────────────────
+    # failed and needs_review are never deleted by cleanup (failed stays forever,
+    # needs_review stays 30 days), so these counts are accurate from live rows.
+    # total_today / done_today are best-effort; done jobs are purged after 1 day
+    # so yesterday's done count may be 0 from live rows — that's fine for the
+    # "today" summary card (it genuinely reflects today's activity).
     counts = ScanJob.objects.aggregate(
         total_today  = Count('pk', filter=Q(created_at__date=today)),
         done_today   = Count('pk', filter=Q(status=ScanJob.STATUS_DONE, updated_at__date=today)),
@@ -53,6 +59,7 @@ def staff_dashboard(request):
         total_all    = Count('pk'),
     )
 
+    # ── Monthly token cost ────────────────────────────────────────────────────
     snap = MonthlyUsage.objects.filter(year=today.year, month=today.month).aggregate(
         inp=Sum('input_tokens'), out=Sum('output_tokens')
     )
@@ -71,11 +78,49 @@ def staff_dashboard(request):
     monthly_cost_labels = [f"{r['year']}-{r['month']:02d}" for r in hist]
     monthly_cost_values = [_cost(r['inp'] or 0, r['out'] or 0) for r in hist]
 
+    # ── 30-day chart data: merge live ScanJob rows + DailyJobStats snapshots ─
+    #
+    # Done jobs are deleted after 1 day; needs_review after 30 days.
+    # DailyJobStats is written by cleanup_events before deletion, so it holds
+    # all historical counts. Live ScanJob rows cover what hasn't been deleted yet.
+    #
+    # Strategy:
+    #   1. Build by_day_status / by_day_reason from DailyJobStats (the archive).
+    #   2. Layer live ScanJob rows on top — they represent today and anything
+    #      not yet purged. For any (date, status) bucket, live rows always win
+    #      over what's in the snapshot for that same date because:
+    #      - If cleanup hasn't run yet for that date, live rows are the truth.
+    #      - Once cleanup runs, it snapshots the rows and deletes them, so the
+    #        snapshot becomes the only source. No double-counting.
+
     cutoff     = now - datetime.timedelta(days=29)
     date_range = _date_range(30)
     date_strs  = [d.isoformat() for d in date_range]
 
-    job_qs = (
+    by_day_status = {d: {} for d in date_strs}
+    by_day_reason = {d: {} for d in date_strs}
+
+    # Step 1: load snapshots (historical, already-deleted jobs)
+    snap_qs = (
+        DailyJobStats.objects
+        .filter(date__gte=cutoff.date())
+        .values('date', 'status', 'failure_reason', 'count')
+    )
+    for row in snap_qs:
+        d = row['date'].isoformat()
+        if d not in by_day_status:
+            continue
+        s = row['status']
+        by_day_status[d][s] = by_day_status[d].get(s, 0) + row['count']
+        if row['failure_reason'] and s == ScanJob.STATUS_FAILED:
+            r = row['failure_reason']
+            by_day_reason[d][r] = by_day_reason[d].get(r, 0) + row['count']
+
+    # Step 2: layer live ScanJob rows — these are jobs not yet deleted.
+    # For dates where cleanup has already run, done/needs_review rows are gone
+    # from ScanJob so this adds nothing (correct). For today and very recent days,
+    # it picks up jobs that haven't been snapshotted yet.
+    live_qs = (
         ScanJob.objects
         .filter(updated_at__gte=cutoff)
         .extra(select={'day': 'DATE(updated_at)'})
@@ -83,10 +128,7 @@ def staff_dashboard(request):
         .annotate(n=Count('pk'))
         .order_by('day')
     )
-
-    by_day_status = {d: {} for d in date_strs}
-    by_day_reason = {d: {} for d in date_strs}
-    for row in job_qs:
+    for row in live_qs:
         d = str(row['day'])
         if d not in by_day_status:
             continue
@@ -96,6 +138,7 @@ def staff_dashboard(request):
             r = row['failure_reason']
             by_day_reason[d][r] = by_day_reason[d].get(r, 0) + row['n']
 
+    # ── Build chart payloads ──────────────────────────────────────────────────
     chart_labels = [d[5:] for d in date_strs]
 
     status_series = [
@@ -128,6 +171,7 @@ def staff_dashboard(request):
         for reason in all_reasons
     ]
 
+    # ── Failed job breakdown (live only — failed jobs are never deleted) ──────
     failed_groups = list(
         ScanJob.objects
         .filter(status=ScanJob.STATUS_FAILED)
@@ -136,6 +180,7 @@ def staff_dashboard(request):
         .order_by('-count')
     )
 
+    # ── Recent jobs table ─────────────────────────────────────────────────────
     status_filter = request.GET.get('status', '')
     reason_filter = request.GET.get('reason', '')
     recent_qs = ScanJob.objects.select_related('user').order_by('-created_at')
