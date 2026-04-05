@@ -46,23 +46,28 @@
   if (filterStatusEl) {
     filterStatusEl.addEventListener('change', function () {
       filterStatus = filterStatusEl.value;
+      currentPage = 1;
       if (lastJobs) render(lastJobs);
     });
   }
   if (filterSourceEl) {
     filterSourceEl.addEventListener('change', function () {
       filterSource = filterSourceEl.value;
+      currentPage = 1;
       if (lastJobs) render(lastJobs);
     });
   }
   if (filterSearchEl) {
     filterSearchEl.addEventListener('input', function () {
       filterSearch = filterSearchEl.value.toLowerCase().trim();
+      currentPage = 1;
       if (lastJobs) render(lastJobs);
     });
   }
 
   var lastJobs = null;
+  var currentPage = 1;
+  var PAGE_SIZE = 25;
 
   // ─── Select mode ──────────────────────────────────────────────────────────
 
@@ -179,20 +184,30 @@
   function render(jobs) {
     var visible = applyFilters(jobs);
 
+    // Show/hide select button based on data availability
+    if (enterSelectBtn) enterSelectBtn.hidden = !visible || visible.length === 0;
+
     if (!visible || visible.length === 0) {
       table.hidden = true;
       emptyMsg.hidden = false;
       emptyMsg.textContent = jobs.length > 0
         ? 'No jobs match the current filters.'
         : 'No jobs yet.';
+      removePagination();
       return;
     }
     emptyMsg.hidden = true;
     table.hidden = false;
-    if (enterSelectBtn) enterSelectBtn.hidden = false;
+
+    // Pagination
+    var totalPages = Math.ceil(visible.length / PAGE_SIZE);
+    if (currentPage > totalPages) currentPage = totalPages;
+    var start = (currentPage - 1) * PAGE_SIZE;
+    var pageItems = visible.slice(start, start + PAGE_SIZE);
+
     tbody.innerHTML = '';
 
-    visible.forEach(function (j) {
+    pageItems.forEach(function (j) {
       var tr = document.createElement('tr');
 
       var isTerminal = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
@@ -263,6 +278,60 @@
 
       tbody.appendChild(tr);
     });
+
+    renderPagination(totalPages);
+  }
+
+  // ─── Client-side pagination nav ──────────────────────────────────────────
+
+  function removePagination() {
+    var existing = document.getElementById('queue-pagination');
+    if (existing) existing.remove();
+  }
+
+  function renderPagination(totalPages) {
+    removePagination();
+    if (totalPages <= 1) return;
+
+    var nav = document.createElement('nav');
+    nav.id = 'queue-pagination';
+    nav.className = 'pagination';
+
+    if (currentPage > 1) {
+      var prev = document.createElement('a');
+      prev.href = '#'; prev.className = 'pagination__link'; prev.textContent = '←';
+      prev.addEventListener('click', function (e) { e.preventDefault(); currentPage--; render(lastJobs); });
+      nav.appendChild(prev);
+    }
+
+    for (var i = 1; i <= totalPages; i++) {
+      if (i === currentPage) {
+        var active = document.createElement('span');
+        active.className = 'pagination__num pagination__num--active';
+        active.textContent = i;
+        nav.appendChild(active);
+      } else if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+        var link = document.createElement('a');
+        link.href = '#'; link.className = 'pagination__num'; link.textContent = i;
+        (function (p) {
+          link.addEventListener('click', function (e) { e.preventDefault(); currentPage = p; render(lastJobs); });
+        })(i);
+        nav.appendChild(link);
+      } else if (i === currentPage - 3 || i === currentPage + 3) {
+        var ellipsis = document.createElement('span');
+        ellipsis.className = 'pagination__ellipsis'; ellipsis.textContent = '…';
+        nav.appendChild(ellipsis);
+      }
+    }
+
+    if (currentPage < totalPages) {
+      var next = document.createElement('a');
+      next.href = '#'; next.className = 'pagination__link'; next.textContent = '→';
+      next.addEventListener('click', function (e) { e.preventDefault(); currentPage++; render(lastJobs); });
+      nav.appendChild(next);
+    }
+
+    table.parentNode.insertBefore(nav, table.nextSibling);
   }
 
   function hasActive(jobs) {

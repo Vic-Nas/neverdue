@@ -1,0 +1,24 @@
+{# partials/pagination.html — shared numbered pagination #}
+{# Expects: page_obj (Django Page), request (auto-available) #}
+{% load page_qs %}
+{% if page_obj.has_other_pages %}
+<nav class="pagination">
+  {% if page_obj.has_previous %}
+  <a href="?{{ page_obj.previous_page_number|page_qs:request }}" class="pagination__link">←</a>
+  {% endif %}
+
+  {% for item in page_obj|page_range_items %}
+    {% if item.type == 'current' %}
+      <span class="pagination__num pagination__num--active">{{ item.num }}</span>
+    {% elif item.type == 'page' %}
+      <a href="?{{ item.num|page_qs:request }}" class="pagination__num">{{ item.num }}</a>
+    {% elif item.type == 'ellipsis' %}
+      <span class="pagination__ellipsis">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page_obj.has_next %}
+  <a href="?{{ page_obj.next_page_number|page_qs:request }}" class="pagination__link">→</a>
+  {% endif %}
+</nav>
+{% endif %}
