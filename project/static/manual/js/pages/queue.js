@@ -288,7 +288,9 @@
 
   function renderPagination(totalPages) {
     removePagination();
-    if (totalPages <= 1) return;
+    // Always render pagination nav so the user sees [1] even with a single page,
+    // matching the behaviour of the server-rendered pagination partial.
+    if (totalPages < 1) totalPages = 1;
 
     var nav = document.createElement('nav');
     nav.id = 'queue-pagination';

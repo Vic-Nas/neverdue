@@ -319,9 +319,8 @@
     text-overflow: unset;
   }
 
-  /* Always hide checkbox col in card mode (select mode uses tap-to-select on card) */
-  .queue-table td.queue-select-col,
-  body.selecting-queue .queue-table td.queue-select-col {
+  /* Always hide checkbox col in card mode — select works via card tap on mobile */
+  .queue-table td.queue-select-col {
     display: none !important;
   }
 
@@ -383,11 +382,31 @@
 }
 
 /* ── Select-mode checkbox column (unified body-class approach) ── */
+/*
+ * queue-select-col: applied to <td> cells (always in DOM, hidden by default)
+ * queue-select-col--th: applied to the <th> header cell
+ * Both are hidden until body.selecting-queue is set.
+ * Keeping them separate means hiding td cells never collapses the column to 0px
+ * which would make the checkboxes invisible even when display:table-cell is set.
+ */
 .queue-select-col { display: none; width: 36px; text-align: center; }
-.queue-row-cb { cursor: pointer; accent-color: var(--accent); }
-body.selecting-queue .queue-select-col { display: table-cell !important; }
-/* Hide select col label prefix in card mode */
+.queue-select-col--th { display: none; width: 36px; text-align: center; }
+body.selecting-queue .queue-select-col { display: table-cell; }
+body.selecting-queue .queue-select-col--th { display: table-cell; }
+/* Suppress data-label pseudo-content on the checkbox cell in mobile card mode */
 body.selecting-queue .queue-select-col::before { display: none !important; }
+
+/* base.css applies padding/border/width:100% to all inputs — reset checkboxes */
+.queue-row-cb,
+#queue-select-all {
+  width: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
 
 /* ── Job detail page ── */
 .job-detail { max-width: 800px; }
