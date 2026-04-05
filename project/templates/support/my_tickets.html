@@ -1,0 +1,28 @@
+{# project/templates/support/my_tickets.html #}
+{% extends "base.html" %}
+{% load static %}
+{% block title %}My Tickets — Support{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/support.css' %}">{% endblock %}
+
+{% block content %}
+<div class="support-wrap">
+  <h1>My Tickets</h1>
+
+  {% if tickets %}
+    <ul class="ticket-list">
+      {% for t in tickets %}
+        <li class="ticket-row">
+          <a href="{% url 'support:detail' t.id %}">
+            <span class="badge">{{ t.get_type_display }}</span>
+            <span class="ticket-snippet">{{ t.body|truncatechars:80 }}</span>
+          </a>
+          <span class="badge badge--{{ t.status }}">{{ t.get_status_display }}</span>
+          <span class="ticket-date">{{ t.created_at|date:"N j, Y" }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No tickets yet. <a href="{% url 'support:submit' %}">Submit one →</a></p>
+  {% endif %}
+</div>
+{% endblock %}
