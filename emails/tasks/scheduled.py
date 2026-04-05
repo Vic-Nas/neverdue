@@ -164,3 +164,14 @@ def cleanup_events(timestamp: int) -> None:
             "emails.cleanup_events: snapshotted and deleted %s needs_review job(s)",
             deleted_review,
         )
+
+
+@app.periodic(cron="0 3 * * *")
+@app.task
+def cleanup_old_tickets(timestamp: int) -> None:
+    """Delete support tickets older than 30 days."""
+    from support.models import Ticket
+    cutoff = timezone.now() - timezone.timedelta(days=30)
+    deleted, _ = Ticket.objects.filter(created_at__lt=cutoff).delete()
+    if deleted:
+        logger.info("support.cleanup_old_tickets: deleted %s ticket(s)", deleted)

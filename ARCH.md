@@ -22,6 +22,7 @@ neverdue/
 ├── llm/                Anthropic extraction pipeline
 │   ├── extractor/      prompts, client, text/image/email extraction, validation
 │   └── pipeline/       orchestration, outcome, saving
+├── support/            User support tickets → LLM triage → GitHub issues
 └── project/            Django settings, URLs, static, templates
     ├── staff/          admin dashboard + bulk actions
     └── static/manual/
@@ -134,7 +135,7 @@ Split into 5 modules, re-exported from `__init__.py`:
 - **`helpers.py`** — `_transient_retry`, `_check_sender_rules`, `_load_user`, `_apply_outcome` (writes done/needs_review/failed from `ProcessingOutcome`; purges `file_b64`/`upload_text`/`upload_context` on non-failed outcomes), `track_llm_usage`.
 - **`processing.py`** — `process_inbound_email` (fetches full email from Resend inside the task), `process_uploaded_file`, `process_text_as_upload`. All follow: retrieve job → set processing → call pipeline → apply outcome.
 - **`reprocess.py`** — `reprocess_events`: serializes pending events, calls `process_text`, deletes originals only on success.
-- **`scheduled.py`** — Periodic tasks: `reset_monthly_scans` (1st of month), `recover_stale_jobs` (every 10 min), `cleanup_events` (2am UTC).
+- **`scheduled.py`** — Periodic tasks: `reset_monthly_scans` (1st of month), `recover_stale_jobs` (every 10 min), `cleanup_events` (2am UTC), `cleanup_old_tickets` (3am UTC — deletes support tickets older than 30 days).
 - **`retry.py`** — `retry_jobs_after_plan_upgrade`, `_retry_failed_jobs`, `_retry_jobs`. Re-enqueues failed jobs by reading `task_args`.
 
 ### `emails/views.py`
@@ -173,9 +174,33 @@ Split into 3 modules, re-exported from `__init__.py`:
 
 `resolve_category` applies user rules in priority order: sender rules → keyword rules → hint-matched existing category → hint-created new category → None. `collect_prompt_injections` gathers applicable prompt-type rules. `_infer_priority` maps category hint keywords to priority levels (1–4).
 
+### `support/models.py`
+
+`Ticket` model with UUID primary key. Fields: `user` (FK to User, SET_NULL), `type` (bug/feature/howto/perf/privacy), `body`, `llm_answer` (populated for howto before user decides), `gh_url`, `status` (pending/awaiting_user/open/closed), `created_at`, `updated_at`. Ordered by `-created_at`.
+
+### `support/llm.py`
+
+Two functions reusing `llm.extractor.client.call_api` directly — no new Anthropic client. `answer_howto(body)` answers "how do I" questions using ARCH.md as context (lazy-loaded once from `settings.BASE_DIR/ARCH.md`). `draft_issue(type, body)` strips PII and returns `(title, body)` for a GitHub issue as parsed JSON. Both use `settings.LLM_MODEL`.
+
+### `support/github.py`
+
+`create_issue(title, body)` opens a GitHub issue on `Vic-Nas/neverdue` via the GitHub REST API using `settings.GITHUB_TOKEN`. Uses `httpx` (already a project dependency). Returns the issue's `html_url`. Raises `ValueError` if token is unconfigured.
+
+### `support/tasks.py`
+
+Single Procrastinate task `process_ticket(ticket_id)`. Branches on ticket type: howto → `answer_howto` → `STATUS_AWAITING`; privacy → `mail_admins` → `STATUS_CLOSED`; all others → `draft_issue` + `create_issue` → `STATUS_OPEN`. Catches `LLMAPIError` and unexpected exceptions with logging — does not re-raise (task is fire-and-forget).
+
+### `support/views.py`
+
+Four login-required views: `submit` (GET renders form, POST creates ticket + defers task + redirects); `ticket_detail` (shows status, answer, GitHub link); `resolve` (AJAX POST — satisfied closes ticket, unsatisfied calls `draft_issue`+`create_issue` inline); `my_tickets` (list view scoped to `request.user`).
+
+### `support/urls.py`
+
+`app_name = "support"`. Four patterns: `""` → `submit`, `"tickets/"` → `my_tickets`, `"<uuid:pk>/"` → `ticket_detail`, `"<uuid:pk>/resolve/"` → `resolve`.
+
 ### `project/settings.py`
 
-Standard Django config. `django.contrib.admin` removed (replaced by `/staff/`). `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres (no Redis). Static files via WhiteNoise. All credentials from env. Procrastinate, httpx, and httpcore loggers set to WARNING to avoid dumping task args and request bodies at DEBUG.
+Standard Django config. `django.contrib.admin` removed (replaced by `/staff/`). `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres (no Redis). Static files via WhiteNoise. All credentials from env. `GITHUB_TOKEN` added for support app. Procrastinate, httpx, and httpcore loggers set to WARNING to avoid dumping task args and request bodies at DEBUG.
 
 ### `project/views.py`
 
@@ -190,7 +215,7 @@ Split into 2 modules, re-exported from `__init__.py`:
 
 ### `project/urls.py`
 
-Imports `project.staff` as `staff_views` and `project.views` as `views`. Staff routes under `/staff/`, app routes delegated to each app's `urls.py`.
+Imports `project.staff` as `staff_views` and `project.views` as `views`. Staff routes under `/staff/`, app routes delegated to each app's `urls.py`. Support app mounted at `/support/`.
 
 ### `project/templates/base.html`
 
@@ -200,6 +225,12 @@ Base layout with top nav (auth-aware links, queue badges, Pro/Upgrade indicator)
 
 All extend `base.html`. `index.html` renders event card grid with bulk-select. `queue_job_detail.html` renders reprocess form and retry button. `rules.html` renders three rule-type forms.
 
+### `project/templates/support/` (3 templates)
+
+- **`submit.html`** — Ticket type radio grid + body textarea. Posts to `support:submit`.
+- **`ticket_detail.html`** — Status-aware: shows spinner if pending, LLM answer + resolve buttons if awaiting_user, GitHub link if open/closed. Resolve buttons call `support:resolve` via fetch.
+- **`my_tickets.html`** — Paginated list of user's own tickets with status badges.
+
 ### `project/static/manual/css/base/`
 
 - **`base.css`** — Design tokens, global resets, typography, button variants, input styles, messages, footer, badge animations.
@@ -208,7 +239,7 @@ All extend `base.html`. `index.html` renders event card grid with bulk-select. `
 
 ### `project/static/manual/css/pages/`
 
-Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.css`, `email-inbox.css`, `events.css`, `login.css`, `preferences.css`, `queue.css`, `staff.css`, `upload.css`.
+Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.css`, `email-inbox.css`, `events.css`, `login.css`, `preferences.css`, `queue.css`, `staff.css`, `support.css`, `upload.css`.
 
 ### `project/static/manual/css/components/`
 

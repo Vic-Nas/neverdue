@@ -1,0 +1,143 @@
+/* project/static/manual/css/pages/support.css */
+
+.support-wrap {
+  max-width: 680px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.support-intro {
+  color: var(--color-text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.support-error {
+  color: var(--color-danger);
+  margin-bottom: 1rem;
+}
+
+.support-notice {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin-top: 1rem;
+}
+
+.support-tickets-link {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.support-back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/* Type selector grid */
+.support-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.support-type-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.support-type-card:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.support-type-card input {
+  accent-color: var(--color-primary);
+}
+
+/* Ticket detail */
+.ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.ticket-date {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-left: auto;
+}
+
+.ticket-body,
+.ticket-answer {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.ticket-resolve {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.ticket-gh {
+  margin-top: 1rem;
+}
+
+/* Status badge colours */
+.badge--pending        { background: var(--color-warning-subtle); color: var(--color-warning); }
+.badge--awaiting_user  { background: var(--color-info-subtle);    color: var(--color-info); }
+.badge--open           { background: var(--color-primary-subtle); color: var(--color-primary); }
+.badge--closed         { background: var(--color-surface);        color: var(--color-text-muted); }
+
+/* Ticket list */
+.ticket-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ticket-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.ticket-row a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ticket-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}

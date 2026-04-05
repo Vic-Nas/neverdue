@@ -1,0 +1,45 @@
+{# project/templates/support/submit.html #}
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Support{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/support.css' %}">{% endblock %}
+
+{% block content %}
+<div class="support-wrap">
+  <h1>Contact Support</h1>
+  <p class="support-intro">Pick a category and describe your issue. We'll get back to you via GitHub or email.</p>
+
+  {% if error %}
+    <p class="support-error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" class="support-form">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label>Type</label>
+      <div class="support-type-grid">
+        {% for value, label in types %}
+          <label class="support-type-card">
+            <input type="radio" name="type" value="{{ value }}" required>
+            <span>{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="body">Description</label>
+      <textarea id="body" name="body" rows="6" required
+        placeholder="Describe your issue in as much detail as you can."></textarea>
+      <span class="form-hint">Do not include passwords or payment info.</span>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </div>
+  </form>
+
+  <p class="support-tickets-link"><a href="{% url 'support:my_tickets' %}">View my previous tickets →</a></p>
+</div>
+{% endblock %}

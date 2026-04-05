@@ -18,4 +18,5 @@ urlpatterns = [
     path('emails/',    include('emails.urls')),
     path('legal/',     include('project.legal_urls')),
     path('help/',      views.help_page, name='help'),
+    path('support/',   include('support.urls')),
 ]
