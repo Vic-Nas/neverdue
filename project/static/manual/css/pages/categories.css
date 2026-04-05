@@ -53,8 +53,18 @@
 }
 
 /* ── Selection mode ── */
-.cat-card__checkbox { display: none; }
-body.cat-selecting .cat-card { cursor: pointer; }
+.cat-card__checkbox {
+  display: none;
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+body.cat-selecting .cat-card { cursor: pointer; padding-right: 3rem; }
 body.cat-selecting .cat-card__checkbox { display: inline-block; }
 .cat-card--selected { background: var(--accent-muted); }
 
@@ -197,15 +207,62 @@ body.cat-selecting .cat-card__checkbox { display: inline-block; }
 /* Rules page                                                      */
 /* ──────────────────────────────────────────────────────────────── */
 
-.rule-row {
+/* ── Rule card (matches cat-card layout) ── */
+.rule-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  transition: box-shadow 0.15s;
+}
+
+.rule-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.rule-card__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
 }
-.rule-row:last-child { border-bottom: none; }
+
+.rule-card__name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  min-width: 0;
+}
+
+.rule-card__pattern {
+  font-family: monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rule-card__pattern--muted { color: var(--text-muted); font-family: inherit; }
+
+.rule-card__actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.rule-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+}
+
+.rule-card__detail { /* inherits from meta */ }
 
 /* Type badge */
 .rule-type-badge {
@@ -222,21 +279,6 @@ body.cat-selecting .cat-card__checkbox { display: inline-block; }
 .rule-type-badge--sender  { background: #e0f0ff; color: #1a5a99; }
 .rule-type-badge--keyword { background: #e6f4ea; color: #2d6a4f; }
 .rule-type-badge--prompt  { background: #fef3e0; color: #92400e; }
-
-.rule-pattern {
-  font-family: monospace;
-  font-size: 0.85rem;
-  flex: 1;
-  min-width: 120px;
-}
-
-.rule-action-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.875rem;
-  flex: 2;
-}
 
 .rule-discard-badge {
   display: inline-block;
@@ -255,17 +297,21 @@ body.cat-selecting .cat-card__checkbox { display: inline-block; }
   font-size: 0.82rem;
 }
 
-.rule-group-label { margin-bottom: 0.5rem; }
-.rule-group-label--spaced { margin-top: 1rem; }
-.rule-pattern--muted { color: var(--text-muted); }
-
 /* ── Rule list + selection mode ── */
-.rule-list { display: flex; flex-direction: column; }
-.rule-row__checkbox {
-  width: 18px; height: 18px;
-  cursor: pointer;
+.rule-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.rule-card__checkbox {
+  display: none;
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
   accent-color: var(--accent);
-  flex-shrink: 0;
+  cursor: pointer;
 }
-body.selecting-rules .rule-row__checkbox { display: inline-block !important; }
+body.selecting-rules .rule-card { cursor: pointer; padding-right: 3rem; }
+body.selecting-rules .rule-card__checkbox { display: inline-block; }
+.rule-card--selected { background: var(--accent-muted); }
 body.selecting-rules .rule-delete-btn { display: none; }

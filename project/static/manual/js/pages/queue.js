@@ -89,7 +89,7 @@
   function enterSelectMode() {
     selectMode = true;
     selectedIds.clear();
-    if (bulkBar) bulkBar.hidden = false;
+    if (bulkBar) bulkBar.classList.add('visible');
     if (enterSelectBtn) enterSelectBtn.hidden = true;
     selectColHeaders.forEach(function (h) { h.hidden = false; });
     if (lastJobs) render(lastJobs);
@@ -99,7 +99,7 @@
   function exitSelectMode() {
     selectMode = false;
     selectedIds.clear();
-    if (bulkBar) bulkBar.hidden = true;
+    if (bulkBar) bulkBar.classList.remove('visible');
     if (enterSelectBtn) enterSelectBtn.hidden = false;
     selectColHeaders.forEach(function (h) { h.hidden = true; });
     if (selectAllCb) selectAllCb.checked = false;
@@ -184,8 +184,8 @@
   function render(jobs) {
     var visible = applyFilters(jobs);
 
-    // Show/hide select button based on data availability
-    if (enterSelectBtn) enterSelectBtn.hidden = !visible || visible.length === 0;
+    // Show/hide select button based on data availability (skip in select mode)
+    if (enterSelectBtn && !selectMode) enterSelectBtn.hidden = !visible || visible.length === 0;
 
     if (!visible || visible.length === 0) {
       table.hidden = true;

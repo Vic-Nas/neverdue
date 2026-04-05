@@ -1,7 +1,6 @@
 {# partials/pagination.html — shared numbered pagination #}
 {# Expects: page_obj (Django Page), request (auto-available) #}
 {% load page_qs %}
-{% if page_obj.has_other_pages %}
 <nav class="pagination">
   {% if page_obj.has_previous %}
   <a href="?{{ page_obj.previous_page_number|page_qs:request }}" class="pagination__link">←</a>
@@ -21,4 +20,3 @@
   <a href="?{{ page_obj.next_page_number|page_qs:request }}" class="pagination__link">→</a>
   {% endif %}
 </nav>
-{% endif %}
