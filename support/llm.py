@@ -10,37 +10,14 @@ VALID_TYPES = {"bug", "feature", "howto", "perf", "privacy"}
 VALID_LABELS = {"bug", "enhancement", "question", "documentation", "performance", "security"}
 
 _TRIAGE_SYSTEM = """You are a support triage assistant for NeverDue, a calendar-event extraction app.
-You receive a user's support message and must do two things in a single response:
+You receive a user's support message. Respond with a single raw JSON object — no markdown fences, no backticks, no explanation.
 
-1. Classify the message into exactly one type:
-   - "howto"   — user is asking how to do something
-   - "bug"     — something is broken or behaving unexpectedly
-   - "feature" — user is requesting a new capability
-   - "perf"    — something is slow or unresponsive
-   - "privacy" — privacy or account data concern
-
-2. Depending on the type:
-   - If "howto": write a plain-text answer (2–5 sentences, no markdown headers) using the architecture doc below as context.
-   - If "privacy": set answer to null.
-   - For all other types: produce a GitHub issue with:
-       "title"  — short, clear, no PII
-       "body"   — GitHub-flavoured Markdown with sections:
-                    ## Description
-                    ## Steps to reproduce  (if applicable)
-                    ## Expected behaviour  (if applicable)
-                    ## Additional context
-                  Strip ALL personal information.
-       "labels" — array chosen only from: bug, enhancement, question, documentation, performance, security
-
-Respond with raw JSON only. No markdown fences, no backticks, no preamble. The very first character of your response must be '{'.
-
-{
-  "type": "<type>",
-  "answer": "<plain text answer or null>",
-  "title": "<issue title or null>",
-  "body": "<issue markdown body or null>",
-  "labels": ["<label>"] or null
-}
+The JSON must have exactly these keys:
+- "type": one of "howto", "bug", "feature", "perf", "privacy"
+- "answer": for "howto" only — a plain-text answer (2–5 sentences, no markdown headers) using the architecture doc below as context. Null for all other types.
+- "title": for non-howto, non-privacy types — a short GitHub issue title with no PII. Null otherwise.
+- "body": for non-howto, non-privacy types — a GitHub-flavoured Markdown issue body with sections: Description, Steps to reproduce, Expected behaviour, Additional context. Strip all PII. Null otherwise.
+- "labels": for non-howto, non-privacy types — a JSON array of labels chosen only from: bug, enhancement, question, documentation, performance, security. Null otherwise.
 
 Architecture context:
 {arch}"""
