@@ -35,8 +35,8 @@
       <div class="ticket-resolve" id="resolve-block">
         <p class="ticket-resolve__prompt">Did this answer your question?</p>
         <div class="ticket-resolve__actions">
-          <button class="btn btn-primary" onclick="resolve(true)">Yes, resolved ✓</button>
-          <button class="btn btn-ghost" onclick="resolve(false)">No</button>
+          <button class="btn btn-primary" id="btn-yes" onclick="resolve(true)">Yes, resolved ✓</button>
+          <button class="btn btn-ghost" id="btn-no" onclick="resolve(false)">No</button>
         </div>
         <p id="resolve-msg" class="support-notice" hidden></p>
       </div>
@@ -64,8 +64,14 @@
 {% if ticket.status == "awaiting_user" %}
 <script>
 async function resolve(satisfied) {
-  const msg = document.getElementById('resolve-msg');
-  const block = document.getElementById('resolve-block');
+  const btnYes = document.getElementById('btn-yes');
+  const btnNo  = document.getElementById('btn-no');
+  const msg    = document.getElementById('resolve-msg');
+  const block  = document.getElementById('resolve-block');
+
+  btnYes.disabled = true;
+  btnNo.disabled  = true;
+
   const resp = await fetch("{% url 'support:resolve' ticket.id %}", {
     method: 'POST',
     headers: {
@@ -75,11 +81,15 @@ async function resolve(satisfied) {
     body: JSON.stringify({ satisfied }),
   });
   const data = await resp.json();
+
   if (!resp.ok) {
     msg.textContent = data.error || 'Something went wrong.';
     msg.hidden = false;
+    btnYes.disabled = false;
+    btnNo.disabled  = false;
     return;
   }
+
   block.innerHTML = satisfied
     ? '<p class="support-notice">✓ Glad it helped! Ticket closed.</p>'
     : `<p class="support-notice">Issue opened on GitHub. <a href="${data.gh_url}" target="_blank" rel="noopener">View it here →</a></p>`;
