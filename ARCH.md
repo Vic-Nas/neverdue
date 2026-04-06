@@ -176,31 +176,31 @@ Split into 3 modules, re-exported from `__init__.py`:
 
 ### `support/models.py`
 
-`Ticket` model with UUID primary key. Fields: `user` (FK to User, SET_NULL), `type` (bug/feature/howto/perf/privacy — default `bug`, overwritten by LLM triage), `body`, `llm_answer` (populated for howto before user decides), `gh_url`, `status` (pending/awaiting_user/open/closed), `created_at`, `updated_at`. Ordered by `-created_at`.
+`Ticket` model with UUID primary key. Fields: `user` (FK to User, SET_NULL), `type` (bug/feature/howto/perf/privacy — default `bug`, overwritten by LLM triage), `body`, `llm_answer` (populated for howto and privacy tickets before user sees result), `gh_url`, `status` (pending/awaiting_user/open/closed), `created_at`, `updated_at`. Ordered by `-created_at`. Module-level `CONTACT_SERVICES` dict maps service keys (privacy, billing, legal, abuse) to email prefixes for `{key}@service.neverdue.ca`.
 
 ### `support/llm.py`
 
-Single public function `triage(body)` — one Anthropic API call that classifies the ticket type and produces all downstream output simultaneously: a plain-text `answer` for howto tickets, or `(title, body, labels)` for a GitHub issue for all other types. Lazy-loads ARCH.md once as context. Returns a dict with keys `type`, `answer`, `title`, `body`, `labels`. `VALID_TYPES` and `VALID_LABELS` guard against invalid LLM output. Reuses `llm.extractor.client.call_api` — no new Anthropic client.
+Single public function `triage(body)` — one Anthropic API call that classifies the ticket type and produces all downstream output simultaneously: a plain-text `answer` for howto tickets, or `(title, body, labels)` for a GitHub issue for all other types. Privacy tickets return null for all issue fields (handled outside LLM). Lazy-loads ARCH.md once as context. Returns a dict with keys `type`, `answer`, `title`, `body`, `labels`. `VALID_TYPES` and `VALID_LABELS` guard against invalid LLM output. Reuses `llm.extractor.client.call_api` — no new Anthropic client.
 
 ### `support/github.py`
 
-`create_issue(title, body, labels)` opens a GitHub issue on `Vic-Nas/neverdue` via the GitHub REST API using `settings.GITHUB_TOKEN`. Uses `httpx` (already a project dependency). Returns the issue's `html_url`. Raises `ValueError` if token is unconfigured.
+`create_issue(title, body, labels)` opens a GitHub issue on `Vic-Nas/neverdue` via the GitHub REST API using `settings.GITHUB_TOKEN`. `verify_github_signature(body, signature)` validates `X-Hub-Signature-256` HMAC against `settings.GITHUB_WEBHOOK_SECRET`. Uses `httpx`. Returns issue `html_url`. Raises `ValueError` if token is unconfigured.
 
 ### `support/tasks.py`
 
-Single Procrastinate task `process_ticket(ticket_id)`. Calls `triage(body)` once, then branches on the returned type: howto → save answer → `STATUS_AWAITING`; privacy → `mail_admins` → `STATUS_CLOSED`; all others → `create_issue` → `STATUS_OPEN`. Always persists the LLM-determined type back to the ticket. Catches `LLMAPIError` and unexpected exceptions with logging — does not re-raise.
+Single Procrastinate task `process_ticket(ticket_id)`. Calls `triage(body)` once, then branches: howto → save answer → `STATUS_AWAITING`; privacy → set `llm_answer` to contact address from `CONTACT_SERVICES` → `STATUS_AWAITING` (no GitHub, no email); all others → `create_issue` → `STATUS_OPEN`. Always persists the LLM-determined type. Catches `LLMAPIError` and unexpected exceptions with logging.
 
 ### `support/views.py`
 
-Four login-required views: `submit` (GET renders bare textarea form, POST creates ticket with default type `bug` + defers task + redirects — no type picker, LLM assigns type in the background); `ticket_detail`; `resolve` (AJAX POST — satisfied closes ticket, unsatisfied calls `triage` again to draft and open a GitHub issue); `my_tickets`.
+Five login-required views plus one public webhook: `submit`; `ticket_detail`; `resolve` (AJAX — satisfied closes ticket, unsatisfied calls `triage` + `create_issue`); `my_tickets`; `github_webhook` (CSRF-exempt POST — verifies `X-Hub-Signature-256`, handles `closed` issue events, updates matching ticket to `STATUS_CLOSED` by `gh_url`).
 
 ### `support/urls.py`
 
-`app_name = "support"`. Four patterns: `""` → `submit`, `"tickets/"` → `my_tickets`, `"<uuid:pk>/"` → `ticket_detail`, `"<uuid:pk>/resolve/"` → `resolve`.
+`app_name = "support"`. Five patterns: `""` → `submit`, `"tickets/"` → `my_tickets`, `"<uuid:pk>/"` → `ticket_detail`, `"<uuid:pk>/resolve/"` → `resolve`, `"gh-webhook/"` → `github_webhook`.
 
 ### `project/settings.py`
 
-Standard Django config. `django.contrib.admin` removed (replaced by `/staff/`). `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres (no Redis). Static files via WhiteNoise. All credentials from env. `GITHUB_TOKEN` added for support app. Procrastinate, httpx, and httpcore loggers set to WARNING to avoid dumping task args and request bodies at DEBUG.
+Standard Django config. `django.contrib.admin` removed (replaced by `/staff/`). `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres (no Redis). Static files via WhiteNoise. All credentials from env. `GITHUB_TOKEN` and `GITHUB_WEBHOOK_SECRET` used by support app. Procrastinate, httpx, and httpcore loggers set to WARNING to avoid dumping task args and request bodies at DEBUG.
 
 ### `project/views.py`
 
@@ -228,7 +228,7 @@ All extend `base.html`. `index.html` renders event card grid with bulk-select. `
 ### `project/templates/support/` (3 templates)
 
 - **`submit.html`** — Bare textarea + submit button. No type picker; LLM classifies on submission.
-- **`ticket_detail.html`** — Status-aware: spinner if pending, LLM answer + Yes / No resolve buttons if awaiting_user (No triggers issue creation inline via fetch), GitHub link if open/closed.
+- **`ticket_detail.html`** — Status-aware: spinner if pending; for `awaiting_user` shows LLM answer — howto tickets show Yes/No resolve buttons, privacy tickets show contact message only; GitHub link if open/closed.
 - **`my_tickets.html`** — Card list matching categories/rules aesthetic; type badge colour-coded by LLM-assigned type.
 
 ### `project/static/manual/css/base/`
@@ -259,6 +259,7 @@ Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.cs
 - **`queue.js`** — Client-side queue table renderer, polls `queue_status` every 4s.
 - **`queue_action.js`** — Reprocess button (needs_review) and retry button (failed) in one IIFE.
 - **`rules.js`** — AJAX add/delete rules for all three rule types.
+- **`support.js`** — Resolve flow for howto tickets: disables Yes/No buttons on click, POSTs to `support:resolve`, replaces block with result on success, re-enables on error.
 - **`upload.js`** — Drag-and-drop file input enhancement.
 
 ---

@@ -2,8 +2,9 @@
 import json
 import logging
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from llm.extractor.client import LLMAPIError
@@ -74,3 +75,31 @@ def resolve(request, pk):
 def my_tickets(request):
     tickets = Ticket.objects.filter(user=request.user)
     return render(request, "support/my_tickets.html", {"tickets": tickets})
+
+
+@csrf_exempt
+@require_POST
+def github_webhook(request):
+    """Receive GitHub issue events and sync ticket status."""
+    from support.github import verify_github_signature
+
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not verify_github_signature(request.body, signature):
+        return HttpResponse(status=403)
+
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return HttpResponse(status=400)
+
+    if data.get("action") != "closed":
+        return HttpResponse(status=200)
+
+    gh_url = data.get("issue", {}).get("html_url", "")
+    if not gh_url:
+        return HttpResponse(status=200)
+
+    Ticket.objects.filter(gh_url=gh_url, status=Ticket.STATUS_OPEN).update(
+        status=Ticket.STATUS_CLOSED
+    )
+    return HttpResponse(status=200)

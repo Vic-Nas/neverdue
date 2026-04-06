@@ -1,6 +1,5 @@
 # support/tasks.py
 import logging
-from django.core.mail import mail_admins
 from procrastinate.contrib.django import app
 from llm.extractor.client import LLMAPIError
 
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 @app.task
 def process_ticket(ticket_id: str) -> None:
-    from support.models import Ticket
+    from support.models import Ticket, CONTACT_SERVICES
     from support.llm import triage
     from support.github import create_issue
 
@@ -21,8 +20,6 @@ def process_ticket(ticket_id: str) -> None:
 
     try:
         result = triage(ticket.body)
-
-        # Always persist the LLM-determined type
         ticket.type = result["type"]
 
         if result["type"] == Ticket.TYPE_HOWTO:
@@ -32,12 +29,13 @@ def process_ticket(ticket_id: str) -> None:
             return
 
         if result["type"] == Ticket.TYPE_PRIVACY:
-            mail_admins(
-                subject=f"[Support] Privacy/account ticket {ticket.id}",
-                message=f"User: {ticket.user_id}\n\n{ticket.body}",
+            service = CONTACT_SERVICES["privacy"]
+            ticket.llm_answer = (
+                f"For privacy and account concerns, please contact us directly at "
+                f"{service}@service.neverdue.ca and we'll get back to you."
             )
-            ticket.status = Ticket.STATUS_CLOSED
-            ticket.save(update_fields=["type", "status", "updated_at"])
+            ticket.status = Ticket.STATUS_AWAITING
+            ticket.save(update_fields=["type", "llm_answer", "status", "updated_at"])
             return
 
         gh_url = create_issue(result["title"], result["body"], result["labels"] or [])
