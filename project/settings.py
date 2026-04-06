@@ -144,8 +144,10 @@ RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
 LLM_API_KEY = os.environ.get('LLM_API_KEY')
 LLM_MODEL   = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
 
-# GitHub — used by support app to open issues
+
+# GitHub — used by support app to open issues and verify webhooks
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
 
 # Procrastinate — uses the default Django DB (Postgres). No broker needed.
 PROCRASTINATE_ON_APP_READY = None  # tasks auto-discovered via INSTALLED_APPS
