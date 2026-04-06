@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from llm.extractor.client import LLMAPIError
 from support.models import Ticket
 from support.tasks import process_ticket
 
@@ -15,18 +16,16 @@ logger = logging.getLogger(__name__)
 @login_required
 def submit(request):
     if request.method == "POST":
-        ticket_type = request.POST.get("type", "")
         body = request.POST.get("body", "").strip()
-        if ticket_type not in dict(Ticket.TYPE_CHOICES) or not body:
+        if not body:
             return render(request, "support/submit.html", {
-                "types": Ticket.TYPE_CHOICES,
-                "error": "Please select a type and describe your issue.",
+                "error": "Please describe your issue.",
             })
-        ticket = Ticket.objects.create(user=request.user, type=ticket_type, body=body)
+        ticket = Ticket.objects.create(user=request.user, type=Ticket.TYPE_BUG, body=body)
         process_ticket.defer(ticket_id=str(ticket.id))
         return redirect("support:detail", pk=ticket.id)
 
-    return render(request, "support/submit.html", {"types": Ticket.TYPE_CHOICES})
+    return render(request, "support/submit.html", {})
 
 
 @login_required
@@ -38,7 +37,7 @@ def ticket_detail(request, pk):
 @login_required
 @require_POST
 def resolve(request, pk):
-    """AJAX — howto satisfied/not-satisfied branch."""
+    """AJAX — howto satisfied/unsatisfied branch."""
     ticket = get_object_or_404(Ticket, pk=pk, user=request.user)
     if ticket.status != Ticket.STATUS_AWAITING:
         return JsonResponse({"error": "Invalid state."}, status=400)
@@ -54,11 +53,11 @@ def resolve(request, pk):
         ticket.save(update_fields=["status", "updated_at"])
         return JsonResponse({"status": "closed"})
 
-    from support.llm import draft_issue
+    from support.llm import triage
     from support.github import create_issue
     try:
-        title, body, labels = draft_issue(ticket.type, ticket.body)
-        gh_url = create_issue(title, body, labels)
+        result = triage(ticket.body)
+        gh_url = create_issue(result["title"], result["body"], result["labels"] or [])
         ticket.gh_url = gh_url
         ticket.status = Ticket.STATUS_OPEN
         ticket.save(update_fields=["gh_url", "status", "updated_at"])

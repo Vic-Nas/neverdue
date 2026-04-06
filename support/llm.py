@@ -1,10 +1,47 @@
 # support/llm.py
+import json
 from django.conf import settings
-from llm.extractor.client import call_api, LLMAPIError  # noqa: reuse existing client
+from llm.extractor.client import call_api  # noqa: reuse existing client
 
 _ARCH = None
 
+VALID_TYPES = {"bug", "feature", "howto", "perf", "privacy"}
 VALID_LABELS = {"bug", "enhancement", "question", "documentation", "performance", "security"}
+
+_TRIAGE_SYSTEM = """You are a support triage assistant for NeverDue, a calendar-event extraction app.
+You receive a user's support message and must do two things in a single response:
+
+1. Classify the message into exactly one type:
+   - "howto"   — user is asking how to do something
+   - "bug"     — something is broken or behaving unexpectedly
+   - "feature" — user is requesting a new capability
+   - "perf"    — something is slow or unresponsive
+   - "privacy" — privacy or account data concern
+
+2. Depending on the type:
+   - If "howto": write a plain-text answer (2–5 sentences, no markdown headers) using the architecture doc below as context.
+   - If "privacy": set answer to null.
+   - For all other types: produce a GitHub issue with:
+       "title"  — short, clear, no PII
+       "body"   — GitHub-flavoured Markdown with sections:
+                    ## Description
+                    ## Steps to reproduce  (if applicable)
+                    ## Expected behaviour  (if applicable)
+                    ## Additional context
+                  Strip ALL personal information.
+       "labels" — array chosen only from: bug, enhancement, question, documentation, performance, security
+
+Respond with raw JSON only, no markdown fences, matching this shape:
+{
+  "type": "<type>",
+  "answer": "<plain text answer or null>",
+  "title": "<issue title or null>",
+  "body": "<issue markdown body or null>",
+  "labels": ["<label>"] or null
+}
+
+Architecture context:
+{arch}"""
 
 
 def _arch_md() -> str:
@@ -17,52 +54,31 @@ def _arch_md() -> str:
     return _ARCH
 
 
-_HOWTO_SYSTEM = """You are a concise support assistant for NeverDue, a calendar-event extraction app.
-Answer the user's question directly using the architecture doc below as context.
-Be helpful, plain, and brief — 2–5 sentences max. No markdown headers.
+def triage(user_body: str) -> dict:
+    """
+    Single LLM call that classifies the ticket and produces all needed output.
 
-{arch}"""
-
-_ISSUE_SYSTEM = """You are preparing a GitHub issue for NeverDue (internal project).
-Analyse the user's message and produce a JSON object with exactly three keys:
-
-"title"  — short, clear issue title. No user names, emails, or personal info.
-"body"   — full GitHub-flavoured Markdown body. Use:
-             ## Description
-             ## Steps to reproduce  (if applicable)
-             ## Expected behaviour  (if applicable)
-             ## Additional context
-           Strip ALL personal information. Be detailed and technical where possible.
-"labels" — JSON array of labels that best describe the issue. Choose only from:
-             bug, enhancement, question, documentation, performance, security
-           Pick what fits the actual content — ignore what the user self-reported.
-           Use multiple labels if appropriate.
-
-Respond with raw JSON only, no markdown fences."""
-
-
-def answer_howto(user_body: str) -> str:
-    """Call the LLM to answer a 'how do I' question. Returns plain text answer."""
-    system = _HOWTO_SYSTEM.format(arch=_arch_md())
-    response = call_api(
-        model=settings.LLM_MODEL,
-        max_tokens=512,
-        system=system,
-        messages=[{"role": "user", "content": user_body}],
-    )
-    return response.content[0].text.strip()
-
-
-def draft_issue(ticket_type: str, user_body: str) -> tuple[str, str, list[str]]:
-    """Return (title, body, labels) for a GitHub issue, PII stripped, labels LLM-determined."""
-    import json
-    prompt = f"User-selected category: {ticket_type}\n\nUser message:\n{user_body}"
+    Returns a dict with keys: type, answer, title, body, labels
+      - type:   one of VALID_TYPES
+      - answer: plain-text string for howto, None otherwise
+      - title:  GitHub issue title for non-howto/non-privacy, None otherwise
+      - body:   GitHub issue markdown body, None otherwise
+      - labels: list of GitHub label strings, None otherwise
+    """
+    system = _TRIAGE_SYSTEM.format(arch=_arch_md())
     response = call_api(
         model=settings.LLM_MODEL,
         max_tokens=1024,
-        system=_ISSUE_SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
+        system=system,
+        messages=[{"role": "user", "content": user_body}],
     )
     data = json.loads(response.content[0].text.strip())
-    labels = [l for l in data.get("labels", []) if l in VALID_LABELS]
-    return data["title"], data["body"], labels
+    ticket_type = data.get("type") if data.get("type") in VALID_TYPES else "bug"
+    labels = [l for l in (data.get("labels") or []) if l in VALID_LABELS]
+    return {
+        "type":   ticket_type,
+        "answer": data.get("answer"),
+        "title":  data.get("title"),
+        "body":   data.get("body"),
+        "labels": labels or None,
+    }
