@@ -1,5 +1,6 @@
 # support/llm.py
 import json
+import re
 from django.conf import settings
 from llm.extractor.client import call_api  # noqa: reuse existing client
 
@@ -31,7 +32,8 @@ You receive a user's support message and must do two things in a single response
                   Strip ALL personal information.
        "labels" — array chosen only from: bug, enhancement, question, documentation, performance, security
 
-Respond with raw JSON only, no markdown fences, matching this shape:
+Respond with raw JSON only. No markdown fences, no backticks, no preamble. The very first character of your response must be '{'.
+
 {
   "type": "<type>",
   "answer": "<plain text answer or null>",
@@ -54,6 +56,14 @@ def _arch_md() -> str:
     return _ARCH
 
 
+def _parse_json(text: str) -> dict:
+    """Strip markdown fences if present, then parse JSON."""
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return json.loads(text.strip())
+
+
 def triage(user_body: str) -> dict:
     """
     Single LLM call that classifies the ticket and produces all needed output.
@@ -72,7 +82,7 @@ def triage(user_body: str) -> dict:
         system=system,
         messages=[{"role": "user", "content": user_body}],
     )
-    data = json.loads(response.content[0].text.strip())
+    data = _parse_json(response.content[0].text)
     ticket_type = data.get("type") if data.get("type") in VALID_TYPES else "bug"
     labels = [l for l in (data.get("labels") or []) if l in VALID_LABELS]
     return {
