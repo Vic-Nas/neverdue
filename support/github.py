@@ -1,9 +1,11 @@
 # support/github.py
+import hashlib
+import hmac
 import httpx
 from django.conf import settings
 
 _REPO = "Vic-Nas/neverdue"
-_API = "https://api.github.com"
+_API  = "https://api.github.com"
 
 
 def create_issue(title: str, body: str, labels: list[str] | None = None) -> str:
@@ -26,3 +28,14 @@ def create_issue(title: str, body: str, labels: list[str] | None = None) -> str:
     )
     resp.raise_for_status()
     return resp.json()["html_url"]
+
+
+def verify_github_signature(body: bytes, signature: str) -> bool:
+    """Verify X-Hub-Signature-256 from GitHub webhook."""
+    secret = getattr(settings, "GITHUB_WEBHOOK_SECRET", "")
+    if not secret:
+        return False
+    expected = "sha256=" + hmac.new(
+        secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)

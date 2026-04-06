@@ -29,17 +29,22 @@
 
     {% elif ticket.status == "awaiting_user" %}
       <div class="ticket-card__answer">
-        <p class="ticket-card__label">Answer</p>
+        <p class="ticket-card__label">
+          {% if ticket.type == "privacy" %}Contact{% else %}Answer{% endif %}
+        </p>
         <p>{{ ticket.llm_answer }}</p>
       </div>
-      <div class="ticket-resolve" id="resolve-block">
+      {% if ticket.type != "privacy" %}
+      <div class="ticket-resolve" id="resolve-block"
+           data-resolve-url="{% url 'support:resolve' ticket.id %}">
         <p class="ticket-resolve__prompt">Did this answer your question?</p>
         <div class="ticket-resolve__actions">
-          <button class="btn btn-primary" id="btn-yes" onclick="resolve(true)">Yes, resolved ✓</button>
-          <button class="btn btn-ghost" id="btn-no" onclick="resolve(false)">No</button>
+          <button class="btn btn-primary" id="btn-yes" data-satisfied="true">Yes, resolved ✓</button>
+          <button class="btn btn-ghost"   id="btn-no"  data-satisfied="false">No</button>
         </div>
         <p id="resolve-msg" class="support-notice" hidden></p>
       </div>
+      {% endif %}
 
     {% elif ticket.status == "open" %}
       <div class="ticket-card__gh">
@@ -60,40 +65,10 @@
   </div>
 
 </div>
+{% endblock %}
 
-{% if ticket.status == "awaiting_user" %}
-<script>
-async function resolve(satisfied) {
-  const btnYes = document.getElementById('btn-yes');
-  const btnNo  = document.getElementById('btn-no');
-  const msg    = document.getElementById('resolve-msg');
-  const block  = document.getElementById('resolve-block');
-
-  btnYes.disabled = true;
-  btnNo.disabled  = true;
-
-  const resp = await fetch("{% url 'support:resolve' ticket.id %}", {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
-    },
-    body: JSON.stringify({ satisfied }),
-  });
-  const data = await resp.json();
-
-  if (!resp.ok) {
-    msg.textContent = data.error || 'Something went wrong.';
-    msg.hidden = false;
-    btnYes.disabled = false;
-    btnNo.disabled  = false;
-    return;
-  }
-
-  block.innerHTML = satisfied
-    ? '<p class="support-notice">✓ Glad it helped! Ticket closed.</p>'
-    : `<p class="support-notice">Issue opened on GitHub. <a href="${data.gh_url}" target="_blank" rel="noopener">View it here →</a></p>`;
-}
-</script>
+{% block extra_js %}
+{% if ticket.status == "awaiting_user" and ticket.type != "privacy" %}
+<script src="{% static 'js/pages/support.js' %}"></script>
 {% endif %}
 {% endblock %}

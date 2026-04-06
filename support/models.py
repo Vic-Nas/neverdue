@@ -4,11 +4,21 @@ from django.db import models
 from django.conf import settings
 
 
+# Mailboxes users should contact for sensitive request types.
+# Format: address is {key}@service.neverdue.ca
+CONTACT_SERVICES = {
+    "privacy": "privacy",
+    "billing": "billing",
+    "legal":   "legal",
+    "abuse":   "abuse",
+}
+
+
 class Ticket(models.Model):
-    TYPE_BUG = "bug"
+    TYPE_BUG     = "bug"
     TYPE_FEATURE = "feature"
-    TYPE_HOWTO = "howto"
-    TYPE_PERF = "perf"
+    TYPE_HOWTO   = "howto"
+    TYPE_PERF    = "perf"
     TYPE_PRIVACY = "privacy"
     TYPE_CHOICES = [
         (TYPE_BUG,     "🐛 Something is broken"),
@@ -18,11 +28,11 @@ class Ticket(models.Model):
         (TYPE_PRIVACY, "🔐 Privacy / account issue"),
     ]
 
-    STATUS_PENDING = "pending"          # task not yet processed
-    STATUS_AWAITING = "awaiting_user"   # howto: LLM answered, waiting for feedback
-    STATUS_OPEN = "open"                # GitHub issue created
-    STATUS_CLOSED = "closed"
-    STATUS_CHOICES = [
+    STATUS_PENDING  = "pending"
+    STATUS_AWAITING = "awaiting_user"
+    STATUS_OPEN     = "open"
+    STATUS_CLOSED   = "closed"
+    STATUS_CHOICES  = [
         (STATUS_PENDING,  "Pending"),
         (STATUS_AWAITING, "Awaiting user"),
         (STATUS_OPEN,     "Open"),
@@ -34,9 +44,9 @@ class Ticket(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, related_name="support_tickets",
     )
-    type       = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    type       = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_BUG)
     body       = models.TextField()
-    llm_answer = models.TextField(blank=True)   # populated for howto before issue
+    llm_answer = models.TextField(blank=True)
     gh_url     = models.URLField(blank=True)
     status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
