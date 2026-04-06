@@ -5,24 +5,39 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/support.css' %}">{% endblock %}
 
 {% block content %}
-<div class="support-wrap">
-  <h1>My Tickets</h1>
+<div class="page">
+
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">My Tickets</h1>
+      <p class="page__sub">Your support history.</p>
+    </div>
+    <div class="page__actions">
+      <a href="{% url 'support:submit' %}" class="btn btn-primary">+ New ticket</a>
+    </div>
+  </div>
 
   {% if tickets %}
-    <ul class="ticket-list">
+    <div class="ticket-list">
       {% for t in tickets %}
-        <li class="ticket-row">
-          <a href="{% url 'support:detail' t.id %}">
-            <span class="badge">{{ t.get_type_display }}</span>
-            <span class="ticket-snippet">{{ t.body|truncatechars:80 }}</span>
-          </a>
-          <span class="badge badge--{{ t.status }}">{{ t.get_status_display }}</span>
-          <span class="ticket-date">{{ t.created_at|date:"N j, Y" }}</span>
-        </li>
+        <a href="{% url 'support:detail' t.id %}" class="ticket-card ticket-card--link">
+          <div class="ticket-card__header">
+            <div class="ticket-card__meta">
+              <span class="ticket-type-badge ticket-type-badge--{{ t.type }}">{{ t.get_type_display }}</span>
+              <span class="badge badge--{{ t.status }}">{{ t.get_status_display }}</span>
+            </div>
+            <span class="ticket-date">{{ t.created_at|date:"N j, Y" }}</span>
+          </div>
+          <p class="ticket-snippet">{{ t.body|truncatechars:120 }}</p>
+        </a>
       {% endfor %}
-    </ul>
+    </div>
   {% else %}
-    <p>No tickets yet. <a href="{% url 'support:submit' %}">Submit one →</a></p>
+    <div class="empty-state">
+      <p class="empty-state__text">No tickets yet.</p>
+      <a href="{% url 'support:submit' %}" class="btn btn-primary">Submit one →</a>
+    </div>
   {% endif %}
+
 </div>
 {% endblock %}

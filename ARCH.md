@@ -176,23 +176,23 @@ Split into 3 modules, re-exported from `__init__.py`:
 
 ### `support/models.py`
 
-`Ticket` model with UUID primary key. Fields: `user` (FK to User, SET_NULL), `type` (bug/feature/howto/perf/privacy), `body`, `llm_answer` (populated for howto before user decides), `gh_url`, `status` (pending/awaiting_user/open/closed), `created_at`, `updated_at`. Ordered by `-created_at`.
+`Ticket` model with UUID primary key. Fields: `user` (FK to User, SET_NULL), `type` (bug/feature/howto/perf/privacy — default `bug`, overwritten by LLM triage), `body`, `llm_answer` (populated for howto before user decides), `gh_url`, `status` (pending/awaiting_user/open/closed), `created_at`, `updated_at`. Ordered by `-created_at`.
 
 ### `support/llm.py`
 
-Two functions reusing `llm.extractor.client.call_api` directly — no new Anthropic client. `answer_howto(body)` answers "how do I" questions using ARCH.md as context (lazy-loaded once from `settings.BASE_DIR/ARCH.md`). `draft_issue(type, body)` strips PII and returns `(title, body)` for a GitHub issue as parsed JSON. Both use `settings.LLM_MODEL`.
+Single public function `triage(body)` — one Anthropic API call that classifies the ticket type and produces all downstream output simultaneously: a plain-text `answer` for howto tickets, or `(title, body, labels)` for a GitHub issue for all other types. Lazy-loads ARCH.md once as context. Returns a dict with keys `type`, `answer`, `title`, `body`, `labels`. `VALID_TYPES` and `VALID_LABELS` guard against invalid LLM output. Reuses `llm.extractor.client.call_api` — no new Anthropic client.
 
 ### `support/github.py`
 
-`create_issue(title, body)` opens a GitHub issue on `Vic-Nas/neverdue` via the GitHub REST API using `settings.GITHUB_TOKEN`. Uses `httpx` (already a project dependency). Returns the issue's `html_url`. Raises `ValueError` if token is unconfigured.
+`create_issue(title, body, labels)` opens a GitHub issue on `Vic-Nas/neverdue` via the GitHub REST API using `settings.GITHUB_TOKEN`. Uses `httpx` (already a project dependency). Returns the issue's `html_url`. Raises `ValueError` if token is unconfigured.
 
 ### `support/tasks.py`
 
-Single Procrastinate task `process_ticket(ticket_id)`. Branches on ticket type: howto → `answer_howto` → `STATUS_AWAITING`; privacy → `mail_admins` → `STATUS_CLOSED`; all others → `draft_issue` + `create_issue` → `STATUS_OPEN`. Catches `LLMAPIError` and unexpected exceptions with logging — does not re-raise (task is fire-and-forget).
+Single Procrastinate task `process_ticket(ticket_id)`. Calls `triage(body)` once, then branches on the returned type: howto → save answer → `STATUS_AWAITING`; privacy → `mail_admins` → `STATUS_CLOSED`; all others → `create_issue` → `STATUS_OPEN`. Always persists the LLM-determined type back to the ticket. Catches `LLMAPIError` and unexpected exceptions with logging — does not re-raise.
 
 ### `support/views.py`
 
-Four login-required views: `submit` (GET renders form, POST creates ticket + defers task + redirects); `ticket_detail` (shows status, answer, GitHub link); `resolve` (AJAX POST — satisfied closes ticket, unsatisfied calls `draft_issue`+`create_issue` inline); `my_tickets` (list view scoped to `request.user`).
+Four login-required views: `submit` (GET renders bare textarea form, POST creates ticket with default type `bug` + defers task + redirects — no type picker, LLM assigns type in the background); `ticket_detail`; `resolve` (AJAX POST — satisfied closes ticket, unsatisfied calls `triage` again to draft and open a GitHub issue); `my_tickets`.
 
 ### `support/urls.py`
 
@@ -227,9 +227,9 @@ All extend `base.html`. `index.html` renders event card grid with bulk-select. `
 
 ### `project/templates/support/` (3 templates)
 
-- **`submit.html`** — Ticket type radio grid + body textarea. Posts to `support:submit`.
-- **`ticket_detail.html`** — Status-aware: shows spinner if pending, LLM answer + resolve buttons if awaiting_user, GitHub link if open/closed. Resolve buttons call `support:resolve` via fetch.
-- **`my_tickets.html`** — Paginated list of user's own tickets with status badges.
+- **`submit.html`** — Bare textarea + submit button. No type picker; LLM classifies on submission.
+- **`ticket_detail.html`** — Status-aware: spinner if pending, LLM answer + Yes / No resolve buttons if awaiting_user (No triggers issue creation inline via fetch), GitHub link if open/closed.
+- **`my_tickets.html`** — Card list matching categories/rules aesthetic; type badge colour-coded by LLM-assigned type.
 
 ### `project/static/manual/css/base/`
 

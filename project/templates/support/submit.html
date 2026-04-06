@@ -5,38 +5,34 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/support.css' %}">{% endblock %}
 
 {% block content %}
-<div class="support-wrap">
-  <h1>Contact Support</h1>
-  <p class="support-intro">Describe your issue and we'll take care of the rest.</p>
+<div class="page">
+
+  <div class="page__header--row">
+    <div>
+      <h1 class="page__title">Contact Support</h1>
+      <p class="page__sub">Describe your issue and we'll take care of the rest.</p>
+    </div>
+  </div>
 
   {% if error %}
     <p class="support-error">{{ error }}</p>
   {% endif %}
 
-  <form method="post" class="support-form">
-    {% csrf_token %}
+  <div class="support-form-wrap">
+    <form method="post" class="support-form">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="body">What's going on?</label>
+        <textarea id="body" name="body" rows="7" required
+          placeholder="Describe your issue in as much detail as you can."></textarea>
+        <span class="form-hint">Do not include passwords or payment info.</span>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Submit</button>
+        <a href="{% url 'support:my_tickets' %}" class="btn btn-ghost">My previous tickets</a>
+      </div>
+    </form>
+  </div>
 
-    <div class="form-group">
-      <label for="type">Category</label>
-      <select id="type" name="type" required>
-        <option value="" disabled selected>Select a category…</option>
-        {% for value, label in types %}
-          <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="body">Description</label>
-      <textarea id="body" name="body" rows="6" required
-        placeholder="Describe your issue in as much detail as you can."></textarea>
-      <span class="form-hint">Do not include passwords or payment info.</span>
-    </div>
-
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Submit</button>
-      <a href="{% url 'support:my_tickets' %}" class="btn btn-ghost">My previous tickets</a>
-    </div>
-  </form>
 </div>
 {% endblock %}

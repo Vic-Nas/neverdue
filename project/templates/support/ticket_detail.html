@@ -5,52 +5,60 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/support.css' %}">{% endblock %}
 
 {% block content %}
-<div class="support-wrap">
+<div class="page">
+
   <a href="{% url 'support:my_tickets' %}" class="support-back">← My tickets</a>
-  <h1>Your Ticket</h1>
+  <h1 class="page__title">Your Ticket</h1>
 
-  <div class="ticket-meta">
-    <span class="badge">{{ ticket.get_type_display }}</span>
-    <span class="badge badge--{{ ticket.status }}">{{ ticket.get_status_display }}</span>
-    <span class="ticket-date">{{ ticket.created_at|date:"N j, Y" }}</span>
+  <div class="ticket-card">
+    <div class="ticket-card__header">
+      <div class="ticket-card__meta">
+        <span class="ticket-type-badge">{{ ticket.get_type_display }}</span>
+        <span class="badge badge--{{ ticket.status }}">{{ ticket.get_status_display }}</span>
+      </div>
+      <span class="ticket-date">{{ ticket.created_at|date:"N j, Y" }}</span>
+    </div>
+
+    <div class="ticket-card__body">
+      <p class="ticket-card__label">What you wrote</p>
+      <p>{{ ticket.body }}</p>
+    </div>
+
+    {% if ticket.status == "pending" %}
+      <p class="support-notice">⏳ We're processing your ticket — refresh in a moment.</p>
+
+    {% elif ticket.status == "awaiting_user" %}
+      <div class="ticket-card__answer">
+        <p class="ticket-card__label">Answer</p>
+        <p>{{ ticket.llm_answer }}</p>
+      </div>
+      <div class="ticket-resolve" id="resolve-block">
+        <p class="ticket-resolve__prompt">Did this answer your question?</p>
+        <div class="ticket-resolve__actions">
+          <button class="btn btn-primary" onclick="resolve(true)">Yes, resolved ✓</button>
+          <button class="btn btn-ghost" onclick="resolve(false)">No</button>
+        </div>
+        <p id="resolve-msg" class="support-notice" hidden></p>
+      </div>
+
+    {% elif ticket.status == "open" %}
+      <div class="ticket-card__gh">
+        <p class="ticket-card__label">GitHub Issue</p>
+        <p>Your issue has been logged. Follow progress and discuss it there.</p>
+        <a href="{{ ticket.gh_url }}" class="btn btn-primary" target="_blank" rel="noopener">
+          View on GitHub →
+        </a>
+      </div>
+
+    {% elif ticket.status == "closed" %}
+      <p class="support-notice">✓ This ticket is closed.
+        {% if ticket.gh_url %}
+          <a href="{{ ticket.gh_url }}" target="_blank" rel="noopener">View GitHub issue →</a>
+        {% endif %}
+      </p>
+    {% endif %}
   </div>
 
-  <div class="ticket-body">
-    <h2>What you wrote</h2>
-    <p>{{ ticket.body }}</p>
-  </div>
-
-  {% if ticket.status == "pending" %}
-    <p class="support-notice">⏳ We're processing your ticket — refresh in a moment.</p>
-
-  {% elif ticket.status == "awaiting_user" %}
-    <div class="ticket-answer">
-      <h2>Answer</h2>
-      <p>{{ ticket.llm_answer }}</p>
-    </div>
-    <div class="ticket-resolve" id="resolve-block">
-      <p>Did this answer your question?</p>
-      <button class="btn btn-primary" onclick="resolve(true)">Yes, resolved ✓</button>
-      <button class="btn btn-secondary" onclick="resolve(false)">No, open an issue</button>
-      <p id="resolve-msg" class="support-notice" hidden></p>
-    </div>
-
-  {% elif ticket.status == "open" %}
-    <div class="ticket-gh">
-      <h2>GitHub Issue</h2>
-      <p>Your issue has been logged. You can follow progress and discuss it there.</p>
-      <a href="{{ ticket.gh_url }}" class="btn btn-primary" target="_blank" rel="noopener">
-        View on GitHub →
-      </a>
-    </div>
-
-  {% elif ticket.status == "closed" %}
-    <p class="support-notice">✓ This ticket is closed.
-      {% if ticket.gh_url %}
-        <a href="{{ ticket.gh_url }}" target="_blank" rel="noopener">View GitHub issue →</a>
-      {% endif %}
-    </p>
-  {% endif %}
 </div>
 
 {% if ticket.status == "awaiting_user" %}
