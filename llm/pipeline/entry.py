@@ -10,6 +10,12 @@ from .saving import _check_and_increment_scans, _fire_usage, _save_events, GCalU
 logger = logging.getLogger(__name__)
 
 
+def _fetch_category_names(user) -> list[str]:
+    """Return the user's existing category names for LLM hint grounding."""
+    from dashboard.models import Category
+    return list(Category.objects.filter(user=user).values_list('name', flat=True))
+
+
 def process_text(user, text: str, sender: str = '', source_email_id: str = '', scan_job=None) -> ProcessingOutcome:
     if not _check_and_increment_scans(user):
         return ProcessingOutcome(
@@ -20,12 +26,14 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
     language = getattr(user, 'language', 'English')
     user_timezone = getattr(user, 'timezone', 'UTC')
     user_instructions = collect_prompt_injections(user, sender)
+    existing_categories = _fetch_category_names(user)
 
     try:
         logger.debug("process_text: calling extract_events | user=%s text_len=%d", user.pk, len(text))
         events, input_tokens, output_tokens = extract_events(
             text, language=language, user_timezone=user_timezone,
             user_instructions=user_instructions,
+            existing_categories=existing_categories,
         )
         logger.debug("process_text: extracted %d events | user=%s", len(events), user.pk)
     except LLMAPIError as exc:
@@ -88,12 +96,15 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
             return ProcessingOutcome(status='needs_review', notes=notes)
 
     user_instructions = collect_prompt_injections(user, sender)
+    existing_categories = _fetch_category_names(user)
+
     try:
         logger.debug("process_email: calling extract_events_from_email | user=%s body_len=%d attachments=%d", user.pk, len(body or ''), len(decoded_attachments))
         events, input_tokens, output_tokens = extract_events_from_email(
             body=body or '', attachments=decoded_attachments,
             language=language, user_timezone=user_timezone,
             user_instructions=user_instructions,
+            existing_categories=existing_categories,
         )
         logger.debug("process_email: extracted %d events | user=%s", len(events), user.pk)
     except LLMAPIError as exc:

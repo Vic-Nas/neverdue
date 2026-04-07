@@ -158,16 +158,16 @@ Split into 7 modules, re-exported from `__init__.py`:
 - **`client.py`** — Anthropic client setup, `call_api` wrapper, and `LLMAPIError` exception (distinguishes API failures from parse errors).
 - **`utils.py`** — `is_informative_filename`, `get_tz`, `today_in_tz`, junk filename detection.
 - **`validation.py`** — `parse_and_validate`, `_validate_event`: sanitises LLM output, converts local→UTC, auto-fixes past-year dates (bumps to current year and promotes to active if the LLM marked pending due to past date), strips invalid recurrence, ensures pending events have a concern. `VALID_FREQS`, `RECURRENCE_MIN_INTERVAL_DAYS`.
-- **`text.py`** — `extract_events(text)`: single LLM call for plain text input.
+- **`text.py`** — `extract_events(text, ..., existing_categories=None)`: now injects user's category names into the LLM prompt to prefer existing categories for event classification, reducing accidental new category creation.
 - **`image.py`** — `extract_events_from_image`: handles image/PDF via base64-encoded content blocks.
-- **`email.py`** — `extract_events_from_email`: two-step pipeline (extract per-attachment, then reconcile with body). Skips reconciliation when all attachments are visual and events were already extracted — context is already fed to each per-image call, so reconciliation would only risk losing events. Supports visual and non-visual attachments.
+- **`email.py`** — `extract_events_from_email(..., existing_categories=None)`: same category grounding logic as `text.py`.
 
 ### `llm/pipeline/` (package)
 
 Split into 3 modules, re-exported from `__init__.py`:
 
 - **`outcome.py`** — `ProcessingOutcome` dataclass (created, notes, status, failure_reason).
-- **`entry.py`** — `process_text`, `process_email`: public entry points that return `ProcessingOutcome`. Catches `LLMAPIError` → `failed/llm_error`, `GCalUnavailableError` → `failed/gcal_disconnected`. When all events are discarded by rules, returns `done` with descriptive notes instead of `needs_review`. No direct DB writes — delegates to `saving.py`.
+- **`entry.py`** — `process_text`, `process_email`: now fetch the user's category names and pass them to the extractors for prompt grounding, reducing spurious category creation. Still returns `ProcessingOutcome` and handles LLM/GCAL errors as before. No direct DB writes — delegates to `saving.py`.
 - **`saving.py`** — `_check_and_increment_scans` (atomic `F()`-based UPDATE), `_fire_usage` (async token tracking), `_save_events` (conflict detection, all-or-nothing pending rule, category resolution via `resolve_category`, discard tracking, writes via `write_event_to_calendar`; returns `(created, has_pending, discarded)`), `_find_conflicts`, `_append_conflict_concern`, `_get_or_create_uncategorized`.
 
 ### `llm/resolver.py`

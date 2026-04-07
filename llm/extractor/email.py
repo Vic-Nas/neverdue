@@ -13,16 +13,32 @@ from .validation import parse_and_validate
 logger = logging.getLogger(__name__)
 
 
+def _build_category_hint(existing_categories: list[str]) -> str:
+    """Return the category grounding line to inject into user messages."""
+    if not existing_categories:
+        return ''
+    cats = ', '.join(existing_categories)
+    return (
+        f"\nExisting categories (prefer these for category_hint when they fit, "
+        f"only invent a new one if none are appropriate): {cats}\n"
+    )
+
+
 def extract_events_from_email(
-    body: str, attachments: list[tuple[bytes, str, str]],
-    language: str = 'English', user_timezone: str = 'UTC', user_instructions: str = '',
+    body: str,
+    attachments: list[tuple[bytes, str, str]],
+    language: str = 'English',
+    user_timezone: str = 'UTC',
+    user_instructions: str = '',
+    existing_categories: list[str] | None = None,
 ) -> tuple[list[dict], int, int]:
     tz = get_tz(user_timezone)
     today = today_in_tz(tz)
     system = SYSTEM_PROMPT + f'\n\nRespond in {language}. Event titles, descriptions, category hints, and concern messages must be in {language}.'
+    category_hint = _build_category_hint(existing_categories or [])
 
     attachment_events, non_visual, total_in, total_out = _extract_from_attachments(
-        attachments, system, body, user_instructions, user_timezone, today, tz,
+        attachments, system, body, user_instructions, user_timezone, today, tz, category_hint,
     )
 
     # When all attachments are visual (no non_visual left to process) and
@@ -34,11 +50,11 @@ def extract_events_from_email(
 
     return _reconcile(
         attachment_events, non_visual, body, user_instructions,
-        language, user_timezone, today, tz, system, total_in, total_out,
+        language, user_timezone, today, tz, system, total_in, total_out, category_hint,
     )
 
 
-def _extract_from_attachments(attachments, system, body, user_instructions, user_timezone, today, tz):
+def _extract_from_attachments(attachments, system, body, user_instructions, user_timezone, today, tz, category_hint):
     attachment_events = []
     non_visual = []
     total_in = total_out = 0
@@ -54,7 +70,10 @@ def _extract_from_attachments(attachments, system, body, user_instructions, user
             else:
                 content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': media_type, 'data': encoded}})
 
-            step1_text = f"Today's date: {today}\nUser's timezone: {user_timezone}\n\nExtract all calendar events from this file."
+            step1_text = f"Today's date: {today}\nUser's timezone: {user_timezone}\n"
+            if category_hint:
+                step1_text += category_hint
+            step1_text += "\nExtract all calendar events from this file."
             if body:
                 step1_text += f'\n\nUser context (follow strictly): {body}'
             if user_instructions:
@@ -77,7 +96,7 @@ def _extract_from_attachments(attachments, system, body, user_instructions, user
     return attachment_events, non_visual, total_in, total_out
 
 
-def _reconcile(attachment_events, non_visual, body, user_instructions, language, user_timezone, today, tz, system, total_in, total_out):
+def _reconcile(attachment_events, non_visual, body, user_instructions, language, user_timezone, today, tz, system, total_in, total_out, category_hint):
     logger.debug("reconcile: starting | attachment_events=%d non_visual=%d body_len=%d", len(attachment_events), len(non_visual), len(body or ''))
     recon_content = []
 
@@ -90,11 +109,13 @@ def _reconcile(attachment_events, non_visual, body, user_instructions, language,
         else:
             recon_content.append({'type': 'text', 'text': file_bytes.decode('utf-8', errors='ignore')})
 
-    recon_text = f"Today's date: {today}\nUser's timezone: {user_timezone}\n\n"
+    recon_text = f"Today's date: {today}\nUser's timezone: {user_timezone}\n"
+    if category_hint:
+        recon_text += category_hint
     if user_instructions:
         recon_text += f"\nUser instructions (follow strictly):\n{user_instructions}\n"
     if attachment_events:
-        recon_text += f"Events already extracted from attachments (dates and times are ground truth):\n{json.dumps(attachment_events, ensure_ascii=False)}\n\n"
+        recon_text += f"\nEvents already extracted from attachments (dates and times are ground truth):\n{json.dumps(attachment_events, ensure_ascii=False)}\n\n"
     if body:
         recon_text += f"{'Email body' if attachment_events else 'Extract all calendar events from this content'}:\n\n{body}"
     recon_content.append({'type': 'text', 'text': recon_text})
