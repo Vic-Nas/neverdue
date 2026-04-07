@@ -35,3 +35,6 @@ db_backup*.json
 temp/
 *.tmp
 *.temp
+
+# Dev
+Makefile
