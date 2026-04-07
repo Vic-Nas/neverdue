@@ -113,15 +113,26 @@ def _validate_event(event: dict, tz) -> dict | None:
         except ValueError:
             expires_at = ''
 
+    raw_links = event.get('links', [])
+    links = []
+    if isinstance(raw_links, list):
+        for item in raw_links:
+            if isinstance(item, dict) and isinstance(item.get('url'), str) and item['url'].startswith('http'):
+                links.append({
+                    'url': item['url'].strip()[:2048],
+                    'title': str(item.get('title', '')).strip()[:255],
+                })
+
     return {
-        'title': str(event.get('title', '')).strip()[:255],
-        'description': str(event.get('description', '')).strip(),
-        'start': start,
-        'end': end,
-        'category_hint': str(event.get('category_hint', '')).strip(),
-        'recurrence_freq': recurrence_freq,
+        'title':            str(event.get('title', '')).strip()[:255],
+        'description':      str(event.get('description', '')).strip(),
+        'links':            links,
+        'start':            start,
+        'end':              end,
+        'category_hint':    str(event.get('category_hint', '')).strip(),
+        'recurrence_freq':  recurrence_freq,
         'recurrence_until': recurrence_until,
-        'status': status,
-        'concern': concern,
-        'expires_at': expires_at,
+        'status':           status,
+        'concern':          concern,
+        'expires_at':       expires_at,
     }

@@ -77,6 +77,13 @@ def _build_gcal_body_from_dict(user, event_data: dict, category) -> dict:
         'reminders': {'useDefault': False, 'overrides': reminders},
         'colorId': _resolve_color_id(user, category),
     }
+    links = event_data.get('links', [])
+    if links:
+        body['source'] = {'title': links[0].get('title') or event_data['title'], 'url': links[0]['url']}
+        if len(links) > 1:
+            extra = '\n'.join(f"{lnk.get('title') or lnk['url']}: {lnk['url']}" for lnk in links[1:])
+            desc = body['description']
+            body['description'] = f"{desc}\n\n{extra}".strip() if desc else extra
     if event_data.get('recurrence_freq'):
         body['recurrence'] = [_build_rrule(event_data['recurrence_freq'], event_data.get('recurrence_until'))]
     return body
@@ -111,6 +118,7 @@ def _save_pending_event(user, event_data, category, scan_job):
         return Event.objects.create(
             user=user, category=category,
             title=event_data['title'], description=event_data.get('description', ''),
+            links=event_data.get('links', []),
             start=event_data['start'], end=event_data['end'],
             recurrence_freq=event_data.get('recurrence_freq') or None,
             recurrence_until=event_data.get('recurrence_until') or None,
@@ -151,6 +159,7 @@ def _save_active_event(user, event_data, category, scan_job):
         return Event.objects.create(
             user=user, category=category,
             title=event_data['title'], description=event_data.get('description', ''),
+            links=event_data.get('links', []),
             start=event_data['start'], end=event_data['end'],
             recurrence_freq=event_data.get('recurrence_freq') or None,
             recurrence_until=event_data.get('recurrence_until') or None,

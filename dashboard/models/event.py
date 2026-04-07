@@ -42,6 +42,7 @@ class Event(models.Model):
     pending_concern = models.TextField(null=True, blank=True)
     color = models.CharField(max_length=20, blank=True, default='')
     reminders = models.JSONField(default=list, blank=True)
+    links = models.JSONField(default=list, blank=True)
     gcal_link = models.URLField(blank=True, default='')
     scan_job = models.ForeignKey(
         'emails.ScanJob', null=True, blank=True,
@@ -97,6 +98,10 @@ class Event(models.Model):
         ]
         if self.description:
             lines.append(f"Notes: {self.description}")
+        if self.links:
+            for link in self.links:
+                label = link.get('title') or link.get('url', '')
+                lines.append(f"Link: {label} — {link.get('url', '')}")
         if self.recurrence_freq:
             lines.append(f"Recurrence: {self.recurrence_freq}")
             if self.recurrence_until:

@@ -54,6 +54,21 @@
   </div>
   {% endif %}
 
+  {% if event.links %}
+  <div class="section-block">
+    <h3>Links</h3>
+    <ul class="link-list">
+      {% for link in event.links %}
+      <li>
+        <a href="{{ link.url }}" target="_blank" rel="noopener">
+          {{ link.title|default:link.url }} ↗
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if event.recurrence_freq %}
   <div class="section-block">
     <h3>Repeats</h3>

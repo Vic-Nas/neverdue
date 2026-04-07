@@ -54,7 +54,7 @@
     <div class="form-section">
       <div class="form-section__header">
         <h3 class="form-section__title">Reminders <span class="label-optional">(optional — overrides category)</span></h3>
-        <button type="button" class="btn-ghost btn btn--sm" onclick="addEventReminder()">+ Add</button>
+        <button type="button" class="btn-ghost btn btn--sm" id="add-reminder-btn">+ Add</button>
       </div>
       <div id="event-reminders-list" class="reminders-list">
         {% for mins in event.reminders %}
@@ -71,6 +71,23 @@
     <div class="form-group">
       <label for="description">Notes <span class="label-optional">(optional)</span></label>
       <textarea id="description" name="description" rows="3" placeholder="Any extra context…">{{ event.description|default:'' }}</textarea>
+    </div>
+
+    {# ── Links ── #}
+    <div class="form-section">
+      <div class="form-section__header">
+        <h3 class="form-section__title">Links <span class="label-optional">(optional)</span></h3>
+        <button type="button" class="btn-ghost btn btn--sm" id="add-link-btn">+ Add</button>
+      </div>
+      <div id="event-links-list" class="reminders-list">
+        {% for link in event.links %}
+        <div class="reminder-row">
+          <input type="url" name="link_urls" value="{{ link.url }}" placeholder="https://…">
+          <input type="text" name="link_titles" value="{{ link.title }}" placeholder="Label (optional)">
+          <button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>
+        </div>
+        {% endfor %}
+      </div>
     </div>
 
     {# ── GCal color override ── #}
@@ -145,19 +162,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/core/forms.js' %}"></script>
-<script>
-function addEventReminder() {
-  addDynamicRow(
-    'event-reminders-list',
-    'reminder-row',
-    '<input type="number" name="reminders" min="1" placeholder="Minutes before">' +
-    '<span class="reminder-row__label">minutes before</span>' +
-    '<button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>'
-  );
-}
-</script>
-<script src="{% static 'js/pages/event_form.js' %}"></script>
-{% if event %}
 <script src="{% static 'js/pages/event_edit.js' %}"></script>
-{% endif %}
 {% endblock %}

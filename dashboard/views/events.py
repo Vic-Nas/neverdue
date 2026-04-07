@@ -1,12 +1,10 @@
 # dashboard/views/events.py
-import json as _json
 import logging
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils.dateparse import parse_datetime
-from django.utils.dateparse import parse_date
+from django.utils.dateparse import parse_date, parse_datetime
 
 from dashboard.models import Category, Event
 
@@ -20,12 +18,10 @@ def index(request):
             user=request.user, status='active',
         ).select_related('category')
 
-        # Search
         q = request.GET.get('q', '').strip()
         if q:
             qs = qs.filter(title__icontains=q)
 
-        # Sort
         sort = request.GET.get('sort', 'start')
         if sort == 'added':
             qs = qs.order_by('-created_at')
@@ -33,7 +29,6 @@ def index(request):
             sort = 'start'
             qs = qs.order_by('start')
 
-        # Pagination
         from django.core.paginator import Paginator
         page_num = request.GET.get('page', '1')
         paginator = Paginator(qs, 25)
@@ -61,6 +56,18 @@ def event_detail(request, pk):
         return HttpResponse('Event unavailable.', status=500)
 
 
+def _parse_links(post):
+    """Build [{url, title}] from parallel link_urls / link_titles form lists."""
+    urls = post.getlist('link_urls')
+    titles = post.getlist('link_titles')
+    links = []
+    for url, title in zip(urls, titles):
+        url = url.strip()
+        if url:
+            links.append({'url': url, 'title': title.strip()})
+    return links
+
+
 @login_required
 def event_edit(request, pk=None):
     try:
@@ -68,32 +75,42 @@ def event_edit(request, pk=None):
         categories = Category.objects.filter(user=request.user).order_by('name')
 
         if request.method == 'POST':
-            data = _json.loads(request.body)
-            title = data.get('title', '').strip()
-            start_str = data.get('start', '')
-            end_str = data.get('end', '')
-            description = data.get('description', '').strip()
-            category_id = data.get('category_id')
-            color = data.get('color', '').strip()
-            recurrence_freq = data.get('recurrence_freq') or None
-            recurrence_until_str = data.get('recurrence_until') or ''
-            raw_reminders = data.get('reminders', [])
-            reminders = [int(m) for m in raw_reminders if isinstance(m, (int, float)) and int(m) > 0]
+            post = request.POST
+            title = post.get('title', '').strip()
+            start_str = post.get('start', '')
+            end_str = post.get('end', '')
+            description = post.get('description', '').strip()
+            category_id = post.get('category') or None
+            color = post.get('color', '').strip()
+            recurrence_freq = post.get('recurrence_freq') or None
+            recurrence_until_str = post.get('recurrence_until', '').strip()
+            raw_reminders = post.getlist('reminders')
+            reminders = [int(m) for m in raw_reminders if m.strip().isdigit() and int(m) > 0]
+            links = _parse_links(post)
 
             if not title or not start_str or not end_str:
-                return JsonResponse({'ok': False, 'error': 'Title, start, and end are required.'}, status=400)
+                return render(request, 'dashboard/event_edit.html', {
+                    'event': event, 'categories': categories,
+                    'error': 'Title, start, and end are required.',
+                })
 
             start = parse_datetime(start_str)
             end = parse_datetime(end_str)
             if not start or not end:
-                return JsonResponse({'ok': False, 'error': 'Invalid date format.'}, status=400)
+                return render(request, 'dashboard/event_edit.html', {
+                    'event': event, 'categories': categories,
+                    'error': 'Invalid date format.',
+                })
 
             category = None
             if category_id:
                 try:
                     category = Category.objects.get(pk=category_id, user=request.user)
                 except Category.DoesNotExist:
-                    return JsonResponse({'ok': False, 'error': 'Category not found.'}, status=400)
+                    return render(request, 'dashboard/event_edit.html', {
+                        'event': event, 'categories': categories,
+                        'error': 'Category not found.',
+                    })
 
             was_pending = event.status == 'pending' if event else False
             if event is None:
@@ -108,6 +125,7 @@ def event_edit(request, pk=None):
             event.recurrence_freq = recurrence_freq
             event.recurrence_until = parse_date(recurrence_until_str) if recurrence_until_str else None
             event.reminders = reminders
+            event.links = links
 
             if was_pending:
                 event.status = 'active'
@@ -115,12 +133,11 @@ def event_edit(request, pk=None):
 
             event.save()
 
-            # Push changes to GCal asynchronously
             if event.google_event_id and request.user.save_to_gcal:
                 from dashboard.tasks import sync_event_to_gcal
                 sync_event_to_gcal.defer(event_id=event.pk)
 
-            return JsonResponse({'ok': True, 'pk': event.pk})
+            return redirect('dashboard:event_detail', pk=event.pk)
 
         return render(request, 'dashboard/event_edit.html', {'event': event, 'categories': categories})
     except Exception:

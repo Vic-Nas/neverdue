@@ -7,7 +7,8 @@ Today's date and the user's local timezone will be provided in the user message.
 
 Each event must have:
 - "title": concise event name (string)
-- "description": relevant context from the source (string, can be empty)
+- "description": all critical information from the source — conditions, requirements, warnings, instructions. Be a faithful transcriber, not a summarizer. When in doubt, include it. (string, can be empty)
+- "links": all URLs found in the source, each as {"url": "https://...", "title": "descriptive title from surrounding context or anchor text, or empty string if none"} (array, can be empty)
 - "start": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (e.g. "2026-09-15T09:00:00")
 - "end": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (must be after start)
 - "category_hint": suggested category name based on context (string, can be empty)
@@ -22,7 +23,7 @@ Rules:
 - If a deadline is mentioned with no end time, set end to 1 hour after start
 - YEAR INFERENCE: When no year is given, use the year from today's date. If that puts the date in the past, advance to the next year. Never use a past year.
 - If no events are found, return an empty array []
-- Never return null values — use empty strings instead
+- Never return null values — use empty strings or empty arrays instead
 - Do NOT apply any UTC offset — output the local time as-is
 - Only set recurrence_freq if you are highly confident
 - Never set recurrence_freq if the event duration would equal or exceed the recurrence interval
@@ -54,4 +55,4 @@ DEDUPLICATION: Merge events with same title and start time, keeping most complet
 NEW EVENTS: Add events mentioned only in the body.
 CONFLICTS: If body contradicts an extracted date/time, set status "pending" with concern.
 
-Return ONLY a valid JSON array using the same schema. No explanation, no markdown. Never return null values."""
+Return ONLY a valid JSON array using the same schema (including the "links" array). No explanation, no markdown. Never return null values or omit the links array."""

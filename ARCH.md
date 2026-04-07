@@ -71,43 +71,45 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 ### `billing/views/` (package)
 
-Split into 2 modules, re-exported from `__init__.py`:
-
-- **`pages.py`** — `plans`, `checkout` (Stripe Checkout session with 7-day trial), `success`, `cancel`, `portal` (billing portal redirect). `_get_or_create_customer` helper.
+ **`event.py`** — `Event`: full calendar event with GCal ID, status active/pending, recurrence, scan_job FK. **Now supports a `links` JSONField** (list of `{url, title}` dicts) for arbitrary event-related URLs. `clean()` validates end > start and recurrence constraints. `rrule` property generates RRULE string. `serialize_as_text` for reprocessing. `__str__` and `serialize_as_text` now include links.
 - **`webhook.py`** — Stripe webhook handler. `_sync_subscription` updates local status and fires `retry_jobs_after_plan_upgrade` when status becomes active. `_handle_checkout_completed` attaches promo code discounts to subscriptions (Stripe trial+promo workaround). Verifies signature via `stripe.Webhook.construct_event`.
 
 ### `dashboard/models/` (package)
-
+### `dashboard/views/` (package)
+Split into 6 modules, re-exported from `__init__.py`:
+- **`events.py`** — `index`, `event_detail`, `event_edit`, `event_delete`. **Event edit now supports multiple links (URL + label) via form fields and `_parse_links` helper. Links are validated and saved to the model.**
 Split into 3 modules, re-exported from `__init__.py`. Each model sets `app_label = 'dashboard'` in Meta.
 
 - **`category.py`** — `Category`: name, priority 1–4, GCal colorId, reminder JSON, hex color.
+### `dashboard/writer.py`
+`write_event_to_calendar`: single write path for all events. Deduplicates by (user, start, end). Splits into `_save_pending_event` (DB-only) and `_save_active_event` (GCal push + DB). When `save_to_gcal` is False, skips GCal and appends "Not synced to Google Calendar (disabled in Preferences)." to event description. `_build_gcal_body_from_dict` builds the API dict, **now including the first link as GCal source and appending extras to the description**. `_save_pending_event` and `_save_active_event` save the `links` field.
 - **`rule.py`** — `Rule`: sender/keyword/prompt types with categorize/discard actions.
 - **`event.py`** — `Event`: full calendar event with GCal ID, status active/pending, recurrence, scan_job FK. `clean()` validates end > start and recurrence constraints. `rrule` property generates RRULE string. `serialize_as_text` for reprocessing.
 
+### `dashboard/ical.py`
+`build_ics` produces RFC 5545 `.ics` bytes from a queryset using the `icalendar` library. Maps Category.priority to RFC 5545 PRIORITY values. **If event links are present, the first is exported as the event URL.** `_parse_rrule` converts the stored RRULE string to a dict with datetime-typed UNTIL.
 ### `dashboard/gcal/` (package)
 
 Google Calendar API via `google-api-python-client`. Re-exported from `__init__.py`:
+### `project/templates/dashboard/` (13 templates)
+All extend `base.html`. `event_edit.html` now supports adding/removing multiple links (URL + label) per event. `event_detail.html` displays all event links as a list. `index.html` renders event card grid with bulk-select. `queue_job_detail.html` renders reprocess form and retry button. `rules.html` renders three rule-type forms.
 
 - **`client.py`** — `_service(user)` builds a `googleapiclient` service using `Credentials(token=get_valid_token(user))`.
-- **`crud.py`** — `delete_from_gcal`, `patch_event_color`. Both use `_service()` and catch `HttpError`.
-- **`watch.py`** — `register_gcal_watch` / `stop_gcal_watch` manage GCal push notification channel lifecycle.
-- **`signals.py`** — `event_pre_delete` receiver: calls `delete_from_gcal` unless `_skip_gcal_delete` is set.
-
-### `dashboard/views/` (package)
-
-Split into 6 modules, re-exported from `__init__.py`:
-
-- **`events.py`** — `index`, `event_detail`, `event_edit`, `event_delete`.
+### `project/static/manual/js/pages/`
+- **`dashboard.js`** — Bulk selection mode for event grid, export URL building, bulk delete/reprocess.
+- **`categories.js`** — Select mode for category cards, bulk delete via JSON POST.
+- **`event_edit.js`** — Prompt-edit flow on existing event. **Now also handles dynamic add/remove for event links.**
+- **`preferences.js`** — Auto-delete toggle, GCal color swatch radio group, smart Google permissions button (Revoke → Restore swap after disconnect).
+- **`queue.js`** — Client-side queue table renderer, polls `queue_status` every 4s.
+- **`queue_action.js`** — Reprocess button (needs_review) and retry button (failed) in one IIFE.
+- **`rules.js`** — AJAX add/delete rules for all three rule types.
+- **`support.js`** — Resolve flow for howto tickets: disables Yes/No buttons on click, POSTs to `support:resolve`, replaces block with result on success, re-enables on error.
+- **`upload.js`** — Drag-and-drop file input enhancement.
 - **`actions.py`** — `event_prompt_edit`, `events_bulk_action`, `export_events`. Handles re-extraction by serializing event data as text, deleting events, dispatching `process_text_as_upload`.
 - **`categories.py`** — `categories`, `category_detail`, `category_edit`, `category_delete`, `categories_bulk_delete` (JSON POST, deletes by pk list).
 - **`queue.py`** — `queue`, `queue_status` (paginated JSON for polling), `queue_job_detail`, `queue_job_reprocess`, `queue_job_retry`.
-- **`rules.py`** — `rules`, `rule_add`, `rule_delete`.
-- **`upload.py`** — `upload` view for file upload processing.
-
-### `dashboard/writer.py`
-
-`write_event_to_calendar`: single write path for all events. Deduplicates by (user, start, end). Splits into `_save_pending_event` (DB-only) and `_save_active_event` (GCal push + DB). When `save_to_gcal` is False, skips GCal and appends "Not synced to Google Calendar (disabled in Preferences)." to event description. `_build_gcal_body_from_dict` builds the API dict. `_resolve_color_id` picks color: event override → category GCal color → priority default. `GCalUnavailableError` raised when sync is on but push fails.
-
+### `llm/extractor/` (package)
+7 modules, re-exported from `__init__.py`: prompts (system/reconciliation, requires links array), client (Anthropic API), utils (filename/tz helpers), validation (sanitizes LLM output, normalizes links), text/image/email (event extraction, category grounding).
 ### `dashboard/ical.py`
 
 `build_ics` produces RFC 5545 `.ics` bytes from a queryset using the `icalendar` library. Maps Category.priority to RFC 5545 PRIORITY values. `_parse_rrule` converts the stored RRULE string to a dict with datetime-typed UNTIL.

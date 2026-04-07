@@ -33,6 +33,9 @@ def build_ics(events) -> bytes:
         if event.description:
             vevent.add('description', event.description)
 
+        if event.links:
+            vevent.add('url', vText(event.links[0]['url']))
+
         start = _ensure_utc(event.start)
         end = _ensure_utc(event.end)
         vevent.add('dtstart', start)
