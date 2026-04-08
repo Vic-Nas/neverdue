@@ -20,7 +20,8 @@ Each event must have:
 
 Rules:
 - If only a date is given with no time, set start to 09:00 and end to 10:00
-- If a deadline is mentioned with no end time, set end to 1 hour after start
+- If a time is expressed as a deadline ("by X", "due by X", "no later than X", "until X", ...), that time is the end. Set start to end minus 1 hour.
+- If a duration is given but no end time, set end to start plus that duration
 - YEAR INFERENCE: When no year is given, use the year from today's date. If that puts the date in the past, advance to the next year. Never use a past year.
 - If no events are found, return an empty array []
 - Never return null values — use empty strings or empty arrays instead
