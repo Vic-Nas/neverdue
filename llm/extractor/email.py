@@ -131,4 +131,7 @@ def _reconcile(attachment_events, non_visual, body, user_instructions, language,
         return events, total_in + message.usage.input_tokens, total_out + message.usage.output_tokens
     except ValueError as exc:
         logger.error("llm.extract_events_from_email: step2 error | fallback_events=%d error=%s", len(attachment_events), exc)
-        return attachment_events, total_in, total_out
+        # If there are any valid attachment_events, return them; otherwise, propagate the error to fail the job
+        if attachment_events:
+            return attachment_events, total_in, total_out
+        raise
