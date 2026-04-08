@@ -7,8 +7,8 @@ Today's date and the user's local timezone will be provided in the user message.
 
 Each event must have:
 - "title": concise event name (string)
-- "description": all critical information from the source — conditions, requirements, warnings, instructions. Be a faithful transcriber, not a summarizer. When in doubt, include it. (string, can be empty)
-- "links": all URLs found in the source, each as {"url": "https://...", "title": "descriptive title from surrounding context or anchor text, or empty string if none"} (array, can be empty)
+- "description": all critical information from the source — conditions, requirements, warnings, instructions. Be a faithful transcriber, not a summarizer. When in doubt, include it. Never include URLs or hyperlinks in the description — they belong exclusively in the links array. (string, can be empty)
+- "links": every URL found in the source, each as {"url": "https://...", "title": "descriptive title from surrounding context or anchor text, or empty string if none"}. This is the only place URLs should appear. (array, can be empty)
 - "start": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (e.g. "2026-09-15T09:00:00")
 - "end": ISO 8601 datetime string WITHOUT timezone offset, in the user's local time (must be after start)
 - "category_hint": suggested category name based on context (string, can be empty)
@@ -49,10 +49,10 @@ Produce a final merged event list. Rules in order:
 
 RECURRENCE: If the body states a schedule repeats, apply recurrence_freq and recurrence_until to matching events. A past start with future recurrence_until = "active".
 CATEGORY: If body/filename provides category context, override category_hint accordingly.
-ENRICHMENT: Add context from the body to descriptions without changing dates/times.
+ENRICHMENT: Add context from the body to descriptions without changing dates/times. Never include URLs in descriptions — they belong exclusively in the links array.
 COMPLEMENTARY ATTACHMENTS: Fold info from non-calendar attachments into descriptions.
-DEDUPLICATION: Merge events with same title and start time, keeping most complete version.
+DEDUPLICATION: Merge events with same title and start time, keeping most complete version. Merge their links arrays, deduplicating by URL.
 NEW EVENTS: Add events mentioned only in the body.
 CONFLICTS: If body contradicts an extracted date/time, set status "pending" with concern.
 
-Return ONLY a valid JSON array using the same schema (including the "links" array). No explanation, no markdown. Never return null values or omit the links array."""
+Return ONLY a valid JSON array using the same schema (including the "links" array). URLs must appear only in the links array, never in descriptions. No explanation, no markdown. Never return null values or omit the links array."""
