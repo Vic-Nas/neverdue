@@ -49,6 +49,7 @@ class Event(models.Model):
         on_delete=models.SET_NULL, related_name='events',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    private = models.BooleanField(default=True)
 
     class Meta:
         app_label = 'dashboard'

@@ -1,3 +1,50 @@
+/* ── Privacy badge (event detail) ── */
+.privacy-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.privacy-badge--public {
+  background: var(--accent-muted);
+  border-color: var(--accent-light);
+  color: var(--accent);
+}
+
+/* ── Toggle switch (event edit) ── */
+.form-group--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.toggle-label { display: flex; flex-direction: column; gap: 0.15rem; }
+.toggle-label__text { font-weight: 500; font-size: 0.9rem; }
+.toggle-label__hint { font-size: 0.8rem; color: var(--text-muted); }
+
+.toggle-switch { position: relative; flex-shrink: 0; width: 44px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch__track {
+  position: absolute; inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-switch__track::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-switch__track { background: var(--accent); }
+.toggle-switch input:checked + .toggle-switch__track::after { transform: translateX(20px); }
 /* project/static/manual/css/pages/events.css */
 
 /* ── Event list ── */

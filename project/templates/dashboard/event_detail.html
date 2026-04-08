@@ -19,10 +19,17 @@
           {{ event.category.name }}
         </span>
       {% endif %}
+      {% if is_owner %}
+        <span class="privacy-badge {% if not event.private %}privacy-badge--public{% endif %}">
+          {% if event.private %}🔒 Private{% else %}🌐 Public{% endif %}
+        </span>
+      {% endif %}
     </div>
     <div class="page__actions">
-      <a href="{% url 'dashboard:event_edit' pk=event.pk %}" class="btn-ghost btn">Edit</a>
-      <a href="{% url 'dashboard:event_delete' pk=event.pk %}" class="btn-danger btn">Delete</a>
+      {% if is_owner %}
+        <a href="{% url 'dashboard:event_edit' pk=event.pk %}" class="btn-ghost btn">Edit</a>
+        <a href="{% url 'dashboard:event_delete' pk=event.pk %}" class="btn-danger btn">Delete</a>
+      {% endif %}
     </div>
   </div>
 

@@ -129,6 +129,19 @@
       </div>
     </div>
 
+    {# ── Visibility ── #}
+    <div class="form-group form-group--toggle">
+      <label class="toggle-label" for="private-toggle">
+        <span class="toggle-label__text">Make public</span>
+        <span class="toggle-label__hint">Anyone with the link can view this event</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="private-toggle" name="private" value="off"
+          {% if event and not event.private %}checked{% endif %}>
+        <span class="toggle-switch__track"></span>
+      </label>
+    </div>
+
     <div class="form-actions">
       <button type="submit" class="btn-primary">{% if event %}Save changes{% else %}Create event{% endif %}</button>
       {% if event %}
