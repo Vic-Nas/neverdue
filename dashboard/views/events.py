@@ -4,7 +4,10 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+import pytz
+
 from django.utils.dateparse import parse_date, parse_datetime
+from django.utils.timezone import make_aware, is_naive
 
 from dashboard.models import Category, Event
 
@@ -111,6 +114,12 @@ def event_edit(request, pk=None):
                     'event': event, 'categories': categories,
                     'error': 'Invalid date format.',
                 })
+
+            user_tz = pytz.timezone(request.user.timezone)
+            if is_naive(start):
+                start = make_aware(start, user_tz)
+            if is_naive(end):
+                end = make_aware(end, user_tz)
 
             category = None
             if category_id:

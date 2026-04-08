@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.timezone import make_aware, is_naive
 
 from dashboard.writer import write_event_to_calendar, GCalUnavailableError
 
@@ -67,6 +68,8 @@ def _find_conflicts(user, event_data: dict) -> list:
         try:
             start_dt = parse_datetime(start_str)
             if start_dt:
+                if is_naive(start_dt):
+                    start_dt = make_aware(start_dt)
                 by_title = list(
                     Event.objects.filter(
                         user=user, title__iexact=title,
