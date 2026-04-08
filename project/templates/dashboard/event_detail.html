@@ -115,6 +115,12 @@
   </div>
   {% endif %}
 
+  {% if not is_owner %}
+  <div class="section-block" style="text-align:center; margin-top:2em;">
+    <a href="{% url 'accounts:login' %}?next={{ request.path }}" class="btn-primary btn">Add to my events</a>
+  </div>
+  {% endif %}
+
   <div class="page__footer">
     <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">← Back to dashboard</a>
   </div>
