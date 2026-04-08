@@ -56,15 +56,6 @@ def event_detail(request, pk):
         return HttpResponse('Event unavailable.', status=500)
 
 
-@login_required
-def event_links(request, pk):
-    """Public-facing links page for a given event. Linked from GCal source when 2+ links."""
-    try:
-        event = get_object_or_404(Event, pk=pk, user=request.user)
-        return render(request, 'dashboard/event_links.html', {'event': event})
-    except Exception:
-        logger.exception("event_links error for user=%s pk=%s", request.user.pk, pk)
-        return HttpResponse('Links unavailable.', status=500)
 
 
 def _parse_links(post):

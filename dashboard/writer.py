@@ -50,8 +50,8 @@ def _gcal_source_for_links(links: list, event_data: dict, event_pk: int | None =
     """Return a GCal source dict for the given links.
 
     - 0 links → None
-    - 1 link  → use it directly
-    - 2+ links → point to the NeverDue links page (requires saved event PK)
+    - 1 link → use its URL and title
+    - 2+ links → link to the event detail page
     """
     if not links:
         return None
@@ -59,10 +59,10 @@ def _gcal_source_for_links(links: list, event_data: dict, event_pk: int | None =
         return {'title': links[0].get('title') or event_data['title'], 'url': links[0]['url']}
     if event_pk:
         return {
-            'title': f"Links for: {event_data['title']}",
-            'url': f"https://{settings.DOMAIN}/dashboard/events/{event_pk}/links/",
+            'title': event_data['title'],
+            'url': f"https://{settings.DOMAIN}/dashboard/events/{event_pk}/",
         }
-    return None  # will be patched after save
+    return None  # fallback if pk not available
 
 
 def build_gcal_body(event) -> dict:
