@@ -60,7 +60,7 @@ def _gcal_source_for_links(links: list, event_data: dict, event_pk: int | None =
     if event_pk:
         return {
             'title': f"Links for: {event_data['title']}",
-            'url': f"https://{settings.DOMAIN}/events/{event_pk}/links/",
+            'url': f"https://{settings.DOMAIN}/dashboard/events/{event_pk}/links/",
         }
     return None  # will be patched after save
 
