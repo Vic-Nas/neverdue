@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Links for: {{ event.title }}{% endblock %}
+{% block content %}
+<div class="container narrow">
+  <h1>Links for: {{ event.title }}</h1>
+  {% if event.links %}
+    <ul class="link-list">
+      {% for link in event.links %}
+        <li>
+          <a href="{{ link.url }}" target="_blank" rel="noopener">
+            {{ link.title|default:link.url }} ↗
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No links available for this event.</p>
+  {% endif %}
+  <p><a href="/dashboard/events/{{ event.pk }}/">Back to event</a></p>
+</div>
+{% endblock %}

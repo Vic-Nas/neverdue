@@ -46,6 +46,25 @@ def _resolve_reminders(event_reminders: list, category) -> list[dict]:
     return [{'method': 'popup', 'minutes': int(m)} for m in minutes_list]
 
 
+def _gcal_source_for_links(links: list, event_data: dict, event_pk: int | None = None) -> dict | None:
+    """Return a GCal source dict for the given links.
+
+    - 0 links → None
+    - 1 link  → use it directly
+    - 2+ links → point to the NeverDue links page (requires saved event PK)
+    """
+    if not links:
+        return None
+    if len(links) == 1:
+        return {'title': links[0].get('title') or event_data['title'], 'url': links[0]['url']}
+    if event_pk:
+        return {
+            'title': f"Links for: {event_data['title']}",
+            'url': f"https://{settings.DOMAIN}/events/{event_pk}/links/",
+        }
+    return None  # will be patched after save
+
+
 def build_gcal_body(event) -> dict:
     """Build a GCal API request body from an Event model instance."""
     user = event.user
@@ -62,10 +81,14 @@ def build_gcal_body(event) -> dict:
     }
     if event.recurrence_freq:
         body['recurrence'] = [_build_rrule(event.recurrence_freq, event.recurrence_until)]
+    links = event.links or []
+    source = _gcal_source_for_links(links, {'title': event.title}, event.pk)
+    if source:
+        body['source'] = source
     return body
 
 
-def _build_gcal_body_from_dict(user, event_data: dict, category) -> dict:
+def _build_gcal_body_from_dict(user, event_data: dict, category, event_pk: int | None = None) -> dict:
     """Build GCal API request body from an event data dict (pre-save)."""
     reminders = _resolve_reminders([], category)
 
@@ -78,12 +101,9 @@ def _build_gcal_body_from_dict(user, event_data: dict, category) -> dict:
         'colorId': _resolve_color_id(user, category),
     }
     links = event_data.get('links', [])
-    if links:
-        body['source'] = {'title': links[0].get('title') or event_data['title'], 'url': links[0]['url']}
-        if len(links) > 1:
-            extra = '\n'.join(f"{lnk.get('title') or lnk['url']}: {lnk['url']}" for lnk in links[1:])
-            desc = body['description']
-            body['description'] = f"{desc}\n\n{extra}".strip() if desc else extra
+    source = _gcal_source_for_links(links, event_data, event_pk)
+    if source:
+        body['source'] = source
     if event_data.get('recurrence_freq'):
         body['recurrence'] = [_build_rrule(event_data['recurrence_freq'], event_data.get('recurrence_until'))]
     return body
@@ -143,10 +163,20 @@ def _save_active_event(user, event_data, category, scan_job):
         from dashboard.gcal.client import _service
         try:
             svc = _service(user)
-            body = _build_gcal_body_from_dict(user, event_data, category)
+
+            links = event_data.get('links', [])
+            needs_patch = len(links) > 1  # source URL requires saved PK, patch after
+
+            body = _build_gcal_body_from_dict(user, event_data, category, event_pk=None)
             google_event = svc.events().insert(calendarId='primary', body=body).execute()
             google_event_id = google_event.get('id')
             gcal_link = google_event.get('htmlLink', '')
+
+            if needs_patch:
+                # Now we have the GCal event ID but not yet the DB PK.
+                # Save to DB first, then patch GCal source with the real event PK.
+                pass  # handled below after Event.objects.create
+
         except Exception as exc:
             logger.error("dashboard.write_event_to_calendar: gcal push failed | user=%s error=%s", user.pk, exc)
             raise GCalUnavailableError(str(exc)) from exc
@@ -156,7 +186,7 @@ def _save_active_event(user, event_data, category, scan_job):
         event_data['description'] = f'{desc}\n\n{note}'.strip() if desc else note
 
     try:
-        return Event.objects.create(
+        event = Event.objects.create(
             user=user, category=category,
             title=event_data['title'], description=event_data.get('description', ''),
             links=event_data.get('links', []),
@@ -171,3 +201,20 @@ def _save_active_event(user, event_data, category, scan_job):
     except Exception as exc:
         logger.error("dashboard.write_event_to_calendar: db save failed | user=%s error=%s", user.pk, exc)
         return None
+
+    # Patch GCal source now that we have the DB PK
+    if user.save_to_gcal and google_event_id and len(event_data.get('links', [])) > 1:
+        try:
+            from dashboard.gcal.client import _service
+            svc = _service(user)
+            source = _gcal_source_for_links(event_data['links'], event_data, event.pk)
+            svc.events().patch(
+                calendarId='primary',
+                eventId=google_event_id,
+                body={'source': source},
+            ).execute()
+        except Exception as exc:
+            logger.warning("dashboard.write_event_to_calendar: gcal source patch failed | user=%s error=%s", user.pk, exc)
+            # Non-fatal — event is saved, source just won't be set
+
+    return event
