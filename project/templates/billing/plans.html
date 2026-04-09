@@ -57,5 +57,58 @@
     </div>
 
   </div>
+
+  {# Referral section — only shown to Pro users #}
+  {% if request.user.is_pro %}
+  <div class="referral-section">
+    <h2 class="referral-section__heading">Refer &amp; save</h2>
+    <p class="referral-section__desc">
+      Earn <strong>12.5% off</strong> your monthly bill for each active subscriber you refer.
+      Refer 8 people and your subscription is free — no cap.
+    </p>
+
+    {% if discount > 0 %}
+    <div class="referral-discount-badge">
+      Your discount at next billing: <strong>{{ discount }}%</strong>
+    </div>
+    {% endif %}
+
+    <div class="referral-code-box">
+      {% if referral_code %}
+        <span class="referral-code-box__label">Your referral code</span>
+        <code class="referral-code-box__code" id="referral-code">{{ referral_code }}</code>
+        <button class="btn-ghost btn btn--sm" id="copy-code-btn" onclick="copyCode()">Copy</button>
+      {% else %}
+        <button class="btn-primary btn btn--sm" id="generate-code-btn">Get my referral code</button>
+      {% endif %}
+    </div>
+
+    {% if referred %}
+    <table class="referral-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Counts toward discount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in referred %}
+        <tr>
+          <td>{{ r.masked_email }}</td>
+          <td><span class="badge badge--{{ r.status }}">{{ r.status }}</span></td>
+          <td>{% if r.counts %}✓{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endif %}
+
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/billing.js' %}"></script>
 {% endblock %}

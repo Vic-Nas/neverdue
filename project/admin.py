@@ -1,7 +1,3 @@
 # project/admin.py
-from django.contrib import admin
-
-from accounts.models import User
-
-
-admin.site.register(User)
+# Admin registrations live in each app's admin.py.
+# User is registered in billing/admin.py with restricted fields.

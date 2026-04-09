@@ -59,7 +59,7 @@ LOGGING = {
 }
 
 INSTALLED_APPS = [
-    # django.contrib.admin removed — replaced by /staff/ dashboard
+    'django.contrib.admin',       # re-enabled — mounted at /staff/admin/
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',

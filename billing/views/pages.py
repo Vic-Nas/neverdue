@@ -5,9 +5,11 @@ import stripe
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
+from billing.discount import compute_discount, referral_summary
 from billing.models import Subscription
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -16,10 +18,35 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def plans(request):
+    sub = getattr(request.user, 'subscription', None)
+    discount = compute_discount(request.user) if sub and sub.is_pro else 0
+    referred = referral_summary(request.user) if sub and sub.is_pro else []
+    ctx = {
+        'discount': discount,
+        'referred': referred,
+        'referral_code': sub.referral_code if sub else None,
+    }
     try:
-        return render(request, 'billing/plans.html')
+        return render(request, 'billing/plans.html', ctx)
     except Exception:
         return HttpResponse('Plans unavailable.', status=500)
+
+
+@login_required
+@require_POST
+def generate_referral_code(request):
+    sub = getattr(request.user, 'subscription', None)
+    if not sub or not sub.is_pro:
+        return JsonResponse({'error': 'Pro subscription required.'}, status=403)
+    if sub.referral_code:
+        return JsonResponse({'code': sub.referral_code})
+    try:
+        code = sub.generate_referral_code()
+        return JsonResponse({'code': code})
+    except Exception as exc:
+        logger.error('billing.generate_referral_code: failed | user_id=%s error=%s',
+                     request.user.pk, exc, exc_info=True)
+        return JsonResponse({'error': 'Could not generate code.'}, status=500)
 
 
 @login_required
@@ -38,7 +65,8 @@ def checkout(request):
         )
         return redirect(session.url)
     except Exception as exc:
-        logger.error('billing.checkout: failed | user_id=%s error=%s', request.user.pk, exc, exc_info=True)
+        logger.error('billing.checkout: failed | user_id=%s error=%s',
+                     request.user.pk, exc, exc_info=True)
         return HttpResponse('Checkout unavailable.', status=500)
 
 
@@ -61,26 +89,17 @@ def cancel(request):
 @login_required
 def portal(request):
     sub = getattr(request.user, 'subscription', None)
-
     if not sub:
         return redirect('billing:plans')
-
     if not sub.stripe_subscription_id:
-        messages.info(
-            request,
+        messages.info(request,
             'Your Pro access was granted manually and is not managed through Stripe. '
-            'Contact support if you have questions about your account.',
-        )
+            'Contact support if you have questions about your account.')
         return redirect('billing:plans')
-
     if not sub.stripe_customer_id or not sub.stripe_customer_id.startswith('cus_'):
-        logger.error(
-            'billing.portal: invalid customer_id | user_id=%s subscription_id=%s customer_id=%s',
-            request.user.pk, sub.stripe_subscription_id, sub.stripe_customer_id,
-        )
+        logger.error('billing.portal: invalid customer_id | user_id=%s', request.user.pk)
         messages.error(request, 'There is an issue with your billing account. Please contact support.')
         return redirect('billing:plans')
-
     try:
         session = stripe.billing_portal.Session.create(
             customer=sub.stripe_customer_id,
@@ -88,7 +107,7 @@ def portal(request):
         )
         return redirect(session.url)
     except stripe.error.StripeError:
-        logger.exception('billing portal failed for user=%s customer=%s', request.user.pk, sub.stripe_customer_id)
+        logger.exception('billing portal failed for user=%s', request.user.pk)
         messages.error(request, 'We could not open the billing portal right now. Please try again or contact support.')
         return redirect('billing:plans')
 

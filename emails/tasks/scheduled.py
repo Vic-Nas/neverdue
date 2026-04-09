@@ -175,3 +175,32 @@ def cleanup_old_tickets(timestamp: int) -> None:
     deleted, _ = Ticket.objects.filter(created_at__lt=cutoff).delete()
     if deleted:
         logger.info("support.cleanup_old_tickets: deleted %s ticket(s)", deleted)
+
+
+@app.periodic(cron="0 4 * * *")
+@app.task
+def cleanup_expired_referral_codes(timestamp: int) -> None:
+    """
+    Null out referral codes generated more than 30 days ago with no referrals.
+    Codes are kept if the user has at least one referred user (referrals.exists()).
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from billing.models import Subscription
+
+    cutoff = timezone.now() - timedelta(days=30)
+    candidates = Subscription.objects.filter(
+        referral_code__isnull=False,
+        referral_code_generated_at__lt=cutoff,
+    ).select_related('user')
+
+    expired = 0
+    for sub in candidates:
+        if not sub.user.referrals.exists():
+            sub.referral_code = None
+            sub.referral_code_generated_at = None
+            sub.save(update_fields=['referral_code', 'referral_code_generated_at'])
+            expired += 1
+
+    if expired:
+        logger.info('billing.cleanup_expired_referral_codes: expired %s code(s)', expired)

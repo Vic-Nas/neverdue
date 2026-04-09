@@ -19,7 +19,7 @@ class User(AbstractUser):
     delete_from_gcal_on_cleanup = models.BooleanField(default=False)
 
     # Timezone — stored as IANA string e.g. "America/Toronto"
-    # timezone_auto_detected: False means user has manually set it (don't overwrite with JS detection)
+    # timezone_auto_detected: False means user has manually set it
     timezone = models.CharField(max_length=100, default='UTC')
     timezone_auto_detected = models.BooleanField(default=False)
 
@@ -29,16 +29,21 @@ class User(AbstractUser):
     gcal_channel_expiration = models.DateTimeField(null=True, blank=True)
 
     # Priority colors — stored as Google Calendar colorId (1–11).
-    # Defaults: Low→Sage(2), Medium→Banana(5), High→Tangerine(6), Urgent→Tomato(11)
     priority_color_low = models.IntegerField(default=2)
     priority_color_medium = models.IntegerField(default=5)
     priority_color_high = models.IntegerField(default=6)
     priority_color_urgent = models.IntegerField(default=11)
 
     # LLM token usage — current month rolling counters.
-    # Reset to 0 each month by reset_monthly_scans (after snapshotting to MonthlyUsage).
     monthly_input_tokens = models.PositiveBigIntegerField(default=0)
     monthly_output_tokens = models.PositiveBigIntegerField(default=0)
+
+    # Referral — who referred this user (acquisition metadata, not billing state)
+    referred_by = models.ForeignKey(
+        'self', null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='referrals',
+    )
 
     @property
     def is_pro(self):
@@ -57,8 +62,6 @@ class MonthlyUsage(models.Model):
     input_tokens = models.PositiveBigIntegerField(default=0)
     output_tokens = models.PositiveBigIntegerField(default=0)
 
-    # Pricing snapshot at time of record — lets us recalculate cost later if rates change.
-    # Stored as USD per million tokens (e.g. 3.00 and 15.00 for Sonnet).
     input_cost_per_million = models.DecimalField(max_digits=8, decimal_places=4, default='3.0000')
     output_cost_per_million = models.DecimalField(max_digits=8, decimal_places=4, default='15.0000')
 
