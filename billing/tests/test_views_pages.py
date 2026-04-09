@@ -4,6 +4,8 @@ Billing page view tests — authentication gates, redirect behaviour,
 checkout session creation, portal session.
 No Stripe subscription needed for most; creates real Stripe customers.
 """
+from unittest.mock import patch
+
 import stripe
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -68,11 +70,12 @@ class CheckoutView(BillingTestCase):
         self.client.force_login(self.user)
 
     def test_checkout_creates_stripe_customer_and_redirects(self):
-        r = self.client.get(reverse("billing:checkout"))
-        # Should redirect to Stripe checkout
+        fake_session = type("S", (), {"url": "https://checkout.stripe.com/pay/test"})()
+        with patch("billing.views.pages.stripe.checkout.Session.create",
+                   return_value=fake_session):
+            r = self.client.get(reverse("billing:checkout"))
         self.assertEqual(r.status_code, 302)
         self.assertIn("stripe.com", r["Location"])
-
         sub = Subscription.objects.get(user=self.user)
         self.assertTrue(sub.stripe_customer_id.startswith("cus_"))
         self.track("customer", sub.stripe_customer_id)
@@ -86,9 +89,11 @@ class CheckoutView(BillingTestCase):
             stripe_customer_id=cust.id,
             status="cancelled",
         )
-        r = self.client.get(reverse("billing:checkout"))
+        fake_session = type("S", (), {"url": "https://checkout.stripe.com/pay/test"})()
+        with patch("billing.views.pages.stripe.checkout.Session.create",
+                   return_value=fake_session):
+            r = self.client.get(reverse("billing:checkout"))
         self.assertEqual(r.status_code, 302)
-        # Still only one subscription record
         self.assertEqual(Subscription.objects.filter(user=self.user).count(), 1)
 
 
