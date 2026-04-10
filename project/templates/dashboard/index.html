@@ -33,7 +33,7 @@
   {% if not request.user.is_pro %}
   <div class="trial-banner">
     <span class="trial-banner__text">✨ Try <strong>Pro</strong> free for 7 days</span>
-    <a href="{% url 'billing:plans' %}" class="trial-banner__link">Learn more →</a>
+    <a href="{% url 'billing:membership' %}" class="trial-banner__link">Learn more →</a>
   </div>
   {% endif %}
 

@@ -34,6 +34,6 @@ def username_pick(request):
 
         request.user.username = username
         request.user.save(update_fields=['username'])
-        return redirect('billing:plans')
+        return redirect('billing:membership')
 
     return render(request, 'accounts/username_pick.html')

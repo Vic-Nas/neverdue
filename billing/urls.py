@@ -6,6 +6,7 @@ app_name = 'billing'
 
 urlpatterns = [
     path('membership/',             views.plans,                  name='membership'),
+    path('plans/',                  views.plans,                  name='plans'),  # backward-compat alias, remove once all templates updated
     path('checkout/',               views.checkout,               name='checkout'),
     path('success/',                views.success,                name='success'),
     path('cancel/',                 views.cancel,                 name='cancel'),
