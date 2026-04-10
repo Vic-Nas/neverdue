@@ -1,6 +1,6 @@
 # billing/views/webhook.py
 import logging
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 import stripe
 from django.conf import settings
@@ -52,22 +52,56 @@ def webhook(request):
 
 
 def _handle_checkout_completed(session):
+    """
+    After checkout:
+    - If a referral code was used: extend B's trial to 30 days and strip the
+      percent coupon off B's subscription (B gets free time, not a % discount).
+      referred_by is set later via customer.discount.created -> _handle_discount_created.
+    - If a non-referral promo/coupon was used: attach it to the subscription as before.
+    """
     subscription_id = session.get('subscription')
     discounts = session.get('discounts') or []
-    if not subscription_id or not discounts:
+    if not subscription_id:
         return
-    sub_discounts = []
+
+    referral_used = False
+    non_referral_discounts = []
+
     for d in discounts:
+        coupon_id = None
         if d.get('promotion_code'):
-            sub_discounts.append({'promotion_code': d['promotion_code']})
+            try:
+                pc = stripe.PromotionCode.retrieve(d['promotion_code'])
+                coupon_id = pc['coupon']['id']
+            except stripe.error.StripeError:
+                pass
         elif d.get('coupon'):
-            sub_discounts.append({'coupon': d['coupon']})
-    if sub_discounts:
-        try:
-            stripe.Subscription.modify(subscription_id, discounts=sub_discounts)
-        except stripe.error.StripeError as exc:
-            logger.error('billing._handle_checkout_completed: failed | subscription_id=%s error=%s',
-                         subscription_id, exc, exc_info=True)
+            coupon_id = d['coupon']
+
+        if coupon_id and Subscription.objects.filter(referral_code=coupon_id).exists():
+            referral_used = True
+        else:
+            if d.get('promotion_code'):
+                non_referral_discounts.append({'promotion_code': d['promotion_code']})
+            elif d.get('coupon'):
+                non_referral_discounts.append({'coupon': d['coupon']})
+
+    try:
+        if referral_used:
+            trial_end = int(datetime.now(tz=dt_timezone.utc).timestamp()) + (30 * 24 * 60 * 60)
+            stripe.Subscription.modify(
+                subscription_id,
+                trial_end=trial_end,
+                proration_behavior='none',
+                discounts=[],
+            )
+            logger.info('_handle_checkout_completed: extended trial 30d | subscription=%s',
+                        subscription_id)
+        if non_referral_discounts:
+            stripe.Subscription.modify(subscription_id, discounts=non_referral_discounts)
+    except stripe.error.StripeError as exc:
+        logger.error('billing._handle_checkout_completed: failed | subscription_id=%s error=%s',
+                     subscription_id, exc, exc_info=True)
 
 
 def _handle_discount_created(discount_obj):
@@ -156,8 +190,48 @@ def _sync_subscription(stripe_sub):
             from emails.tasks import retry_jobs_after_plan_upgrade
             retry_jobs_after_plan_upgrade.defer(user_id=sub.user.pk)
             _push_combined_discount(sub)
+            _shift_referrer_billing_anchor(sub)
     except Exception:
         logger.exception('_sync_subscription: save failed for customer=%s', stripe_sub['customer'])
+
+
+def _shift_referrer_billing_anchor(sub):
+    """
+    When B (sub) transitions trialing -> active (first real payment confirmed),
+    shift A's (referrer's) billing cycle anchor to max(A_period_end, B_period_end) + 1 day.
+    Uses trial_end + proration_behavior='none' so A gets free extra days, no charge.
+    Only moves forward, never back.
+    """
+    referrer = getattr(sub.user, 'referred_by', None)
+    if not referrer:
+        return
+    referrer_sub = getattr(referrer, 'subscription', None)
+    if not referrer_sub or not referrer_sub.stripe_subscription_id:
+        return
+    if not sub.current_period_end or not referrer_sub.current_period_end:
+        return
+
+    # Only shift if B's period ends after A's — i.e. A would bill before B next cycle
+    if sub.current_period_end <= referrer_sub.current_period_end:
+        return
+
+    # Move A's next billing to one day after B's period ends
+    new_anchor = sub.current_period_end + timedelta(days=1)
+    new_anchor_ts = int(new_anchor.timestamp())
+
+    try:
+        stripe.Subscription.modify(
+            referrer_sub.stripe_subscription_id,
+            trial_end=new_anchor_ts,
+            proration_behavior='none',
+        )
+        referrer_sub.current_period_end = new_anchor
+        referrer_sub.save(update_fields=['current_period_end'])
+        logger.info('_shift_referrer_billing_anchor: shifted referrer=%s to %s',
+                    referrer.pk, new_anchor.date())
+    except stripe.error.StripeError as exc:
+        logger.error('_shift_referrer_billing_anchor: failed | referrer=%s error=%s',
+                     referrer.pk, exc, exc_info=True)
 
 
 def _push_combined_discount(sub):
