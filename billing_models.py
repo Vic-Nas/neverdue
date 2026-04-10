@@ -43,16 +43,15 @@ def _stripe_upsert_coupon(code, percent_off, duration, name):
 
 def _stripe_ensure_promotion_code(coupon_id, code):
     """
-    Ensure an *active* PromotionCode with the given code string exists for coupon_id.
+    Ensure a PromotionCode with the given code string exists for coupon_id.
 
     Must be called AFTER _stripe_upsert_coupon, at which point Stripe has already
     reactivated any existing PCs that reference the (just-recreated) coupon.
-    We only need to create a PC if no *active* one exists — inactive (orphaned) PCs
-    from prior deletions of the coupon do not count and must not block creation.
+    We only need to create a PC if none has ever been created for this code string.
     """
-    existing = list(stripe.PromotionCode.list(code=code, active=True, limit=1).auto_paging_iter())
+    existing = list(stripe.PromotionCode.list(code=code, limit=1).auto_paging_iter())
     if existing:
-        return  # already exists and is active
+        return  # already exists (and is active — coupon was just recreated)
     stripe.PromotionCode.create(coupon=coupon_id, code=code)
 
 
