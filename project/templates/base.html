@@ -44,11 +44,11 @@
   <div class="topnav__actions">
     {% if user.is_authenticated %}
       {% if user.is_pro %}
-    <a href="{% url 'billing:portal' %}" class="topnav__pro">Pro ↗</a>
+        <a href="{% url 'billing:portal' %}" class="topnav__pro">Pro ↗</a>
+        <a href="{% url 'billing:membership' %}" class="topnav__link {% if request.resolver_match.url_name == 'membership' %}topnav__link--active{% endif %}">Referral</a>
       {% else %}
-        <a href="{% url 'billing:plans' %}" class="topnav__upgrade">Upgrade</a>
+        <a href="{% url 'billing:membership' %}" class="topnav__upgrade">Upgrade</a>
       {% endif %}
-      <span class="topnav__username">{{ user.username }}</span>
       <a href="{% url 'accounts:preferences' %}" class="topnav__link">Preferences</a>
       <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
     {% endif %}

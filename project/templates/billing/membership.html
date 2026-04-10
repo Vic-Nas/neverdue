@@ -1,0 +1,134 @@
+{# project/templates/billing/membership.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}
+  {% if show_referral %}Referral — NeverDue{% else %}Plans — NeverDue{% endif %}
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/billing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="billing-page">
+
+  {% if show_referral %}
+  {# ── Pro / downgraded-with-code: referral page ── #}
+
+  <div class="page__header">
+    <h1 class="page__title">Refer &amp; save</h1>
+    <p class="page__sub">
+      Earn <strong>12.5% off</strong> your monthly bill for every active subscriber you refer.
+      Refer 8 and your subscription pays for itself.
+    </p>
+  </div>
+
+  {% if not is_pro %}
+  <div class="referral-notice">
+    <p>Your subscription is inactive — discounts will apply when you re-subscribe.
+       <a href="{% url 'billing:checkout' %}">Re-subscribe →</a></p>
+  </div>
+  {% endif %}
+
+  {% if discount > 0 %}
+  <div class="referral-discount-badge">
+    Your discount at next billing: <strong>{{ discount }}%</strong>
+  </div>
+  {% endif %}
+
+  <div class="referral-code-box">
+    {% if referral_code %}
+      <span class="referral-code-box__label">Your referral code</span>
+      <code class="referral-code-box__code" id="referral-code">{{ referral_code }}</code>
+      <button class="btn-ghost btn btn--sm" id="copy-code-btn" onclick="copyCode()">Copy</button>
+    {% elif is_pro %}
+      <button class="btn-primary btn btn--sm" id="generate-code-btn">Get my referral code</button>
+    {% endif %}
+  </div>
+
+  {% if referred %}
+  <table class="referral-table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Counts toward discount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in referred %}
+      <tr>
+        <td>{{ r.masked_email }}</td>
+        <td><span class="badge badge--{{ r.status }}">{{ r.status }}</span></td>
+        <td>{% if r.counts %}✓{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="referral-empty">No referrals yet. Share your code to start earning discounts.</p>
+  {% endif %}
+
+  {% if is_pro %}
+  <div class="referral-manage">
+    <a href="{% url 'billing:portal' %}" class="btn-ghost btn">Manage subscription ↗</a>
+  </div>
+  {% endif %}
+
+  {% else %}
+  {# ── Non-pro, no existing code: plan comparison ── #}
+
+  <h1 class="billing-page__heading">Simple pricing</h1>
+  <p class="billing-page__sub">Start free. Upgrade when you need more.</p>
+
+  <div class="plans-grid">
+
+    {# Free #}
+    <div class="plan-card">
+      <div class="plan-card__name">Free</div>
+      <div class="plan-card__price">$0 <span>/ month</span></div>
+      <p class="plan-card__desc">For light users who want to stay on top of deadlines.</p>
+      <ul class="plan-features">
+        <li>30 email scans / month</li>
+        <li>Up to 3 categories</li>
+        <li>Google Calendar sync</li>
+        <li>Custom reminder rules</li>
+        <li class="disabled">Image &amp; PDF upload</li>
+        <li class="disabled">Unlimited scans</li>
+        <li class="disabled">Unlimited categories</li>
+      </ul>
+      <span class="btn-primary btn--full btn--disabled">Current plan</span>
+    </div>
+
+    {# Pro #}
+    <div class="plan-card plan-card--pro">
+      <div class="plan-card__badge">Pro</div>
+      <div class="plan-card__name">Pro</div>
+      <div class="plan-card__price">$8 <span>/ month</span></div>
+      <p class="plan-card__trial">7-day free trial</p>
+      <p class="plan-card__desc">For students and professionals who live by their deadlines.</p>
+      <ul class="plan-features">
+        <li>Unlimited email scans</li>
+        <li>Unlimited categories</li>
+        <li>Google Calendar sync</li>
+        <li>Custom reminder rules</li>
+        <li>Image &amp; PDF upload</li>
+        <li>Priority processing</li>
+        <li>Earn free months via referrals</li>
+      </ul>
+      <a href="{% url 'billing:checkout' %}" class="btn-primary btn--full">Upgrade to Pro →</a>
+    </div>
+
+  </div>
+
+  <p class="billing-referral-hint">
+    Already on Pro? You'll get a referral code to share — refer 8 active subscribers and pay nothing.
+  </p>
+
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pages/billing.js' %}"></script>
+{% endblock %}

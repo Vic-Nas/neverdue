@@ -19,17 +19,27 @@ logger = logging.getLogger(__name__)
 @login_required
 def plans(request):
     sub = getattr(request.user, 'subscription', None)
-    discount = compute_discount(request.user) if sub and sub.is_pro else 0
-    referred = referral_summary(request.user) if sub and sub.is_pro else []
+    is_pro = sub and sub.is_pro
+    has_referral_code = sub and sub.referral_code
+
+    # Show referral section to: active pro users, OR downgraded users who already
+    # generated a code (their referred users are still visible and motivating).
+    show_referral = is_pro or has_referral_code
+
+    discount = compute_discount(request.user) if is_pro else 0
+    referred = referral_summary(request.user) if show_referral else []
+
     ctx = {
+        'is_pro': is_pro,
+        'show_referral': show_referral,
         'discount': discount,
         'referred': referred,
         'referral_code': sub.referral_code if sub else None,
     }
     try:
-        return render(request, 'billing/plans.html', ctx)
+        return render(request, 'billing/membership.html', ctx)
     except Exception:
-        return HttpResponse('Plans unavailable.', status=500)
+        return HttpResponse('Page unavailable.', status=500)
 
 
 @login_required
@@ -90,26 +100,26 @@ def cancel(request):
 def portal(request):
     sub = getattr(request.user, 'subscription', None)
     if not sub:
-        return redirect('billing:plans')
+        return redirect('billing:membership')
     if not sub.stripe_subscription_id:
         messages.info(request,
             'Your Pro access was granted manually and is not managed through Stripe. '
             'Contact support if you have questions about your account.')
-        return redirect('billing:plans')
+        return redirect('billing:membership')
     if not sub.stripe_customer_id or not sub.stripe_customer_id.startswith('cus_'):
         logger.error('billing.portal: invalid customer_id | user_id=%s', request.user.pk)
         messages.error(request, 'There is an issue with your billing account. Please contact support.')
-        return redirect('billing:plans')
+        return redirect('billing:membership')
     try:
         session = stripe.billing_portal.Session.create(
             customer=sub.stripe_customer_id,
-            return_url=request.build_absolute_uri('/billing/plans/'),
+            return_url=request.build_absolute_uri('/billing/membership/'),
         )
         return redirect(session.url)
     except stripe.error.StripeError:
         logger.exception('billing portal failed for user=%s', request.user.pk)
         messages.error(request, 'We could not open the billing portal right now. Please try again or contact support.')
-        return redirect('billing:plans')
+        return redirect('billing:membership')
 
 
 def _get_or_create_customer(user):
