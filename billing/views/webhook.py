@@ -10,10 +10,6 @@ from django.views.decorators.csrf import csrf_exempt
 from billing.models import Subscription
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
-# Pin to a stable pre-clover API version. The Stripe account is pinned to
-# 2025-12-15.clover which removed subscription.discount (singular) in favour of
-# subscription.discounts (array). Pinning here restores the schema that both this
-# code and the test suite rely on (coupon= on Subscription.modify, expand=['discount']).
 stripe.api_version = '2024-06-20'
 
 logger = logging.getLogger(__name__)
@@ -53,20 +49,25 @@ def webhook(request):
 
 def _handle_checkout_completed(session):
     """
-    After checkout:
-    - If a referral code was used: extend B's trial to 30 days and strip the
-      percent coupon off B's subscription (B gets free time, not a % discount).
-      referred_by is set later via customer.discount.created -> _handle_discount_created.
-    - If a non-referral promo/coupon was used: attach it to the subscription as before.
+    Referral codes are now resolved server-side at checkout session creation
+    (pages.py) so they never reach Stripe as coupons — Stripe already shows
+    the correct trial duration on the checkout page.
+
+    The only thing left to do here is handle staff coupons: record the
+    CouponRedemption so the discount stacks correctly at next billing.
+    customer.discount.created fires for both paths and handles referred_by
+    and CouponRedemption, so this handler is now a no-op for referrals.
     """
     subscription_id = session.get('subscription')
     discounts = session.get('discounts') or []
-    if not subscription_id:
+    if not subscription_id or not discounts:
         return
 
-    referral_used = False
+    # If any discount made it through, make sure it's on the subscription
+    # (Stripe sometimes attaches it only at customer level).
+    # This only applies to staff coupons since referral codes are no longer
+    # passed to Stripe at all.
     non_referral_discounts = []
-
     for d in discounts:
         coupon_id = None
         if d.get('promotion_code'):
@@ -78,8 +79,11 @@ def _handle_checkout_completed(session):
         elif d.get('coupon'):
             coupon_id = d['coupon']
 
+        # Referral codes should never arrive here anymore, but guard anyway
         if coupon_id and Subscription.objects.filter(referral_code=coupon_id).exists():
-            referral_used = True
+            logger.warning(
+                '_handle_checkout_completed: referral code reached Stripe unexpectedly '
+                'coupon=%s subscription=%s', coupon_id, subscription_id)
         else:
             if d.get('promotion_code'):
                 non_referral_discounts.append({'promotion_code': d['promotion_code']})
@@ -87,16 +91,6 @@ def _handle_checkout_completed(session):
                 non_referral_discounts.append({'coupon': d['coupon']})
 
     try:
-        if referral_used:
-            trial_end = int(datetime.now(tz=dt_timezone.utc).timestamp()) + (30 * 24 * 60 * 60)
-            stripe.Subscription.modify(
-                subscription_id,
-                trial_end=trial_end,
-                proration_behavior='none',
-                discounts=[],
-            )
-            logger.info('_handle_checkout_completed: extended trial 30d | subscription=%s',
-                        subscription_id)
         if non_referral_discounts:
             stripe.Subscription.modify(subscription_id, discounts=non_referral_discounts)
     except stripe.error.StripeError as exc:
@@ -211,11 +205,9 @@ def _shift_referrer_billing_anchor(sub):
     if not sub.current_period_end or not referrer_sub.current_period_end:
         return
 
-    # Only shift if B's period ends after A's — i.e. A would bill before B next cycle
     if sub.current_period_end <= referrer_sub.current_period_end:
         return
 
-    # Move A's next billing to one day after B's period ends
     new_anchor = sub.current_period_end + timedelta(days=1)
     new_anchor_ts = int(new_anchor.timestamp())
 

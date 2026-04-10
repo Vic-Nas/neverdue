@@ -10,7 +10,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from billing.discount import compute_discount, referral_summary
-from billing.models import Subscription
+from billing.models import Coupon, Subscription
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
@@ -22,8 +22,6 @@ def plans(request):
     is_pro = sub and sub.is_pro
     has_referral_code = sub and sub.referral_code
 
-    # Show referral section to: active pro users, OR downgraded users who already
-    # generated a code (their referred users are still visible and motivating).
     show_referral = is_pro or has_referral_code
 
     discount = compute_discount(request.user) if is_pro else 0
@@ -60,20 +58,61 @@ def generate_referral_code(request):
 
 
 @login_required
+@require_POST
 def checkout(request):
+    """
+    Receives an optional promo_code from the membership page form.
+    Resolves it server-side before creating the Stripe session so Stripe
+    shows the real benefit — "30 days free" for referrals, actual % for
+    staff coupons — instead of the raw coupon face value.
+    """
+    raw_code = request.POST.get('promo_code', '').strip().upper()
+
+    trial_days = 7          # default
+    session_discounts = []  # [] means no discount passed to Stripe
+    code_error = None
+
+    if raw_code:
+        # Referral code?
+        referral_sub = Subscription.objects.filter(referral_code=raw_code).first()
+        if referral_sub and referral_sub.user != request.user:
+            trial_days = 30
+            # Set referred_by if not already set and not self-referral
+            if not request.user.referred_by:
+                request.user.referred_by = referral_sub.user
+                request.user.save(update_fields=['referred_by'])
+        else:
+            # Staff coupon?
+            coupon = Coupon.objects.filter(code=raw_code).first()
+            if coupon and coupon.is_redeemable():
+                session_discounts = [{'coupon': raw_code}]
+            else:
+                code_error = raw_code
+
+    if code_error:
+        messages.error(request, f'"{code_error}" is not a valid promo code.')
+        return redirect('billing:membership')
+
     try:
-        customer, _ = _get_or_create_customer(request.user)
-        session = stripe.checkout.Session.create(
-            customer=customer.stripe_customer_id,
+        sub, _ = _get_or_create_customer(request.user)
+
+        session_kwargs = dict(
+            customer=sub.stripe_customer_id,
             payment_method_types=['card'],
             line_items=[{'price': settings.STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            subscription_data={'trial_period_days': 7},
-            allow_promotion_codes=True,
+            subscription_data={'trial_period_days': trial_days},
+            # allow_promotion_codes intentionally omitted — codes are handled
+            # server-side so Stripe always shows the real benefit to the user.
             success_url=request.build_absolute_uri('/billing/success/'),
             cancel_url=request.build_absolute_uri('/billing/cancel/'),
         )
+        if session_discounts:
+            session_kwargs['discounts'] = session_discounts
+
+        session = stripe.checkout.Session.create(**session_kwargs)
         return redirect(session.url)
+
     except Exception as exc:
         logger.error('billing.checkout: failed | user_id=%s error=%s',
                      request.user.pk, exc, exc_info=True)

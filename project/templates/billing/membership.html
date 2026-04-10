@@ -25,7 +25,7 @@
   {% if not is_pro %}
   <div class="referral-notice">
     <p>Your subscription is inactive — discounts will apply when you re-subscribe.
-       <a href="{% url 'billing:checkout' %}">Re-subscribe →</a></p>
+       <a href="{% url 'billing:membership' %}">Re-subscribe →</a></p>
   </div>
   {% endif %}
 
@@ -115,7 +115,27 @@
         <li>Priority processing</li>
         <li>Earn free months via referrals</li>
       </ul>
-      <a href="{% url 'billing:checkout' %}" class="btn-primary btn--full">Upgrade to Pro →</a>
+
+      {# ── Promo code + upgrade form ── #}
+      <form method="post" action="{% url 'billing:checkout' %}" class="checkout-form">
+        {% csrf_token %}
+        <div class="promo-field">
+          <label for="promo_code" class="promo-field__label">Have a promo or referral code?</label>
+          <div class="promo-field__row">
+            <input
+              type="text"
+              id="promo_code"
+              name="promo_code"
+              class="promo-field__input"
+              placeholder="e.g. NVD-3S71D"
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn--full">Upgrade to Pro →</button>
+      </form>
+
     </div>
 
   </div>
