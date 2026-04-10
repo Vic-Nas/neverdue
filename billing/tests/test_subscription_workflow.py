@@ -114,7 +114,7 @@ class PortalSession(BillingTestCase):
         )
         session = s().billing_portal.Session.create(
             customer=self.cust.id,
-            return_url='https://localhost/billing/plans/',
+            return_url='https://localhost/billing/membership/',
         )
         self.assertIn('stripe.com', session.url)
 
@@ -130,4 +130,4 @@ class PortalSession(BillingTestCase):
         client = Client()
         client.force_login(self.user)
         r = client.get(reverse('billing:portal'))
-        self.assertRedirects(r, reverse('billing:plans'), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse('billing:membership'), fetch_redirect_response=False)
