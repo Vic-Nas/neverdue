@@ -72,15 +72,13 @@ def checkout(request):
     session_discounts = []  # [] means no discount passed to Stripe
     code_error = None
 
+    referral_sub = None
     if raw_code:
         # Referral code?
         referral_sub = Subscription.objects.filter(referral_code=raw_code).first()
         if referral_sub and referral_sub.user != request.user:
             trial_days = 30
-            # Set referred_by if not already set and not self-referral
-            if not request.user.referred_by:
-                request.user.referred_by = referral_sub.user
-                request.user.save(update_fields=['referred_by'])
+            # Do NOT set referred_by yet; wait until after Stripe session is created
         else:
             # Staff coupon?
             coupon = Coupon.objects.filter(code=raw_code).first()
@@ -111,6 +109,12 @@ def checkout(request):
             session_kwargs['discounts'] = session_discounts
 
         session = stripe.checkout.Session.create(**session_kwargs)
+
+        # Only commit referred_by once we know Stripe accepted the session
+        if referral_sub and not request.user.referred_by_id:
+            request.user.referred_by = referral_sub.user
+            request.user.save(update_fields=['referred_by'])
+
         return redirect(session.url)
 
     except Exception as exc:
