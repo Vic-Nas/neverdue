@@ -1,4 +1,3 @@
-from emails.tasks import retry_jobs_after_plan_upgrade
 # billing/signals.py
 """
 dj-stripe signal handlers.
@@ -12,6 +11,7 @@ import logging
 import stripe
 from django.conf import settings
 from djstripe.signals import WEBHOOK_SIGNALS
+from emails.tasks import retry_jobs_after_plan_upgrade
 
 logger = logging.getLogger(__name__)
 

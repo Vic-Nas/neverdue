@@ -96,6 +96,7 @@ def make_djstripe_invoice(user, amount_paid_cents, period_start, charge_id='ch_t
     dj_customer, _ = djstripe.Customer.objects.get_or_create(
         id=sub.stripe_customer_id,
         defaults={
+            'subscriber': user,
             'livemode': False,
             'currency': 'usd',
             'delinquent': False,

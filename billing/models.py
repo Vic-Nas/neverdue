@@ -59,7 +59,6 @@ class Subscription(models.Model):
     def is_pro(self):
         return self.status in ('active', 'trialing')
 
-
     def generate_referral_code(self):
         """
         Generate a unique NVD-XXXXX code, save it, and push it to Stripe as a
