@@ -16,16 +16,7 @@ import django.db.models.deletion
 
 
 def migrate_referrals_forward(apps, schema_editor):
-    """
-    Convert referred_by FK relationships to UserCoupon rows.
-    Both users share a 12.50% coupon.
-    """
-    User = apps.get_model('accounts', 'User')
-    UserCoupon = apps.get_model('billing', 'UserCoupon')
-
-    for user in User.objects.filter(referred_by__isnull=False).select_related('referred_by'):
-        coupon = UserCoupon.objects.create(percent='12.50')
-        coupon.users.set([user, user.referred_by])
+    pass  # referred_by field no longer exists; data already migrated on prod
 
 
 def migrate_redemptions_forward(apps, schema_editor):
