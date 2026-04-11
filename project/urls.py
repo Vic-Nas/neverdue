@@ -23,4 +23,7 @@ urlpatterns = [
     path('legal/',     include('project.legal_urls')),
     path('help/',      views.help_page, name='help'),
     path('support/',   include('support.urls')),
+
+    # dj-stripe webhook — replaces /billing/webhook/
+    path('stripe/', include('djstripe.urls', namespace='djstripe')),
 ]

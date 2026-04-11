@@ -11,8 +11,8 @@ neverdue/
 ├── accounts/           OAuth + user model + preferences
 │   └── views/          auth, google, username, preferences, timezone
 ├── billing/            Stripe subscriptions, coupons, referrals
-│   ├── tests/          coupon_workflow, discount_stack, referral_workflow, subscription_workflow
-│   └── views/          pages, webhook
+│   ├── tests/          test_user_coupon (full suite)
+│   └── views/          pages
 ├── dashboard/          Events, categories, rules, GCal sync, iCal export
 │   ├── gcal/           Google Calendar API (google-api-python-client)
 │   ├── models/         Category, Rule, Event
@@ -42,7 +42,7 @@ neverdue/
 
 ### `accounts/models.py`
 
-Custom `User` extends `AbstractUser` with Google OAuth tokens, timezone, language, `save_to_gcal` toggle, priority color preferences (stored as GCal colorId 1–11), rolling monthly LLM token counters, and a `referred_by` FK (nullable self-reference set at checkout when a referral code is used). `is_pro` delegates to `subscription.is_pro`. `MonthlyUsage` is an append-only snapshot written by `reset_monthly_scans`.
+Custom `User` extends `AbstractUser` with Google OAuth tokens, timezone, language, `save_to_gcal` toggle, priority color preferences (stored as GCal colorId 1–11), and rolling monthly LLM token counters. `is_pro` delegates to `subscription.is_pro`. `MonthlyUsage` is an append-only snapshot written by `reset_monthly_scans`. The `referred_by` field has been removed — referral relationships are now expressed through `UserCoupon.users`.
 
 ### `accounts/views/` (package)
 
@@ -68,38 +68,49 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 ### `billing/models.py`
 
-- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, and `referral_code` (nullable unique NVD-XXXXX string). `is_pro` returns True for active/trialing. `generate_referral_code()` lazily creates a code and calls `_sync_referral_code_to_stripe`. `_sync_referral_code_to_stripe` pushes the code to Stripe as a Coupon (12% display) + PromotionCode via `_stripe_upsert_coupon` / `_stripe_ensure_promotion_code`.
-- **`Coupon`** — Staff-created percent discount (code, percent, label, expires_at). `sync_to_stripe()` upserts the Stripe Coupon and ensures a PromotionCode exists. `is_redeemable()` checks expiry.
-- **`CouponRedemption`** — Records a user redeeming a Coupon. `unique_together (user, coupon)` prevents double-counting. `on_delete=PROTECT` on the Coupon FK — a redeemed coupon cannot be deleted.
-- **`_stripe_upsert_coupon`** — Delete-then-create a Stripe Coupon by ID (idempotent). Stripe auto-reactivates existing PromotionCodes after recreation.
-- **`_stripe_ensure_promotion_code`** — Creates an active PromotionCode only if none exists (`active=True` filter).
+- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, and `referral_code` (nullable unique NVD-XXXXX string). `is_pro` returns True for active/trialing. `generate_referral_code()` generates a code, saves it, and creates a Stripe `PromotionCode` against the shared `STRIPE_REFERRAL_COUPON_ID`. Idempotent: returns the existing code if already set.
+- **`UserCoupon`** — A discount shared between users. `users` M2M, `percent` DecimalField, `created_at`. Each user gets `percent` off while all other users on the coupon are active or are the admin sentinel. Used for both referrals (two real users) and staff grants (user + admin sentinel). No `max_redemptions` — enforced by Stripe on the PromotionCode.
+- **`RefundRecord`** — Idempotency guard for monthly refunds. One row per `(UserCoupon, Stripe invoice)`. `unique_together` prevents double refund on Procrastinate retry. `on_delete=PROTECT` on the UserCoupon FK.
+- **`compute_discount(user)`** — Module-level function. Sums `percent` of all UserCoupons where every other user is active (`status='active'`) or is the admin sentinel. Caps at 100, returns int.
 
-### `billing/discount.py`
+### `billing/apps.py`
 
-Pure discount computation — no side effects, no Stripe calls. `compute_discount(user)` sums active `CouponRedemption` percents plus `12.5 * active_referral_count`, caps at 100, returns `int`. `_count_active_referrals(user)` counts `referred_by=user` users with `subscription__status='active'` (trialing excluded). `referral_summary(user)` returns masked-email dicts for display on the billing page. `_mask_email` produces `jo***e@gm***.com` format.
+`BillingConfig.ready()` imports `billing.signals` to register all dj-stripe signal handlers at startup.
+
+### `billing/signals.py`
+
+dj-stripe signal handlers — all Stripe object syncing is handled by dj-stripe automatically. Only NeverDue business logic lives here. Registered via a single `WEBHOOK_EVENT_CALLBACK` connection to `_dispatch`.
+
+- **`handle_customer_discount_created`** — Identifies referrer via `Subscription.referral_code`. Guards: self-referral (strips Stripe discount via `Customer.delete_discount`, no coupon), duplicate (coupon linking these two users already exists, skip), unknown code (not a referral code, skip silently). Creates `UserCoupon(percent=12.50, users=[referrer, new_user])` on success.
+- **`handle_invoice_paid`** — On `subscription_create`: pushes `_push_combined_discount` for the payer and all their coupon partners (both sides activate at first payment). On `subscription_cycle`: pushes for the payer only (safety net).
+- **`handle_invoice_upcoming`** — Primary discount push path. Calls `_push_combined_discount` ~1 hour before each invoice so Stripe reflects the current discount.
+- **`handle_subscription_updated`** — Defers `retry_jobs_after_plan_upgrade` on any→active transition. dj-stripe handles local status sync automatically.
+- **`_push_combined_discount`** — Calls `compute_discount`, deletes/recreates `nvd-auto-<pk>` Stripe coupon with `duration='once'`, applies it to the subscription. Removes discount if percent is 0.
+
+### `billing/tasks.py`
+
+Single Procrastinate task: `process_monthly_refunds` (1st of month, 06:00 UTC, queue=`billing`). For each `UserCoupon`, for each paying user, finds last month's paid invoice from the dj-stripe local `Invoice` table, verifies all coupon partners also paid, issues a `stripe.Refund.create`, and writes a `RefundRecord` atomically. Admin sentinel is skipped. Each coupon is independent. `RefundRecord.unique_together` makes the whole job idempotent on retry.
+
+### `billing/admin.py`
+
+- **`SubscriptionAdmin`** — List/search by user and Stripe IDs. `referral_code` visible for debug. Stripe IDs and `created_at` are read-only.
+- **`UserCouponAdmin`** — Staff creates staff-grant coupons here (target user + admin sentinel). `filter_horizontal` for users. No Stripe sync on save — discount is pushed lazily at next `invoice.upcoming`.
+- **`RefundRecordAdmin`** — Fully read-only financial audit log. `has_add_permission` and `has_delete_permission` both return False.
+- **`UserReferralAdmin`** — Minimal read-only User view. Excludes all token fields. `has_add_permission` and `has_delete_permission` both return False.
 
 ### `billing/views/` (package)
 
-- **`pages.py`** — Renders `billing/membership.html` (replaced `plans.html`). Injects `show_referral` context var to conditionally display the referral section. `generate_referral_code` view lazily creates a referral code on demand.
-- **`webhook.py`** — Stripe webhook handler (signature verified via `stripe.Webhook.construct_event`, API pinned to `2024-06-20`):
-  - `_sync_subscription` — updates local status/period; on `trialing→active` transition fires `retry_jobs_after_plan_upgrade`, `_push_combined_discount`, and `_shift_referrer_billing_anchor`.
-  - `_handle_checkout_completed` — resolves each checkout discount to its coupon ID via `PromotionCode.retrieve`; if it matches a `Subscription.referral_code`, extends B's trial to 30 days (`proration_behavior='none'`) and strips the percent coupon (`discounts=[]`); non-referral coupons are attached normally.
-  - `_handle_discount_created` — sets `referred_by` on B's user when a referral code coupon fires, or records a `CouponRedemption` for staff coupons.
-  - `_handle_invoice_upcoming` — calls `_push_combined_discount` ~1 hour before each billing cycle.
-  - `_shift_referrer_billing_anchor` — when B goes `trialing→active`, if `B.current_period_end > A.current_period_end`, sets A's `trial_end` to `B.current_period_end + 1 day` with `proration_behavior='none'`; updates local `referrer_sub.current_period_end` so subsequent referrals compare against the already-shifted date.
-  - `_push_combined_discount` — computes discount via `compute_discount`, deletes/recreates `nvd-auto-<pk>` coupon on Stripe, applies it with `duration='once'`; removes discount if percent is 0.
+- **`pages.py`** — `plans` renders `billing/membership.html`; context includes `discount` (int %), `active_partners` (count of active coupon partners), `referral_code`, `show_referral`. `generate_referral_code` POST view lazily creates a code and returns JSON. `checkout` is a simple GET that creates a Stripe Checkout Session with `allow_promotion_codes=True` — promotion codes are entered on Stripe's hosted page. No server-side code interception.
 
 ### `billing/urls.py`
 
-`app_name = 'billing'`. Patterns: `membership/` (name=`membership`), `checkout/`, `success/`, `cancel/`, `portal/`, `webhook/`, `referral-code/generate/`.
+`app_name = 'billing'`. Patterns: `membership/`, `checkout/` (GET), `success/`, `cancel/`, `portal/`, `referral-code/generate/`. The `/billing/webhook/` pattern has been removed — dj-stripe mounts its own endpoint at `/stripe/webhook/`.
 
 ### `billing/tests/` (package)
 
-- **`helpers.py`** — `BillingTestCase` (tracks Stripe objects for cleanup), `make_user`, `create_stripe_customer`, `create_stripe_subscription`, `s()` (Stripe test-mode client).
-- **`test_coupon_workflow.py`** — Real-Stripe tests: `CouponSyncCreatesPromotionCode` (sync creates coupon + promo code, second sync is idempotent), `CouponAdminDeleteOrphansStripe`, `DiscountCreatedWebhookRecordsRedemption` (referral path, staff coupon path, unknown coupon ignored), `PushCombinedDiscountAppliesCorrectly`.
-- **`test_discount_stack.py`** — DB-level and real-Stripe stacking tests: `CouponReferralStack` (coupon + N referrals, cap at 100, trialing excluded), `CouponRedemptionIntegrity` (unique_together, PROTECT delete, admin correction), `StripeDiscountSync` (DB discount matches Stripe-applied percent for all combinations).
-- **`test_referral_workflow_real.py`** — Real-Stripe referral flow: `ReferralCodeExistsOnStripe` (generate_referral_code syncs to Stripe as coupon + promo code), `ReferralWebhookSetsReferredBy` (discount.created sets referred_by, not overwritten), `ReferralDiscountComputation` (12.5% per active referral, int truncation, cap).
-- **`test_subscription_workflow.py`** — Core subscription lifecycle tests.
+- **`helpers.py`** — `BillingTestCase` (tracks Stripe objects for cleanup, deactivates PromotionCodes on teardown), `make_user`, `make_admin_sentinel` (creates admin user + hardcoded-active Subscription), `create_stripe_customer`, `create_stripe_subscription`, `make_djstripe_invoice` (seeds local djstripe Invoice row for task tests without live Stripe call), `sign_stripe_webhook`, `s()`.
+- **`settings_test.py`** — Overrides for test run: procrastinate removed, MD5 password hasher, SQLite in-memory DB.
+- **`test_user_coupon.py`** — Full billing test suite (~60 tests across 8 classes): `ComputeDiscount` (unit, DB only), `UserCouponIntegrity` (DB constraints), `SignalHandlers` (signal functions called directly, Stripe mocked), `MonthlyRefundTask` (djstripe Invoice rows seeded, Stripe mocked), `PushCombinedDiscount` (real Stripe test mode), `GenerateReferralCode` (unit + real Stripe), `SubscriptionWorkflow` (lifecycle, real Stripe), `BillingWorkflow` (end-to-end, real Stripe).
 
 ### `dashboard/models/` (package)
 
@@ -155,7 +166,7 @@ Split into 5 modules, re-exported from `__init__.py`:
 - **`helpers.py`** — `_transient_retry`, `_check_sender_rules`, `_load_user`, `_apply_outcome`, `track_llm_usage`.
 - **`processing.py`** — `process_inbound_email`, `process_uploaded_file`, `process_text_as_upload`.
 - **`reprocess.py`** — `reprocess_events`: serializes pending events, calls `process_text`, deletes originals only on success.
-- **`scheduled.py`** — `reset_monthly_scans` (1st of month), `recover_stale_jobs` (every 10 min), `cleanup_events` (2am UTC), `cleanup_old_tickets` (3am UTC).
+- **`scheduled.py`** — `reset_monthly_scans` (1st of month), `recover_stale_jobs` (every 10 min), `cleanup_events` (2am UTC), `cleanup_old_tickets` (3am UTC). `cleanup_expired_referral_codes` has been removed — referral codes are permanent once generated.
 - **`retry.py`** — `retry_jobs_after_plan_upgrade`, `_retry_failed_jobs`, `_retry_jobs`.
 
 ### `emails/views.py`
@@ -218,7 +229,7 @@ Split into 3 modules, re-exported from `__init__.py`:
 
 ### `project/settings.py`
 
-Standard Django config. `django.contrib.admin` removed. `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres. Static files via WhiteNoise. `GITHUB_TOKEN`, `GITHUB_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID` from env.
+Standard Django config. `AUTH_USER_MODEL = 'accounts.User'`. Procrastinate uses Postgres. Static files via WhiteNoise. Stripe keys from env. dj-stripe configured: `STRIPE_LIVE_MODE`, `DJSTRIPE_WEBHOOK_SECRET`, `DJSTRIPE_USE_NATIVE_JSONFIELD = True`, `DJSTRIPE_FOREIGN_KEY_TO_FIELD = 'id'`. `STRIPE_REFERRAL_COUPON_ID` is the ID of a one-time manually created Stripe coupon (12.5%, forever) used as the base for all referral PromotionCodes.
 
 ### `project/views.py`
 
@@ -231,7 +242,7 @@ Three passthrough views: `privacy`, `terms`, `help_page`.
 
 ### `project/urls.py`
 
-Staff routes under `/staff/`, app routes delegated to each app's `urls.py`. Support app mounted at `/support/`.
+Staff routes under `/staff/`, app routes delegated to each app's `urls.py`. Support app mounted at `/support/`. dj-stripe webhook mounted at `/stripe/` via `include('djstripe.urls', namespace='djstripe')` — this replaces the old `/billing/webhook/` endpoint.
 
 ### `project/templates/base.html`
 
@@ -239,7 +250,7 @@ Base layout with top nav (auth-aware links, queue badges, Pro/Upgrade indicator,
 
 ### `project/templates/billing/membership.html`
 
-Replaced `plans.html`. Renders plan options and, when `show_referral` is True, the referral section (code generation, referral summary, masked referred-user list). Checkout link via `billing:checkout`.
+Renders plan comparison for non-pro users (simple `<a>` upgrade link, no form or promo code input). For pro users or users with an existing referral code, renders the referral section: discount badge, `active_partners` count (integer, no email addresses), referral code display with copy button or generate button. Checkout uses `allow_promotion_codes=True` on Stripe's hosted page — codes are entered there.
 
 ### `project/templates/dashboard/` (13 templates)
 
@@ -247,7 +258,7 @@ All extend `base.html`. `event_edit.html` supports adding/removing multiple link
 
 ### `project/templates/billing/cancel.html`
 
-Points to `billing:membership` (no longer references `billing:plans`).
+Points to `billing:membership`.
 
 ### `project/templates/accounts/login.html`
 
@@ -271,7 +282,7 @@ Includes a Referrals section explaining how the referral program works.
 
 ### `project/static/manual/css/pages/`
 
-Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.css`, `email-inbox.css`, `events.css`, `login.css`, `preferences.css`, `queue.css`, `staff.css`, `support.css`, `upload.css`.
+Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.css`, `email-inbox.css`, `events.css`, `login.css`, `preferences.css`, `queue.css`, `staff.css`, `support.css`, `upload.css`. `billing.css` no longer contains `.checkout-form`, `.promo-field__*` blocks; referral section uses `.referral-discount-badge`, `.referral-code-box`, `.referral-partners`, `.referral-empty`, `.referral-manage`.
 
 ### `project/static/manual/css/components/`
 
@@ -292,6 +303,7 @@ Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.cs
 - **`queue_action.js`** — Reprocess button (needs_review) and retry button (failed) in one IIFE.
 - **`rules.js`** — AJAX add/delete rules for all three rule types.
 - **`support.js`** — Resolve flow for howto tickets: disables Yes/No buttons, POSTs to `support:resolve`, re-enables on error.
+- **`billing.js`** — Referral code generation (POST to `generate_referral_code`, replaces button with code + copy UI) and `copyCode()` (clipboard).
 - **`upload.js`** — Drag-and-drop file input enhancement.
 
 ---

@@ -9,8 +9,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
-from billing.discount import compute_discount, referral_summary
-from billing.models import Coupon, Subscription
+from billing.models import Subscription
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
@@ -20,18 +19,32 @@ logger = logging.getLogger(__name__)
 def plans(request):
     sub = getattr(request.user, 'subscription', None)
     is_pro = sub and sub.is_pro
-    has_referral_code = sub and sub.referral_code
 
-    show_referral = is_pro or has_referral_code
+    show_referral = bool(sub and (is_pro or sub.referral_code))
 
-    discount = compute_discount(request.user) if is_pro else 0
-    referred = referral_summary(request.user) if show_referral else []
+    discount = 0
+    active_partners = 0
+
+    if sub:
+        from billing.models import compute_discount, UserCoupon
+        if is_pro:
+            discount = compute_discount(request.user)
+
+        # Count distinct coupon partners who are currently active
+        partner_pks = set()
+        for coupon in request.user.coupons.prefetch_related('users__subscription'):
+            for u in coupon.users.all():
+                if u.pk != request.user.pk:
+                    partner_sub = getattr(u, 'subscription', None)
+                    if partner_sub and partner_sub.status == 'active':
+                        partner_pks.add(u.pk)
+        active_partners = len(partner_pks)
 
     ctx = {
         'is_pro': is_pro,
         'show_referral': show_referral,
         'discount': discount,
-        'referred': referred,
+        'active_partners': active_partners,
         'referral_code': sub.referral_code if sub else None,
     }
     try:
@@ -52,74 +65,47 @@ def generate_referral_code(request):
         code = sub.generate_referral_code()
         return JsonResponse({'code': code})
     except Exception as exc:
-        logger.error('billing.generate_referral_code: failed | user_id=%s error=%s',
-                     request.user.pk, exc, exc_info=True)
+        logger.error(
+            'billing.generate_referral_code: failed | user_id=%s error=%s',
+            request.user.pk, exc, exc_info=True,
+        )
         return JsonResponse({'error': 'Could not generate code.'}, status=500)
 
 
 @login_required
-@require_POST
 def checkout(request):
     """
-    Receives an optional promo_code from the membership page form.
-    Resolves it server-side before creating the Stripe session so Stripe
-    shows the real benefit — "30 days free" for referrals, actual % for
-    staff coupons — instead of the raw coupon face value.
+    Simple GET redirect to Stripe Checkout.
+    Promotion codes (referral and any future staff codes) are entered directly
+    on Stripe's hosted page — allow_promotion_codes=True enables the native UI.
     """
-    raw_code = request.POST.get('promo_code', '').strip().upper()
-
-    trial_days = 7          # default
-    session_discounts = []  # [] means no discount passed to Stripe
-    code_error = None
-
-    referral_sub = None
-    if raw_code:
-        # Referral code?
-        referral_sub = Subscription.objects.filter(referral_code=raw_code).first()
-        if referral_sub and referral_sub.user != request.user:
-            trial_days = 30
-            # Do NOT set referred_by yet; wait until after Stripe session is created
-        else:
-            # Staff coupon?
-            coupon = Coupon.objects.filter(code=raw_code).first()
-            if coupon and coupon.is_redeemable():
-                session_discounts = [{'coupon': raw_code}]
-            else:
-                code_error = raw_code
-
-    if code_error:
-        messages.error(request, f'"{code_error}" is not a valid promo code.')
-        return redirect('billing:membership')
-
     try:
         sub, _ = _get_or_create_customer(request.user)
-
-        session_kwargs = dict(
+        session = stripe.checkout.Session.create(
             customer=sub.stripe_customer_id,
             payment_method_types=['card'],
             line_items=[{'price': settings.STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
-            subscription_data={'trial_period_days': trial_days},
-            # allow_promotion_codes intentionally omitted — codes are handled
-            # server-side so Stripe always shows the real benefit to the user.
+            subscription_data={'trial_period_days': 7},
+            allow_promotion_codes=True,
+            custom_text={
+                'after_submit': {
+                    'message': (
+                        'Referral discounts are applied as monthly refunds '
+                        'once your linked account is confirmed active. '
+                        'You will see the refund on your next statement.'
+                    )
+                }
+            },
             success_url=request.build_absolute_uri('/billing/success/'),
             cancel_url=request.build_absolute_uri('/billing/cancel/'),
         )
-        if session_discounts:
-            session_kwargs['discounts'] = session_discounts
-
-        session = stripe.checkout.Session.create(**session_kwargs)
-
-        # Only commit referred_by once we know Stripe accepted the session
-        if referral_sub and not request.user.referred_by_id:
-            request.user.referred_by = referral_sub.user
-            request.user.save(update_fields=['referred_by'])
-
         return redirect(session.url)
-
     except Exception as exc:
-        logger.error('billing.checkout: failed | user_id=%s error=%s',
-                     request.user.pk, exc, exc_info=True)
+        logger.error(
+            'billing.checkout: failed | user_id=%s error=%s',
+            request.user.pk, exc, exc_info=True,
+        )
         return HttpResponse('Checkout unavailable.', status=500)
 
 
@@ -145,13 +131,18 @@ def portal(request):
     if not sub:
         return redirect('billing:membership')
     if not sub.stripe_subscription_id:
-        messages.info(request,
+        messages.info(
+            request,
             'Your Pro access was granted manually and is not managed through Stripe. '
-            'Contact support if you have questions about your account.')
+            'Contact support if you have questions about your account.',
+        )
         return redirect('billing:membership')
     if not sub.stripe_customer_id or not sub.stripe_customer_id.startswith('cus_'):
         logger.error('billing.portal: invalid customer_id | user_id=%s', request.user.pk)
-        messages.error(request, 'There is an issue with your billing account. Please contact support.')
+        messages.error(
+            request,
+            'There is an issue with your billing account. Please contact support.',
+        )
         return redirect('billing:membership')
     try:
         session = stripe.billing_portal.Session.create(
@@ -161,13 +152,20 @@ def portal(request):
         return redirect(session.url)
     except stripe.error.StripeError:
         logger.exception('billing portal failed for user=%s', request.user.pk)
-        messages.error(request, 'We could not open the billing portal right now. Please try again or contact support.')
+        messages.error(
+            request,
+            'We could not open the billing portal right now. Please try again or contact support.',
+        )
         return redirect('billing:membership')
 
 
 def _get_or_create_customer(user):
     sub, created = Subscription.objects.get_or_create(
         user=user,
-        defaults={'stripe_customer_id': stripe.Customer.create(email=user.email, name=user.username).id}
+        defaults={
+            'stripe_customer_id': stripe.Customer.create(
+                email=user.email, name=user.username
+            ).id
+        },
     )
     return sub, created

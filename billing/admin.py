@@ -1,10 +1,8 @@
 # billing/admin.py
-import stripe
-from django.conf import settings
 from django.contrib import admin
 
 from accounts.models import User
-from billing.models import Coupon, CouponRedemption, Subscription
+from billing.models import RefundRecord, Subscription, UserCoupon
 
 
 @admin.register(Subscription)
@@ -12,51 +10,54 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_display = ('user', 'status', 'referral_code', 'current_period_end')
     list_filter = ('status',)
     search_fields = ('user__email', 'user__username', 'stripe_customer_id')
-    readonly_fields = ('stripe_customer_id', 'stripe_subscription_id',
-                       'created_at', 'referral_code_generated_at')
+    readonly_fields = ('stripe_customer_id', 'stripe_subscription_id', 'created_at')
 
 
-@admin.register(Coupon)
-class CouponAdmin(admin.ModelAdmin):
-    list_display = ('code', 'percent', 'label', 'expires_at', 'redemption_count', 'created_at')
-    search_fields = ('code', 'label')
+@admin.register(UserCoupon)
+class UserCouponAdmin(admin.ModelAdmin):
+    """
+    Staff creates staff-grant coupons here: add the target user + admin sentinel.
+    Referral coupons are created automatically by the signal handler — do not
+    create them manually unless correcting data.
+
+    No Stripe sync needed on save: the Stripe-side discount is pushed lazily
+    at the next invoice.upcoming event.
+    """
+    list_display = ('id', 'percent', 'user_list', 'created_at')
     readonly_fields = ('created_at',)
+    filter_horizontal = ('users',)
 
-    def redemption_count(self, obj):
-        return obj.redemptions.count()
-    redemption_count.short_description = 'Redemptions'
-
-    def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
-        if not change:
-            # Mirror to Stripe on first creation only
-            try:
-                stripe.api_key = settings.STRIPE_SECRET_KEY
-                obj.sync_to_stripe()
-            except stripe.error.StripeError as exc:
-                self.message_user(
-                    request,
-                    f'Coupon saved locally but Stripe sync failed: {exc}',
-                    level='WARNING',
-                )
+    def user_list(self, obj):
+        return ', '.join(u.username for u in obj.users.all())
+    user_list.short_description = 'Users'
 
 
-@admin.register(CouponRedemption)
-class CouponRedemptionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'coupon', 'redeemed_at')
-    list_filter = ('coupon',)
-    search_fields = ('user__email', 'user__username', 'coupon__code')
-    readonly_fields = ('redeemed_at',)
+@admin.register(RefundRecord)
+class RefundRecordAdmin(admin.ModelAdmin):
+    """
+    Read-only financial audit log. Staff can inspect but not modify or delete.
+    """
+    list_display = ('user_coupon', 'stripe_invoice_id', 'amount', 'created_at')
+    search_fields = ('stripe_invoice_id', 'stripe_refund_id')
+    readonly_fields = (
+        'user_coupon', 'stripe_invoice_id', 'stripe_refund_id', 'amount', 'created_at'
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
+@admin.register(User, site=admin.site)
 class UserReferralAdmin(admin.ModelAdmin):
     """
-    Minimal read-only User view — only safe fields, no tokens.
-    Registered separately to avoid overriding the full auth.User admin.
+    Minimal read-only User view — only safe fields, no tokens, no sensitive data.
     """
-    list_display = ('username', 'email', 'date_joined', 'is_pro_display', 'referred_by')
+    list_display = ('username', 'email', 'date_joined', 'is_pro_display')
     search_fields = ('username', 'email')
-    readonly_fields = ('username', 'email', 'date_joined', 'referred_by')
+    readonly_fields = ('username', 'email', 'date_joined')
     exclude = (
         'password', 'google_id', 'google_calendar_token', 'google_refresh_token',
         'token_expiry', 'gcal_channel_id', 'gcal_channel_resource_id',
@@ -73,6 +74,3 @@ class UserReferralAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
-
-admin.site.register(User, UserReferralAdmin)

@@ -1,50 +1,13 @@
 # emails/tasks/scheduled.py
 import logging
 
-from django.db.models import Count
+from django.db.models import Count, F
 from django.utils import timezone
 from procrastinate.contrib.django import app
 
 from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
-
-
-def _snapshot_jobs_to_daily_stats(qs):
-    """
-    Aggregate a ScanJob queryset by (date, status, failure_reason) and upsert
-    into DailyJobStats. Call this immediately before bulk-deleting jobs so the
-    staff dashboard retains historical counts after cleanup.
-
-    Uses update_or_create so re-running cleanup on the same day is safe.
-    """
-    from emails.models import DailyJobStats
-
-    rows = (
-        qs
-        .extra(select={'day': 'DATE(updated_at)'})
-        .values('day', 'status', 'failure_reason')
-        .annotate(n=Count('pk'))
-    )
-    for row in rows:
-        DailyJobStats.objects.update_or_create(
-            date=row['day'],
-            status=row['status'],
-            failure_reason=row['failure_reason'] or '',
-            defaults={},  # nothing to update — we accumulate below
-        )
-        # Increment rather than overwrite so two cleanup runs don't double-count.
-        DailyJobStats.objects.filter(
-            date=row['day'],
-            status=row['status'],
-            failure_reason=row['failure_reason'] or '',
-        ).update(count=models_F('count') + row['n'])
-
-
-# Lazy import to avoid circular issues at module load time.
-def _F():
-    from django.db.models import F
-    return F
 
 
 @app.periodic(cron="0 0 1 * *")
@@ -89,7 +52,6 @@ def recover_stale_jobs(timestamp: int) -> None:
 @app.periodic(cron="0 2 * * *")
 @app.task
 def cleanup_events(timestamp: int) -> None:
-    from django.db.models import F
     from dashboard.models import Event
     from dashboard.gcal import delete_from_gcal
     from accounts.models import User
@@ -137,7 +99,6 @@ def cleanup_events(timestamp: int) -> None:
         logger.info("emails.cleanup_events: snapshotted and deleted %s done job(s)", deleted_done)
 
     # ── Needs-review jobs: snapshot then delete (after 30 days) ──────────────
-    # The events they created still exist independently; the job row is bookkeeping.
     review_cutoff = timezone.now() - timezone.timedelta(days=30)
     review_qs = ScanJob.objects.filter(
         status=ScanJob.STATUS_NEEDS_REVIEW, updated_at__lt=review_cutoff,
@@ -175,32 +136,3 @@ def cleanup_old_tickets(timestamp: int) -> None:
     deleted, _ = Ticket.objects.filter(created_at__lt=cutoff).delete()
     if deleted:
         logger.info("support.cleanup_old_tickets: deleted %s ticket(s)", deleted)
-
-
-@app.periodic(cron="0 4 * * *")
-@app.task
-def cleanup_expired_referral_codes(timestamp: int) -> None:
-    """
-    Null out referral codes generated more than 30 days ago with no referrals.
-    Codes are kept if the user has at least one referred user (referrals.exists()).
-    """
-    from django.utils import timezone
-    from datetime import timedelta
-    from billing.models import Subscription
-
-    cutoff = timezone.now() - timedelta(days=30)
-    candidates = Subscription.objects.filter(
-        referral_code__isnull=False,
-        referral_code_generated_at__lt=cutoff,
-    ).select_related('user')
-
-    expired = 0
-    for sub in candidates:
-        if not sub.user.referrals.exists():
-            sub.referral_code = None
-            sub.referral_code_generated_at = None
-            sub.save(update_fields=['referral_code', 'referral_code_generated_at'])
-            expired += 1
-
-    if expired:
-        logger.info('billing.cleanup_expired_referral_codes: expired %s code(s)', expired)

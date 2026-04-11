@@ -65,8 +65,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'djstripe',
     'accounts',
-    'billing',
+    'billing.apps.BillingConfig',
     'dashboard.apps.DashboardConfig',
     'emails',
     'llm',
@@ -144,7 +145,6 @@ RESEND_WEBHOOK_SECRET = os.environ.get('RESEND_WEBHOOK_SECRET', '')
 LLM_API_KEY = os.environ.get('LLM_API_KEY')
 LLM_MODEL   = os.environ.get('LLM_MODEL', 'claude-sonnet-4-20250514')
 
-
 # GitHub — used by support app to open issues and verify webhooks
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_WEBHOOK_SECRET = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
@@ -156,6 +156,17 @@ PROCRASTINATE_ON_APP_READY = None  # tasks auto-discovered via INSTALLED_APPS
 ADSENSE_CLIENT_ID = os.environ.get('ADSENSE_CLIENT_ID')
 ADSENSE_SLOTS     = os.environ.get('ADSENSE_SLOTS', '').split(',')
 
-STRIPE_SECRET_KEY      = os.environ.get('STRIPE_SECRET_KEY')
-STRIPE_PRICE_ID        = os.environ.get('STRIPE_PRICE_ID')
-STRIPE_WEBHOOK_SECRET  = os.environ.get('STRIPE_WEBHOOK_SECRET')
+# Stripe
+STRIPE_SECRET_KEY     = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_PRICE_ID       = os.environ.get('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+
+# The one-time manually created Stripe coupon ID for referrals (12.5%, forever,
+# no redemption cap). Create once in the Stripe dashboard and store the ID here.
+STRIPE_REFERRAL_COUPON_ID = os.environ.get('STRIPE_REFERRAL_COUPON_ID')
+
+# dj-stripe
+STRIPE_LIVE_MODE = not DEBUG
+DJSTRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+DJSTRIPE_USE_NATIVE_JSONFIELD = True
+DJSTRIPE_FOREIGN_KEY_TO_FIELD = 'id'

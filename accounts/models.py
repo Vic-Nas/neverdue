@@ -38,13 +38,6 @@ class User(AbstractUser):
     monthly_input_tokens = models.PositiveBigIntegerField(default=0)
     monthly_output_tokens = models.PositiveBigIntegerField(default=0)
 
-    # Referral — who referred this user (acquisition metadata, not billing state)
-    referred_by = models.ForeignKey(
-        'self', null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='referrals',
-    )
-
     @property
     def is_pro(self):
         return hasattr(self, 'subscription') and self.subscription.is_pro
@@ -62,12 +55,16 @@ class MonthlyUsage(models.Model):
     input_tokens = models.PositiveBigIntegerField(default=0)
     output_tokens = models.PositiveBigIntegerField(default=0)
 
-    input_cost_per_million = models.DecimalField(max_digits=8, decimal_places=4, default='3.0000')
-    output_cost_per_million = models.DecimalField(max_digits=8, decimal_places=4, default='15.0000')
+    input_cost_per_million = models.DecimalField(
+        max_digits=8, decimal_places=4, default='3.0000'
+    )
+    output_cost_per_million = models.DecimalField(
+        max_digits=8, decimal_places=4, default='15.0000'
+    )
 
     class Meta:
         unique_together = ('user', 'year', 'month')
         ordering = ('-year', '-month')
 
     def __str__(self):
-        return f"{self.user.username} — {self.year}-{self.month:02d}"
+        return f'{self.user.username} — {self.year}-{self.month:02d}'
