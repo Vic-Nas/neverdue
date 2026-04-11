@@ -59,6 +59,7 @@ class Subscription(models.Model):
     def is_pro(self):
         return self.status in ('active', 'trialing')
 
+
     def generate_referral_code(self):
         """
         Generate a unique NVD-XXXXX code, save it, and push it to Stripe as a
@@ -77,7 +78,7 @@ class Subscription(models.Model):
                 try:
                     stripe.api_key = settings.STRIPE_SECRET_KEY
                     stripe.PromotionCode.create(
-                        coupon=settings.STRIPE_REFERRAL_COUPON_ID,
+                        promotion=settings.STRIPE_REFERRAL_COUPON_ID,
                         code=code,
                     )
                 except stripe.error.StripeError:

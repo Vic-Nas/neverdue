@@ -1,3 +1,4 @@
+from emails.tasks import retry_jobs_after_plan_upgrade
 # billing/signals.py
 """
 dj-stripe signal handlers.
@@ -41,12 +42,15 @@ def _push_combined_discount(sub):
             pass  # didn't exist — fine
 
         if pct <= 0:
-            stripe.Subscription.modify(sub.stripe_subscription_id, coupon='')
+            stripe.Subscription.modify(sub.stripe_subscription_id, discounts=[])
             logger.info('_push_combined_discount: removed discount | user=%s', sub.user.pk)
             return
 
         stripe.Coupon.create(id=coupon_id, percent_off=pct, duration='once')
-        stripe.Subscription.modify(sub.stripe_subscription_id, coupon=coupon_id)
+        stripe.Subscription.modify(
+            sub.stripe_subscription_id,
+            discounts=[{'coupon': coupon_id}],
+        )
         logger.info(
             '_push_combined_discount: applied %s%% | user=%s sub=%s',
             pct, sub.user.pk, sub.stripe_subscription_id,
@@ -226,7 +230,6 @@ def handle_subscription_updated(event, **kwargs):
         sub = _get_local_sub_by_customer(customer_id, 'handle_subscription_updated')
         if not sub:
             return
-        from emails.tasks import retry_jobs_after_plan_upgrade
         retry_jobs_after_plan_upgrade.defer(user_id=sub.user.pk)
         logger.info(
             'handle_subscription_updated: deferred retry_jobs | user=%s', sub.user.pk
