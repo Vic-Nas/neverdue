@@ -10,9 +10,7 @@ import logging
 
 import stripe
 from django.conf import settings
-from djstripe.signals import (
-    WEBHOOK_EVENT_CALLBACK,
-)
+from djstripe.signals import WEBHOOK_SIGNALS
 
 logger = logging.getLogger(__name__)
 
@@ -238,25 +236,31 @@ def handle_subscription_updated(event, **kwargs):
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+# WEBHOOK_SIGNALS is a dict of {event_type: django.dispatch.Signal}.
+# Each signal sends (sender, event, **kwargs). We wrap each handler to catch
+# and re-raise so dj-stripe returns 500 and Stripe retries on failure.
 
-def _dispatch(event, **kwargs):
-    """
-    Single entry point for all dj-stripe webhook events we care about.
-    Routes by event type. Unhandled types are silently ignored.
-    """
-    etype = event.type
-    try:
-        if etype == 'customer.discount.created':
-            handle_customer_discount_created(event, **kwargs)
-        elif etype == 'invoice.paid':
-            handle_invoice_paid(event, **kwargs)
-        elif etype == 'invoice.upcoming':
-            handle_invoice_upcoming(event, **kwargs)
-        elif etype == 'customer.subscription.updated':
-            handle_subscription_updated(event, **kwargs)
-    except Exception:
-        logger.exception('billing.signals._dispatch: unhandled error | event=%s', etype)
-        raise  # let dj-stripe return 500 so Stripe retries
+def _wrap(handler):
+    def receiver(sender, event, **kwargs):
+        try:
+            handler(event, **kwargs)
+        except Exception:
+            logger.exception(
+                'billing.signals: unhandled error | event=%s', event.type
+            )
+            raise
+    return receiver
 
 
-WEBHOOK_EVENT_CALLBACK.connect(_dispatch)
+WEBHOOK_SIGNALS['customer.discount.created'].connect(
+    _wrap(handle_customer_discount_created)
+)
+WEBHOOK_SIGNALS['invoice.paid'].connect(
+    _wrap(handle_invoice_paid)
+)
+WEBHOOK_SIGNALS['invoice.upcoming'].connect(
+    _wrap(handle_invoice_upcoming)
+)
+WEBHOOK_SIGNALS['customer.subscription.updated'].connect(
+    _wrap(handle_subscription_updated)
+)
