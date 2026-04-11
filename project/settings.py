@@ -161,10 +161,6 @@ STRIPE_SECRET_KEY     = os.environ.get('STRIPE_SECRET_KEY')
 STRIPE_PRICE_ID       = os.environ.get('STRIPE_PRICE_ID')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
-# The one-time manually created Stripe coupon ID for referrals (12.5%, forever,
-# no redemption cap). Create once in the Stripe dashboard and store the ID here.
-STRIPE_REFERRAL_COUPON_ID = os.environ.get('STRIPE_REFERRAL_COUPON_ID')
-
 # dj-stripe
 STRIPE_LIVE_MODE = not DEBUG
 DJSTRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')

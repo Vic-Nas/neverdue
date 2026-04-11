@@ -424,10 +424,8 @@ class SignalHandlers(TestCase):
 
         event = _make_sub_updated_event('cus_su1', 'trialing', 'active')
         with patch('billing.signals.retry_jobs_after_plan_upgrade') as mock_retry:
-            # Need to patch at the point of import inside the function
-            with patch('emails.tasks.retry_jobs_after_plan_upgrade') as mock_retry2:
-                self.handle_sub_updated(event)
-                mock_retry2.defer.assert_called_once_with(user_id=user.pk)
+            self.handle_sub_updated(event)
+            mock_retry.defer.assert_called_once_with(user_id=user.pk)
 
     def test_handle_subscription_updated_active_to_active_no_retry(self):
         user = make_user('sh_su2')
@@ -476,6 +474,9 @@ class MonthlyRefundTask(TestCase):
         a, inv_a = self._make_paying_user('mrt_a1', charge_id='ch_a1')
         b, inv_b = self._make_paying_user('mrt_b1', charge_id='ch_b1')
         coupon = _make_coupon('12.50', a, b)
+        UserCoupon.objects.filter(pk=coupon.pk).update(
+            created_at=self.last_month - timezone.timedelta(days=5)
+        )
 
         self._run_task()
 
@@ -646,6 +647,8 @@ class MonthlyRefundTask(TestCase):
         mock_stripe.Refund.create.side_effect = [
             MagicMock(id='re_two_1'),
             MagicMock(id='re_two_2'),
+            MagicMock(id='re_two_3'),
+            MagicMock(id='re_two_4'),
         ]
         a, _ = self._make_paying_user('mrt_two_a', charge_id='ch_two_a')
         b, _ = self._make_paying_user('mrt_two_b', charge_id='ch_two_b')
@@ -720,7 +723,7 @@ class PushCombinedDiscount(BillingTestCase):
         _push_combined_discount(self.local_sub)
 
         stripe_sub = s().Subscription.retrieve(self.stripe_sub.id)
-        self.assertIsNotNone(stripe_sub.get('discount'))
+        self.assertTrue(len(stripe_sub.get('discounts', [])) > 0)
 
     def test_zero_discount_removes_stripe_discount(self):
         from billing.signals import _push_combined_discount
@@ -782,6 +785,7 @@ class GenerateReferralCode(BillingTestCase):
         self.local_sub.save()
 
         code = self.local_sub.generate_referral_code()
+        self.track('coupon', f'nvd-referral-{self.user.pk}')
         self.track('promotion_code', code)
 
         existing = list(
@@ -843,7 +847,7 @@ class SubscriptionWorkflow(BillingTestCase):
         self.local_sub.save()
 
         event = _make_sub_updated_event(self.cust.id, 'trialing', 'active')
-        with patch('emails.tasks.retry_jobs_after_plan_upgrade') as mock_retry:
+        with patch('billing.signals.retry_jobs_after_plan_upgrade') as mock_retry:
             from billing.signals import handle_subscription_updated
             handle_subscription_updated(event)
             mock_retry.defer.assert_called_once_with(user_id=self.user.pk)

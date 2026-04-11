@@ -6,6 +6,7 @@ import logging
 from datetime import timezone as dt_timezone
 
 import stripe
+from stripe import StripeError
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -68,15 +69,17 @@ def process_monthly_refunds(timestamp: int) -> None:
         sub_obj = getattr(user, 'subscription', None)
         if not sub_obj or not sub_obj.stripe_customer_id:
             return None
+        last_month_start_ts = int(last_month_start.timestamp())
+        last_month_end_ts = int(last_month_end.timestamp())
         return (
             djstripe.Invoice.objects
             .filter(
                 customer__id=sub_obj.stripe_customer_id,
-                status='paid',
-                period_start__gte=last_month_start,
-                period_start__lt=last_month_end,
+                stripe_data__status='paid',
+                stripe_data__period_start__gte=last_month_start_ts,
+                stripe_data__period_start__lt=last_month_end_ts,
             )
-            .order_by('-period_start')
+            .order_by('-stripe_data__period_start')
             .first()
         )
 
@@ -110,9 +113,8 @@ def process_monthly_refunds(timestamp: int) -> None:
             inv = invoices[u.pk]
 
             # Skip if invoice pre-dates coupon creation
-            period_start = inv.period_start
-            if period_start.tzinfo is None:
-                period_start = period_start.replace(tzinfo=dt_timezone.utc)
+            period_start_ts = inv.period_start  # raw int from stripe_data
+            period_start = timezone.datetime.fromtimestamp(period_start_ts, tz=dt_timezone.utc)
             if period_start < coupon.created_at:
                 logger.info(
                     'process_monthly_refunds: coupon=%s user=%s skipped — '
@@ -131,13 +133,11 @@ def process_monthly_refunds(timestamp: int) -> None:
                 )
                 continue
 
-            refund_cents = int(inv.amount_paid * float(coupon.percent) / 100)
+            refund_cents = int(inv.stripe_data['amount_paid'] * float(coupon.percent) / 100)
             if refund_cents <= 0:
                 continue
 
-            charge_id = inv.charge_id if hasattr(inv, 'charge_id') else (
-                inv.charge.id if inv.charge else None
-            )
+            charge_id = inv.stripe_data.get('charge')
             if not charge_id:
                 logger.warning(
                     'process_monthly_refunds: coupon=%s user=%s invoice=%s has no charge — skip',
@@ -150,7 +150,7 @@ def process_monthly_refunds(timestamp: int) -> None:
                     charge=charge_id,
                     amount=refund_cents,
                 )
-            except stripe.error.StripeError:
+            except StripeError:
                 logger.exception(
                     'process_monthly_refunds: Stripe refund failed | '
                     'coupon=%s user=%s invoice=%s', coupon.pk, u.pk, inv.id,

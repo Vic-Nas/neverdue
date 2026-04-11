@@ -79,7 +79,7 @@ def sign_stripe_webhook(payload_dict, secret=None):
 
 def make_djstripe_invoice(user, amount_paid_cents, period_start, charge_id='ch_test123'):
     """
-    Create a djstripe Customer + Invoice row for the given user.
+    Create a djstripe Customer + Charge + Invoice row for the given user.
     Used in MonthlyRefundTask tests — no live Stripe call needed.
 
     period_start: aware datetime for the billing period.
@@ -92,40 +92,170 @@ def make_djstripe_invoice(user, amount_paid_cents, period_start, charge_id='ch_t
     if not sub:
         raise ValueError(f'User {user.username} has no local Subscription row')
 
-    # Upsert a djstripe Customer
-    dj_customer, _ = djstripe.Customer.objects.get_or_create(
-        id=sub.stripe_customer_id,
-        defaults={
-            'subscriber': user,
-            'livemode': False,
-            'currency': 'usd',
-            'delinquent': False,
-            'djstripe_created': timezone.now(),
-            'djstripe_updated': timezone.now(),
-        },
-    )
-
+    customer_id = sub.stripe_customer_id
     invoice_id = f'in_test_{user.pk}_{int(period_start.timestamp())}'
-    dj_invoice, _ = djstripe.Invoice.objects.update_or_create(
-        id=invoice_id,
-        defaults={
-            'customer': dj_customer,
-            'status': 'paid',
-            'amount_paid': Decimal(amount_paid_cents),
-            'period_start': period_start,
-            'period_end': period_start + timezone.timedelta(days=30),
-            'livemode': False,
-            'currency': 'usd',
-            'charge_id': charge_id,
-            'djstripe_created': timezone.now(),
-            'djstripe_updated': timezone.now(),
-            'billing_reason': 'subscription_cycle',
-            'subtotal': Decimal(amount_paid_cents),
-            'total': Decimal(amount_paid_cents),
-            'amount_due': Decimal(amount_paid_cents),
-            'amount_remaining': Decimal(0),
+    period_end = period_start + timezone.timedelta(days=30)
+
+    # Upsert djstripe Customer via sync_from_stripe_data
+    customer_data = {
+        'id': customer_id,
+        'object': 'customer',
+        'livemode': False,
+        'created': int(period_start.timestamp()),
+        'metadata': {},
+        'email': user.email,
+        'description': None,
+        'currency': 'cad',
+        'delinquent': False,
+        'balance': 0,
+        'default_source': None,
+        'invoice_settings': {'default_payment_method': None},
+        'sources': {'object': 'list', 'data': [], 'has_more': False, 'url': ''},
+        'subscriptions': {'object': 'list', 'data': [], 'has_more': False, 'url': ''},
+        'tax_ids': {'object': 'list', 'data': [], 'has_more': False, 'url': ''},
+    }
+    dj_customer = djstripe.Customer.sync_from_stripe_data(customer_data)
+    dj_customer.subscriber = user
+    dj_customer.save()
+
+    # Upsert djstripe Charge — required because Invoice.sync_from_stripe_data
+    # will try to resolve the 'charge' FK and raise Charge.DoesNotExist otherwise.
+    charge_data = {
+        'id': charge_id,
+        'object': 'charge',
+        'livemode': False,
+        'created': int(period_start.timestamp()),
+        'metadata': {},
+        'customer': customer_id,
+        'amount': amount_paid_cents,
+        'amount_captured': amount_paid_cents,
+        'amount_refunded': 0,
+        'currency': 'cad',
+        'paid': True,
+        'captured': True,
+        'refunded': False,
+        'status': 'succeeded',
+        'balance_transaction': None,
+        'billing_details': {
+            'address': {'city': None, 'country': None, 'line1': None, 'line2': None,
+                        'postal_code': None, 'state': None},
+            'email': None,
+            'name': None,
+            'phone': None,
         },
-    )
+        'description': None,
+        'disputed': False,
+        'failure_balance_transaction': None,
+        'failure_code': None,
+        'failure_message': None,
+        'invoice': None,  # omit FK — djstripe would call Stripe API to retrieve fictional invoice IDs
+        'on_behalf_of': None,
+        'order': None,
+        'outcome': None,
+        'payment_intent': None,
+        'payment_method': None,
+        'payment_method_details': {'type': 'card', 'card': {
+            'amount_authorized': None,
+            'authorization_code': None,
+            'brand': 'visa',
+            'checks': None,
+            'country': 'CA',
+            'exp_month': 12,
+            'exp_year': 2030,
+            'extended_authorization': None,
+            'fingerprint': None,
+            'funding': 'credit',
+            'incremental_authorization': None,
+            'installments': None,
+            'last4': '4242',
+            'mandate': None,
+            'multicapture': None,
+            'network': None,
+            'network_token': None,
+            'overcapture': None,
+            'three_d_secure': None,
+            'wallet': None,
+        }},
+        'radar_options': {},
+        'receipt_email': None,
+        'receipt_number': None,
+        'receipt_url': None,
+        'refunds': {'object': 'list', 'data': [], 'has_more': False, 'url': ''},
+        'review': None,
+        'shipping': None,
+        'source': None,
+        'source_transfer': None,
+        'statement_descriptor': None,
+        'statement_descriptor_suffix': None,
+        'transfer_data': None,
+        'transfer_group': None,
+    }
+    djstripe.Charge.sync_from_stripe_data(charge_data)
+
+    # Upsert djstripe Invoice via sync_from_stripe_data
+    invoice_data = {
+        'id': invoice_id,
+        'object': 'invoice',
+        'livemode': False,
+        'created': int(period_start.timestamp()),
+        'metadata': {},
+        'customer': customer_id,
+        'status': 'paid',
+        'amount_paid': amount_paid_cents,
+        'amount_due': amount_paid_cents,
+        'amount_remaining': 0,
+        'subtotal': amount_paid_cents,
+        'total': amount_paid_cents,
+        'currency': 'cad',
+        'period_start': int(period_start.timestamp()),
+        'period_end': int(period_end.timestamp()),
+        'billing_reason': 'subscription_cycle',
+        'charge': charge_id,
+        'collection_method': 'send_invoice',
+        'description': None,
+        'discount': None,
+        'due_date': None,
+        'ending_balance': None,
+        'footer': None,
+        'hosted_invoice_url': None,
+        'invoice_pdf': None,
+        'next_payment_attempt': None,
+        'number': None,
+        'paid': True,
+        'receipt_number': None,
+        'starting_balance': 0,
+        'statement_descriptor': None,
+        'subscription': None,
+        'tax': None,
+        'webhooks_delivered_at': None,
+        'payment_intent': None,
+        'default_payment_method': None,
+        'default_source': None,
+        'default_tax_rates': [],
+        'discounts': [],
+        'lines': [],
+        'account_country': None,
+        'account_name': None,
+        'attempt_count': 1,
+        'attempted': True,
+        'auto_advance': False,
+        'automatically_finalizes_at': None,
+        'custom_fields': None,
+        'from_invoice': None,
+        'issuer': {'type': 'self'},
+        'last_finalization_error': None,
+        'latest_revision': None,
+        'on_behalf_of': None,
+        'rendering': None,
+        'shipping_cost': None,
+        'shipping_details': None,
+        'subtotal_excluding_tax': amount_paid_cents,
+        'total_excluding_tax': amount_paid_cents,
+        'total_discount_amounts': [],
+        'total_tax_amounts': [],
+        'transfer_data': None,
+    }
+    dj_invoice = djstripe.Invoice.sync_from_stripe_data(invoice_data)
     return dj_invoice
 
 
@@ -148,7 +278,11 @@ class BillingTestCase(TestCase):
                 elif kind == 'coupon':
                     s().Coupon.delete(obj_id)
                 elif kind == 'promotion_code':
-                    s().PromotionCode.modify(obj_id, active=False)
+                    results = list(
+                        s().PromotionCode.list(code=obj_id, active=True, limit=1).auto_paging_iter()
+                    )
+                    if results:
+                        s().PromotionCode.modify(results[0].id, active=False)
             except stripe.error.InvalidRequestError:
                 pass
 

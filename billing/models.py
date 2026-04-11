@@ -4,6 +4,7 @@ import random
 import string
 
 import stripe
+from stripe import StripeError
 from django.conf import settings
 from django.db import models
 
@@ -64,6 +65,8 @@ class Subscription(models.Model):
         Generate a unique NVD-XXXXX code, save it, and push it to Stripe as a
         PromotionCode on the shared referral coupon. Idempotent: returns the
         existing code if one already exists.
+
+        Returns the referral code string (NVD-XXXXX).
         """
         if self.referral_code:
             return self.referral_code
@@ -76,14 +79,28 @@ class Subscription(models.Model):
                 self.save(update_fields=['referral_code'])
                 try:
                     stripe.api_key = settings.STRIPE_SECRET_KEY
+                    coupon_id = f'nvd-referral-{self.user.pk}'
+                    try:
+                        stripe.Coupon.delete(coupon_id)
+                    except stripe.error.InvalidRequestError:
+                        pass  # didn't exist — fine
+                    stripe.Coupon.create(
+                        id=coupon_id,
+                        percent_off=12.5,
+                        duration='forever',
+                    )
                     stripe.PromotionCode.create(
-                        promotion=settings.STRIPE_REFERRAL_COUPON_ID,
+                        promotion={
+                            'type': 'coupon',
+                            'coupon': coupon_id,
+                        },
                         code=code,
                     )
-                except stripe.error.StripeError:
+                except StripeError:
                     logger.exception(
                         'generate_referral_code: failed to create PromotionCode | code=%s', code
                     )
+                    raise
                 return code
 
         raise RuntimeError('Could not generate a unique referral code after 10 attempts')
