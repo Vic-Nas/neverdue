@@ -55,7 +55,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('billing', '0002_coupon_subscription_referral_code_and_more'),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('accounts', '0002_rename_revoke_to_save_gcal'),
     ]
 
     operations = [
