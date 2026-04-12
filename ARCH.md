@@ -68,10 +68,10 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 ### `billing/models.py`
 
-- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, and `referral_code` (nullable unique NVD-XXXXX string). `is_pro` returns True for active/trialing. `generate_referral_code()` generates a code, saves it, creates a per-user Stripe Coupon (`nvd-referral-{user.pk}`, 12.5%, forever), then attaches a PromotionCode with the NVD-XXXXX code. Idempotent: returns the existing code if already set.
-- **`UserCoupon`** — A discount shared between users. `users` M2M, `percent` DecimalField, `created_at`. Each user gets `percent` off while all other users on the coupon are active or are the admin sentinel. Used for both referrals (two real users) and staff grants (user + admin sentinel). No `max_redemptions` — enforced by Stripe on the PromotionCode.
+- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, `referral_code` (nullable unique NVD-XXXXX string), and `referral_max_redemptions` (default 12, staff-editable in admin). `is_pro` returns True for active/trialing. `generate_referral_code()` generates a code, saves it, creates a per-user Stripe Coupon (`nvd-referral-{user.pk}`, 12.5%, forever), then attaches a PromotionCode with `max_redemptions=referral_max_redemptions`. Idempotent: returns the existing code if already set. `max_redemptions` must be configured before calling — Stripe does not allow changing it after creation.
+- **`UserCoupon`** — A discount pair between exactly two users. `users` M2M, `percent` DecimalField, `created_at`. Each referral creates one row: referrer + referred user. Staff grants use one real user + the admin sentinel. When a user unsubscribes (`customer.subscription.deleted`), all `UserCoupon` rows they are on are deleted — freeing the slot. There is no dormancy: resubscribing requires a new referral code.
 - **`RefundRecord`** — Idempotency guard for monthly refunds. One row per `(UserCoupon, Stripe invoice)`. `unique_together` prevents double refund on Procrastinate retry. `on_delete=PROTECT` on the UserCoupon FK.
-- **`compute_discount(user)`** — Module-level function. Sums `percent` of all UserCoupons where every other user is active (`status='active'`) or is the admin sentinel. Caps at 100, returns int.
+- **`compute_discount(user)`** — Module-level function. Sums `percent` of all UserCoupons where every other user is active (`status='active'`) or is the admin sentinel. Caps at 100, returns `math.ceil(total)` as int. Used only for display on the membership page — it does not drive any Stripe charges.
 
 ### `billing/apps.py`
 
@@ -79,38 +79,38 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 ### `billing/signals.py`
 
-dj-stripe signal handlers — all Stripe object syncing is handled by dj-stripe automatically. Only NeverDue business logic lives here. Registered at module level via four individual `WEBHOOK_SIGNALS[event_type].connect()` calls, each wrapped in `_wrap()` which catches and re-raises exceptions so Stripe gets a 500 and retries.
+dj-stripe signal handlers — all Stripe object syncing is handled by dj-stripe automatically. Only NeverDue business logic lives here. Registered at module level via three individual `WEBHOOK_SIGNALS[event_type].connect()` calls, each wrapped in `_wrap()` which catches and re-raises exceptions so Stripe gets a 500 and retries.
 
 - **`handle_customer_discount_created`** — Extracts `discount.coupon.id` from the event and queries `Subscription.objects.filter(referral_code=coupon_id)` to identify the referrer. Guards: self-referral (strips Stripe discount via `Customer.delete_discount`, no coupon), duplicate (UserCoupon linking these two already exists, skip), unknown code (not a referral code, skip silently). Creates `UserCoupon(percent=12.50, users=[referrer, new_user])` on success.
-- **`handle_invoice_paid`** — On `subscription_create`: pushes `_push_combined_discount` for the payer and all their coupon partners (both sides activate at first payment). On `subscription_cycle`: pushes for the payer only (safety net).
-- **`handle_invoice_upcoming`** — Primary discount push path. Calls `_push_combined_discount` ~1 hour before each invoice so Stripe reflects the current discount.
 - **`handle_subscription_updated`** — Defers `retry_jobs_after_plan_upgrade` on any→active transition. dj-stripe handles local status sync automatically.
-- **`_push_combined_discount`** — Calls `compute_discount`, deletes/recreates `nvd-auto-<pk>` Stripe coupon with `duration='once'`, applies it to the subscription. Removes discount if percent is 0.
+- **`handle_subscription_cancelled`** — Fires on `customer.subscription.deleted`. Deletes all `UserCoupon` rows the cancelled user is on, freeing their slot(s). The admin sentinel is never a Stripe customer so sentinel rows are unaffected.
 
 ### `billing/tasks.py`
 
-Single Procrastinate task: `process_monthly_refunds` (1st of month, 06:00 UTC, queue=`billing`). For each `UserCoupon`, for each paying user, finds last month's paid invoice from the dj-stripe local `Invoice` table (querying via `stripe_data__` JSONField lookups). Checks: invoice pre-dates coupon creation (skips), `RefundRecord` already exists (skips), no `charge` ID on the invoice (skips with warning), all other paying users also paid that month (skips entire coupon if any didn't). Computes `refund_cents = amount_paid * percent / 100`, issues `stripe.Refund.create(charge=charge_id, amount=refund_cents)`, and writes a `RefundRecord` atomically. Admin sentinel is skipped from paying_users entirely. On Stripe error the coupon is aborted and a `RuntimeError` is raised so Procrastinate retries. `RefundRecord.unique_together` makes the whole job idempotent on retry.
+Single Procrastinate task: `process_monthly_refunds` (1st of month, 06:00 UTC, queue=`billing`). **This is the only discount mechanism** — users always pay full price; refunds land afterward. For each `UserCoupon`, for each paying user, finds last month's paid invoice from the dj-stripe local `Invoice` table (querying via `stripe_data__` JSONField lookups). Checks: invoice pre-dates coupon creation (skips that user for this coupon), `RefundRecord` already exists (skips), no `charge` ID on the invoice (skips with warning), all other paying users also paid that month (skips entire coupon if any didn't). Computes `refund_cents = math.ceil(amount_paid * percent / 100)`, issues `stripe.Refund.create(charge=charge_id, amount=refund_cents)`, and writes a `RefundRecord` atomically. Admin sentinel is excluded from `paying_users` entirely. On Stripe error the coupon is aborted and a `RuntimeError` is raised so Procrastinate retries. `RefundRecord.unique_together` makes the whole job idempotent on retry.
 
 ### `billing/admin.py`
 
-- **`SubscriptionAdmin`** — List/search by user and Stripe IDs. `referral_code` visible for debug. Stripe IDs and `created_at` are read-only.
-- **`UserCouponAdmin`** — Staff creates staff-grant coupons here (target user + admin sentinel). `filter_horizontal` for users. No Stripe sync on save — discount is pushed lazily at next `invoice.upcoming`.
+- **`SubscriptionAdmin`** — List/search by user and Stripe IDs. `referral_code` and `referral_max_redemptions` visible and editable (staff sets `referral_max_redemptions` before generating a code). Stripe IDs and `created_at` are read-only.
+- **`UserCouponAdmin`** — Staff creates staff-grant coupons here (target user + admin sentinel). `filter_horizontal` for users. No Stripe sync on save — discounts are issued as month-end refunds by `process_monthly_refunds`.
 - **`RefundRecordAdmin`** — Fully read-only financial audit log. `has_add_permission` and `has_delete_permission` both return False.
 - **`UserReferralAdmin`** — Minimal read-only User view. Excludes all token fields. `has_add_permission` and `has_delete_permission` both return False.
 
 ### `billing/views/` (package)
 
-- **`pages.py`** — `plans` renders `billing/membership.html`; context includes `discount` (int %), `active_partners` (count of active coupon partners), `referral_code`, `show_referral`. `generate_referral_code` POST view lazily creates a code and returns JSON. `checkout` is a simple GET that creates a Stripe Checkout Session with `allow_promotion_codes=True` — promotion codes are entered on Stripe's hosted page. No server-side code interception.
+- **`pages.py`** — `plans` renders `billing/membership.html`; context includes `discount` (int %, ceiling), `active_partners` (count of active coupon partners), `referral_code`, `show_referral`. `generate_referral_code` POST view lazily creates a code and returns JSON. `checkout` is a simple GET that creates a Stripe Checkout Session with `allow_promotion_codes=True` — promotion codes are entered on Stripe's hosted page. `coupon_status` is an unauthenticated GET at `/billing/referral/<code>/` that fetches the PromotionCode live from Stripe and renders slots used/remaining.
 
 ### `billing/urls.py`
 
-`app_name = 'billing'`. Patterns: `membership/`, `checkout/` (GET), `success/`, `cancel/`, `portal/`, `referral-code/generate/`. The `/billing/webhook/` pattern has been removed — dj-stripe mounts its own endpoint at `/stripe/webhook/`.
+`app_name = 'billing'`. Patterns: `membership/`, `checkout/` (GET), `success/`, `cancel/`, `portal/`, `referral-code/generate/`, `referral/<str:code>/` (unauthenticated). The `/billing/webhook/` pattern has been removed — dj-stripe mounts its own endpoint at `/stripe/webhook/`.
 
 ### `billing/tests/` (package)
 
-- **`helpers.py`** — `BillingTestCase` (tracks Stripe objects for cleanup — handles subscriptions, customers, coupons, and promotion codes on teardown), `make_user`, `make_admin_sentinel` (creates admin user + hardcoded-active Subscription), `create_stripe_customer`, `create_stripe_subscription`, `make_djstripe_invoice` (seeds local djstripe Customer + Charge + Invoice rows for task tests without live Stripe calls; the Charge row is required because Invoice sync resolves the `charge` FK), `sign_stripe_webhook`, `s()`.
+- **`helpers.py`** — `BillingTestCase` (tracks Stripe objects for cleanup), `make_user`, `make_admin_sentinel` (creates admin user + hardcoded-active Subscription), `create_stripe_customer`, `create_stripe_subscription`, `make_djstripe_invoice` (seeds local djstripe Customer + Charge + Invoice rows for task tests without live Stripe calls), `sign_stripe_webhook`, `s()`.
 - **`settings_test.py`** — Overrides for test run: procrastinate removed, MD5 password hasher, SQLite in-memory DB.
-- **`test_user_coupon.py`** — Full billing test suite (~60 tests across 8 classes): `ComputeDiscount` (unit, DB only), `UserCouponIntegrity` (DB constraints), `SignalHandlers` (signal functions called directly, Stripe mocked), `MonthlyRefundTask` (djstripe Invoice rows seeded, Stripe mocked), `PushCombinedDiscount` (real Stripe test mode), `GenerateReferralCode` (unit + real Stripe), `SubscriptionWorkflow` (lifecycle, real Stripe), `BillingWorkflow` (end-to-end, real Stripe).
+- **`test_compute_discount.py`** — Unit tests for `compute_discount()` and DB constraints. Covers ceiling arithmetic (1 referral → 13, 2 → 25, never double-ceiling), status rules, stacking, cap at 100, and `RefundRecord` integrity.
+- **`test_signals.py`** — Signal handler tests (Stripe mocked). Covers `handle_customer_discount_created` (referral creation, self-referral guard, duplicate guard, multi-user), `handle_subscription_cancelled` (row deletion, isolation), and `handle_subscription_updated` (job retry deferral).
+- **`test_refund_task.py`** — `process_monthly_refunds` tests (djstripe Invoice rows seeded, Stripe mocked). Covers happy path, admin sentinel exclusion, skip conditions, idempotency, Stripe error handling, and multi-coupon users.
 
 ### `dashboard/models/` (package)
 

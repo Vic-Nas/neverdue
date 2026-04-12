@@ -1,5 +1,6 @@
 # billing/models.py
 import logging
+import math
 import random
 import string
 
@@ -34,7 +35,7 @@ def compute_discount(user):
         ):
             total += float(coupon.percent)
 
-    return min(int(total), 100)
+    return min(math.ceil(total), 100)
 
 
 class Subscription(models.Model):
@@ -56,6 +57,18 @@ class Subscription(models.Model):
     # customer.discount.created webhook. Permanent once created.
     referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
 
+    # Maximum redemptions for this user's referral PromotionCode.
+    # Must be set before generate_referral_code() is called — Stripe does not
+    # allow changing max_redemptions after the PromotionCode is created.
+    referral_max_redemptions = models.PositiveSmallIntegerField(
+        default=12,
+        help_text=(
+            'Maximum number of times this referral code can be redeemed. '
+            'Set before the code is generated — Stripe does not allow '
+            'changing this after the PromotionCode is created.'
+        ),
+    )
+
     @property
     def is_pro(self):
         return self.status in ('active', 'trialing')
@@ -63,8 +76,12 @@ class Subscription(models.Model):
     def generate_referral_code(self):
         """
         Generate a unique NVD-XXXXX code, save it, and push it to Stripe as a
-        PromotionCode on the shared referral coupon. Idempotent: returns the
+        PromotionCode on a per-user Stripe Coupon. Idempotent: returns the
         existing code if one already exists.
+
+        max_redemptions is taken from self.referral_max_redemptions (default 12).
+        Stripe does not allow changing this after creation, so staff must set
+        referral_max_redemptions on the Subscription before calling this.
 
         Returns the referral code string (NVD-XXXXX).
         """
@@ -95,6 +112,7 @@ class Subscription(models.Model):
                             'coupon': coupon_id,
                         },
                         code=code,
+                        max_redemptions=self.referral_max_redemptions,
                     )
                 except StripeError:
                     logger.exception(
@@ -108,16 +126,17 @@ class Subscription(models.Model):
 
 class UserCoupon(models.Model):
     """
-    A discount shared between users.
+    A discount pair between two users.
 
-    Each user on the coupon gets `percent` off while all other users on the
-    same coupon are active (status='active') or are the admin sentinel.
+    Each referral creates one UserCoupon row with exactly two users: the
+    referrer and the referred user. Both receive `percent` off as a month-end
+    refund, provided both paid that month.
 
-    Referral: two users. Both get 12.5% while both pay.
-    Staff grant: one user + admin sentinel. User always gets the discount.
+    Staff grants use one real user + the admin sentinel. The sentinel always
+    counts as active so the real user always qualifies for the refund.
 
-    Redemption limits are enforced by Stripe on the PromotionCode;
-    we do not shadow-implement them here.
+    When a user unsubscribes, all UserCoupon rows they are on are deleted —
+    they free their slot. If they resubscribe they must use a new referral code.
     """
     users = models.ManyToManyField(User, related_name='coupons')
     percent = models.DecimalField(max_digits=5, decimal_places=2)

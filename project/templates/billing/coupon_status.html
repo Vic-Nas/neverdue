@@ -1,0 +1,50 @@
+{# project/templates/billing/coupon_status.html #}
+{# No login required. Linked from referral codes shared externally. #}
+{% extends 'base.html' %}
+{% block title %}Referral code — NeverDue{% endblock %}
+
+{% block content %}
+<div class="billing-page">
+
+  <div class="page__header">
+    <h1 class="page__title">Referral code</h1>
+    <p class="page__sub"><code>{{ code }}</code></p>
+  </div>
+
+  {% if error %}
+    <p>We could not check this code right now. Please try again in a moment.</p>
+
+  {% elif not valid %}
+    <p>This referral code does not exist.</p>
+
+  {% elif not active %}
+    <p>This referral code is no longer active — all slots have been filled.</p>
+
+  {% else %}
+    {% if remaining is not None %}
+      {% if remaining > 0 %}
+        <p>
+          <strong>{{ remaining }}</strong> slot{{ remaining|pluralize }} remaining
+          ({{ used }} of {{ max_redemptions }} used).
+        </p>
+        <p>
+          <a href="{% url 'billing:checkout' %}" class="btn-primary btn">
+            Subscribe and use this code →
+          </a>
+        </p>
+      {% else %}
+        <p>This referral code is full — all {{ max_redemptions }} slots have been used.</p>
+      {% endif %}
+    {% else %}
+      {# No max_redemptions set — unlimited #}
+      <p>This code is active. {{ used }} redemption{{ used|pluralize }} so far.</p>
+      <p>
+        <a href="{% url 'billing:checkout' %}" class="btn-primary btn">
+          Subscribe and use this code →
+        </a>
+      </p>
+    {% endif %}
+  {% endif %}
+
+</div>
+{% endblock %}

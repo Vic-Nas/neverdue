@@ -17,49 +17,12 @@ logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
+_REFERRAL_COUPON_PREFIX = 'nvd-referral-'
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _push_combined_discount(sub):
-    """
-    Compute the user's total discount and apply it as a single Stripe coupon
-    (duration='once') on their subscription. Idempotent: safe to call multiple
-    times; always deletes-then-recreates the nvd-auto-<pk> coupon.
-
-    If percent is 0, removes any existing discount from the subscription.
-    """
-    from billing.models import compute_discount
-
-    pct = compute_discount(sub.user)
-    coupon_id = f'nvd-auto-{sub.user.pk}'
-
-    try:
-        try:
-            stripe.Coupon.delete(coupon_id)
-        except stripe.error.InvalidRequestError:
-            pass  # didn't exist — fine
-
-        if pct <= 0:
-            stripe.Subscription.modify(sub.stripe_subscription_id, discounts=[])
-            logger.info('_push_combined_discount: removed discount | user=%s', sub.user.pk)
-            return
-
-        stripe.Coupon.create(id=coupon_id, percent_off=pct, duration='once')
-        stripe.Subscription.modify(
-            sub.stripe_subscription_id,
-            discounts=[{'coupon': coupon_id}],
-        )
-        logger.info(
-            '_push_combined_discount: applied %s%% | user=%s sub=%s',
-            pct, sub.user.pk, sub.stripe_subscription_id,
-        )
-    except stripe.error.StripeError:
-        logger.exception(
-            '_push_combined_discount: failed | user=%s', sub.user.pk
-        )
-        raise
 
 
 def _get_local_sub_by_customer(customer_id, context=''):
@@ -82,13 +45,15 @@ def handle_customer_discount_created(event, **kwargs):
     """
     Fires when a PromotionCode is applied at Stripe checkout.
 
-    Identifies the referrer via Subscription.referral_code, then creates a
-    UserCoupon linking referrer and new subscriber.
+    Identifies the referrer by parsing the Stripe Coupon ID. Referral coupons
+    are named 'nvd-referral-<user_pk>' by generate_referral_code(). The
+    human-readable NVD-XXXXX code lives on the PromotionCode object and is NOT
+    present in the discount event — only the underlying coupon.id is sent.
 
     Guards:
     - Self-referral: strip Stripe discount, skip coupon creation.
-    - Duplicate: UserCoupon linking these two already exists → skip.
-    - Unknown code: not one of our referral codes → skip silently.
+    - Duplicate: UserCoupon linking these two already exists -> skip.
+    - Unknown coupon: not one of our referral coupon IDs -> skip silently.
     Redemption limits are enforced by Stripe on the PromotionCode.
     """
     from billing.models import Subscription, UserCoupon
@@ -100,16 +65,31 @@ def handle_customer_discount_created(event, **kwargs):
     if not coupon_id or not customer_id:
         return
 
-    # Is this one of our referral codes?
+    # Is this one of our per-user referral coupons? ID format: 'nvd-referral-<pk>'
+    if not coupon_id.startswith(_REFERRAL_COUPON_PREFIX):
+        logger.debug(
+            'handle_customer_discount_created: not a referral coupon | coupon=%s', coupon_id
+        )
+        return
+
+    try:
+        referrer_user_pk = int(coupon_id[len(_REFERRAL_COUPON_PREFIX):])
+    except ValueError:
+        logger.debug(
+            'handle_customer_discount_created: malformed referral coupon id | coupon=%s', coupon_id
+        )
+        return
+
     referrer_sub = (
         Subscription.objects
         .select_related('user')
-        .filter(referral_code=coupon_id)
+        .filter(user__pk=referrer_user_pk)
         .first()
     )
     if not referrer_sub:
         logger.debug(
-            'handle_customer_discount_created: not a referral code | coupon=%s', coupon_id
+            'handle_customer_discount_created: no subscription for referrer_pk=%s',
+            referrer_user_pk,
         )
         return
 
@@ -153,68 +133,9 @@ def handle_customer_discount_created(event, **kwargs):
     )
 
 
-def handle_invoice_paid(event, **kwargs):
-    """
-    On first real payment (subscription_create): push discount for all coupon
-    partners of this user — both sides activate simultaneously.
-    On renewal (subscription_cycle): push discount for this user only (safety net).
-    """
-    from billing.models import UserCoupon
-
-    obj = event.data['object']
-    customer_id = obj.get('customer', '')
-    billing_reason = obj.get('billing_reason', '')
-
-    sub = _get_local_sub_by_customer(customer_id, 'handle_invoice_paid')
-    if not sub:
-        return
-
-    if billing_reason == 'subscription_create':
-        # Push for this user and all their coupon partners
-        partner_ids = set()
-        for coupon in sub.user.coupons.prefetch_related('users'):
-            for u in coupon.users.all():
-                partner_ids.add(u.pk)
-        partner_ids.discard(sub.user.pk)
-
-        _push_combined_discount(sub)
-
-        if partner_ids:
-            from billing.models import Subscription
-            for partner_sub in Subscription.objects.filter(
-                user__pk__in=partner_ids,
-                stripe_subscription_id__isnull=False,
-            ).select_related('user'):
-                try:
-                    _push_combined_discount(partner_sub)
-                except Exception:
-                    logger.exception(
-                        'handle_invoice_paid: failed pushing partner discount | user=%s',
-                        partner_sub.user.pk,
-                    )
-
-    elif billing_reason == 'subscription_cycle':
-        _push_combined_discount(sub)
-
-
-def handle_invoice_upcoming(event, **kwargs):
-    """
-    Primary discount push path: ~1 hour before each billing cycle.
-    Ensures the next invoice reflects the current discount state.
-    """
-    obj = event.data['object']
-    customer_id = obj.get('customer', '')
-
-    sub = _get_local_sub_by_customer(customer_id, 'handle_invoice_upcoming')
-    if not sub or not sub.is_pro:
-        return
-
-    _push_combined_discount(sub)
-
-
 def handle_subscription_updated(event, **kwargs):
     """
-    Defers retry_jobs_after_plan_upgrade on any → active transition.
+    Defers retry_jobs_after_plan_upgrade on any -> active transition.
     dj-stripe handles syncing the local Subscription status automatically.
     """
     from billing.models import Subscription
@@ -234,6 +155,32 @@ def handle_subscription_updated(event, **kwargs):
         logger.info(
             'handle_subscription_updated: deferred retry_jobs | user=%s', sub.user.pk
         )
+
+
+def handle_subscription_cancelled(event, **kwargs):
+    """
+    Fires when a subscription is deleted (fully cancelled) in Stripe.
+
+    Deletes all UserCoupon rows the user is on, freeing their slot.
+    If they resubscribe later they must enter a new referral code.
+
+    The admin sentinel is never a Stripe customer so this handler will
+    never fire for sentinel rows — those are managed by staff directly.
+    """
+    from billing.models import UserCoupon
+
+    obj = event.data['object']
+    customer_id = obj.get('customer', '')
+
+    sub = _get_local_sub_by_customer(customer_id, 'handle_subscription_cancelled')
+    if not sub:
+        return
+
+    deleted_count, _ = UserCoupon.objects.filter(users=sub.user).delete()
+    logger.info(
+        'handle_subscription_cancelled: deleted %d UserCoupon rows | user=%s',
+        deleted_count, sub.user.pk,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -258,12 +205,9 @@ def _wrap(handler):
 WEBHOOK_SIGNALS['customer.discount.created'].connect(
     _wrap(handle_customer_discount_created)
 )
-WEBHOOK_SIGNALS['invoice.paid'].connect(
-    _wrap(handle_invoice_paid)
-)
-WEBHOOK_SIGNALS['invoice.upcoming'].connect(
-    _wrap(handle_invoice_upcoming)
-)
 WEBHOOK_SIGNALS['customer.subscription.updated'].connect(
     _wrap(handle_subscription_updated)
+)
+WEBHOOK_SIGNALS['customer.subscription.deleted'].connect(
+    _wrap(handle_subscription_cancelled)
 )

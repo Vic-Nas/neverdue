@@ -3,6 +3,7 @@
 Procrastinate tasks for billing.
 """
 import logging
+import math
 from datetime import timezone as dt_timezone
 
 import stripe
@@ -133,7 +134,7 @@ def process_monthly_refunds(timestamp: int) -> None:
                 )
                 continue
 
-            refund_cents = int(inv.stripe_data['amount_paid'] * float(coupon.percent) / 100)
+            refund_cents = math.ceil(inv.stripe_data['amount_paid'] * float(coupon.percent) / 100)
             if refund_cents <= 0:
                 continue
 

@@ -159,7 +159,46 @@ def portal(request):
         return redirect('billing:membership')
 
 
-def _get_or_create_customer(user):
+def coupon_status(request, code):
+    """
+    Unauthenticated GET. Returns the current state of a referral code:
+    how many slots have been used and how many remain.
+
+    Fetches the PromotionCode live from Stripe so the count is always current.
+    Returns a minimal HTML partial — no login required so anyone can check
+    a code before subscribing.
+    """
+    import stripe as stripe_lib
+    stripe_lib.api_key = settings.STRIPE_SECRET_KEY
+
+    try:
+        results = stripe_lib.PromotionCode.list(code=code, limit=1)
+        if not results.data:
+            return render(request, 'billing/coupon_status.html', {
+                'valid': False,
+                'code': code,
+            })
+
+        promo = results.data[0]
+        max_r = promo.get('max_redemptions')
+        used = promo.get('times_redeemed', 0)
+        remaining = (max_r - used) if max_r is not None else None
+
+        return render(request, 'billing/coupon_status.html', {
+            'valid': True,
+            'code': code,
+            'active': promo.get('active', False),
+            'used': used,
+            'max_redemptions': max_r,
+            'remaining': remaining,
+        })
+    except stripe_lib.error.StripeError:
+        logger.exception('coupon_status: Stripe error | code=%s', code)
+        return render(request, 'billing/coupon_status.html', {
+            'valid': False,
+            'code': code,
+            'error': True,
+        }, status=502)
     sub, created = Subscription.objects.get_or_create(
         user=user,
         defaults={

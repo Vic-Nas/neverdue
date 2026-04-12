@@ -7,7 +7,8 @@ from billing.models import RefundRecord, Subscription, UserCoupon
 
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'status', 'referral_code', 'current_period_end')
+    list_display = ('user', 'status', 'referral_code', 'referral_max_redemptions',
+                    'current_period_end')
     list_filter = ('status',)
     search_fields = ('user__email', 'user__username', 'stripe_customer_id')
     readonly_fields = ('stripe_customer_id', 'stripe_subscription_id', 'created_at')
@@ -20,8 +21,8 @@ class UserCouponAdmin(admin.ModelAdmin):
     Referral coupons are created automatically by the signal handler — do not
     create them manually unless correcting data.
 
-    No Stripe sync needed on save: the Stripe-side discount is pushed lazily
-    at the next invoice.upcoming event.
+    Discounts are issued as month-end refunds by process_monthly_refunds — there
+    is no Stripe-side coupon to sync here.
     """
     list_display = ('id', 'percent', 'user_list', 'created_at')
     readonly_fields = ('created_at',)
