@@ -42,7 +42,7 @@ def plans(request):
 
     user = request.user
     sub = getattr(user, 'subscription', None)
-    is_pro = user.is_pro
+    is_pro = user.is_pro or user.is_staff
     show_referral = True
 
     discount = compute_discount(user) if is_pro else 0
@@ -107,7 +107,7 @@ def coupon_lookup(request):
         head is None or
         (hasattr(head, 'subscription') and head.subscription.status == 'active')
     )
-    head_label = head.username if head else 'NeverDue'
+    head_label = 'NeverDue' if head is None else 'a NeverDue member'
 
     redeemer_count = coupon.redemptions.filter(
         user__subscription__status='active'
