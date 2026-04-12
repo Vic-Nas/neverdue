@@ -5,20 +5,19 @@ from accounts.models import User
 from billing.models import Coupon, CouponRedemption, RefundRecord, Subscription
 
 # ---------------------------------------------------------------------------
-# Unregister dj-stripe models that are irrelevant to NeverDue's admin UI.
-# dj-stripe syncs these locally but staff should not manage them here.
+# Unregister ALL dj-stripe models — NeverDue manages billing through its own
+# models only. djstripe data is still synced and usable in code.
 # ---------------------------------------------------------------------------
-_DJSTRIPE_MODELS_TO_HIDE = [
-    'Coupon', 'Customer', 'Subscription', 'Invoice', 'Price', 'Product',
-    'PaymentMethod', 'Charge', 'Refund', 'BalanceTransaction',
-    'WebhookEventTrigger', 'PromotionCode', 'Discount',
-]
-for _name in _DJSTRIPE_MODELS_TO_HIDE:
-    try:
-        import djstripe.models as _djs
-        admin.site.unregister(getattr(_djs, _name))
-    except Exception:
-        pass
+import inspect
+import djstripe.models as _djs
+from djstripe.models.core import StripeModel as _StripeModel
+
+for _name, _cls in inspect.getmembers(_djs, inspect.isclass):
+    if issubclass(_cls, _StripeModel) and _cls is not _StripeModel:
+        try:
+            admin.site.unregister(_cls)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
