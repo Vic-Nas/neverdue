@@ -40,6 +40,8 @@ class User(AbstractUser):
 
     @property
     def is_pro(self):
+        if self.is_staff:
+            return True
         return hasattr(self, 'subscription') and self.subscription.is_pro
 
 

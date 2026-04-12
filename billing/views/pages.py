@@ -66,7 +66,8 @@ def generate_referral_code(request):
     if sub.referral_coupon_id:
         return JsonResponse({'code': sub.referral_code})
     try:
-        code = sub.generate_referral_code()
+        head = None if request.user.is_staff else request.user
+        code = sub.generate_referral_code(head=head)
         return JsonResponse({'code': code})
     except Exception as exc:
         logger.error(

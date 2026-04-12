@@ -166,14 +166,19 @@ class Subscription(models.Model):
     def referral_code(self):
         return self.referral_coupon.code if self.referral_coupon else None
 
-    def generate_referral_code(self):
+    def generate_referral_code(self, head=None):
         """
-        Lazily create this user's personal referral Coupon (head=self.user,
-        percent=12.5, max_redemptions=12). Idempotent.
+        Lazily create this user's personal referral Coupon (head=self.user by
+        default, percent=12.5, max_redemptions=12). Idempotent.
+        Pass head=None for staff users so redeemers always get their discount
+        without requiring a staff invoice that will never exist.
         Returns the NVD-XXXXX code string.
         """
         if self.referral_coupon_id:
             return self.referral_coupon.code
+
+        # Default head to self.user; callers pass head=None for staff
+        coupon_head = head if head is not None else self.user
 
         chars = string.ascii_uppercase + string.digits
         for _ in range(10):
@@ -183,7 +188,7 @@ class Subscription(models.Model):
                     code=code,
                     percent='12.50',
                     max_redemptions=12,
-                    head=self.user,
+                    head=coupon_head,
                 )
                 self.referral_coupon = coupon
                 self.save(update_fields=['referral_coupon'])
