@@ -13,6 +13,17 @@
 
   autoDelete.addEventListener('change', toggleCleanupFields);
 
+  document.querySelectorAll('.priority-color-row').forEach(function (row) {
+    var confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'gcal-confirm-btn';
+    confirmBtn.textContent = 'OK';
+    row.appendChild(confirmBtn);
+    confirmBtn.addEventListener('click', function () {
+      row.classList.remove('priority-color-row--changed');
+    });
+  });
+
   document.querySelectorAll('.gcal-swatches').forEach(function (group) {
     group.addEventListener('change', function (e) {
       // Update selected ring
@@ -28,9 +39,10 @@
         preview.title = label.title;
       }
 
-      // Close the <details> after picking
+      // Close <details> and reveal the OK confirm button
       var details = group.closest('.gcal-picker-details');
       if (details) details.removeAttribute('open');
+      if (row) row.classList.add('priority-color-row--changed');
     });
   });
 

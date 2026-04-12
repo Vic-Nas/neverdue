@@ -259,28 +259,62 @@
 
 .gcal-picker-summary {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--accent);
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   list-style: none;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  transition: background 0.1s, color 0.1s;
+  border: 1px solid var(--accent-light);
+  background: var(--accent-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .gcal-picker-summary::-webkit-details-marker { display: none; }
 
 .gcal-picker-summary:hover {
-  background: var(--border);
-  color: var(--text);
+  background: var(--accent-light);
+  border-color: var(--accent-light);
+  color: white;
 }
 
 .gcal-picker-details[open] .gcal-picker-summary {
   background: var(--border);
-  color: var(--text);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+/* OK confirm button — shown after a swatch is picked, replaces Change */
+.gcal-confirm-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent);
+  transition: background 0.15s, transform 0.1s;
+  display: none;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.gcal-confirm-btn:hover {
+  background: var(--accent-light);
+  transform: translateY(-1px);
+}
+
+.priority-color-row--changed .gcal-picker-details {
+  display: none;
+}
+
+.priority-color-row--changed .gcal-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Swatch tray — expands inline below the row */
