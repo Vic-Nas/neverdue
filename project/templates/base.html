@@ -45,10 +45,10 @@
     {% if user.is_authenticated %}
       {% if user.is_pro %}
         <a href="{% url 'billing:portal' %}" class="topnav__pro">Pro ↗</a>
-        <a href="{% url 'billing:membership' %}" class="topnav__link {% if request.resolver_match.url_name == 'membership' %}topnav__link--active{% endif %}">Referral</a>
       {% else %}
         <a href="{% url 'billing:membership' %}" class="topnav__upgrade">Upgrade</a>
       {% endif %}
+      <a href="{% url 'billing:membership' %}" class="topnav__link {% if request.resolver_match.url_name == 'membership' %}topnav__link--active{% endif %}">Referral</a>
       <a href="{% url 'accounts:preferences' %}" class="topnav__link">Preferences</a>
       <a href="{% url 'accounts:logout' %}" class="btn-ghost btn">Sign out</a>
     {% endif %}

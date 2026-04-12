@@ -148,3 +148,44 @@
 .cleanup-sub-fields .form-group {
   margin-bottom: 0;
 }
+/* ── Compact page header ── */
+.page__header--compact {
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page__header--compact .page__title {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* ── Username section ── */
+.username-current {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.username-current__name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.username-current__inbox {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.username-change-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.username-change-row input {
+  max-width: 220px;
+  margin: 0;
+}

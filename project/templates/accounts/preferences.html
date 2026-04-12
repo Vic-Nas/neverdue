@@ -5,72 +5,50 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/pages/preferences.css' %}">
-<script>
-(function () {
-  const btn   = document.getElementById('username-change-btn');
-  const input = document.getElementById('new-username');
-  const err   = document.getElementById('username-change-error');
-  const ok    = document.getElementById('username-change-ok');
-  if (!btn) return;
-
-  btn.addEventListener('click', () => {
-    const username = input.value.trim().toLowerCase();
-    if (!username) { showErr('Please enter a username.'); return; }
-
-    if (!confirm(`Change your username to "${username}" for CA$5? This will be charged to your card on file.`)) return;
-
-    btn.disabled = true;
-    btn.textContent = 'Processing…';
-    err.hidden = true;
-    ok.hidden  = true;
-
-    const body = new FormData();
-    body.append('username', username);
-    body.append('csrfmiddlewaretoken', document.querySelector('meta[name="csrf-token"]').content);
-
-    fetch('{% url "accounts:change_username" %}', { method: 'POST', body })
-      .then(r => r.json())
-      .then(data => {
-        btn.disabled = false;
-        btn.textContent = 'Change username — CA$5';
-        if (data.ok) {
-          input.value = '';
-          ok.textContent = `Username changed to "${data.username}". Update any email forwards pointing to your old address.`;
-          ok.hidden = false;
-          // Update the displayed current username without a full reload
-          const cur = document.querySelector('.form-section .form-group strong');
-          if (cur) cur.textContent = data.username;
-        } else {
-          showErr(data.error || 'Something went wrong.');
-        }
-      })
-      .catch(() => {
-        btn.disabled = false;
-        btn.textContent = 'Change username — CA$5';
-        showErr('Network error. Please try again.');
-      });
-  });
-
-  function showErr(msg) {
-    err.textContent = msg;
-    err.hidden = false;
-  }
-})();
-</script>
-
 {% endblock %}
 
 {% block content %}
 <div class="page">
 
-  <div class="page__header">
+  <div class="page__header page__header--compact">
     <h1 class="page__title">Preferences</h1>
-    <p class="page__sub">Customize how NeverDue works for you.</p>
   </div>
 
   <form method="post" class="event-form">
     {% csrf_token %}
 
+    {# ── Username ── #}
+    <div class="form-section">
+      <h2 class="form-section__title">Username</h2>
+      <div class="form-group">
+        <div class="username-current">
+          <span class="username-current__name" id="current-username-display">{{ request.user.username }}</span>
+          <span class="username-current__inbox">{{ request.user.username }}@{{ DOMAIN }}</span>
+        </div>
+        <p class="form-hint">
+          Changing your username costs <strong>CA$5</strong>, charged immediately to your card on file.
+          Remember to update any email forwards pointing to your old address.
+        </p>
+      </div>
+      <div class="form-group username-change-row">
+        <input
+          type="text"
+          id="new-username"
+          placeholder="new username"
+          pattern="[a-z0-9_]+"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="150"
+        >
+        <button type="button" class="btn btn-ghost btn--sm" id="username-change-btn">
+          Change — CA$5
+        </button>
+      </div>
+      <p class="form-hint form-hint--error" id="username-change-error" hidden></p>
+      <p class="form-hint form-hint--success" id="username-change-ok" hidden></p>
+    </div>
+
+    {# ── Language ── #}
     <div class="form-section">
       <h2 class="form-section__title">Language</h2>
       <div class="form-group">
@@ -84,6 +62,7 @@
       </div>
     </div>
 
+    {# ── Event cleanup ── #}
     <div class="form-section">
       <h2 class="form-section__title">Event cleanup</h2>
 
@@ -117,6 +96,7 @@
       </div>
     </div>
 
+    {# ── Timezone ── #}
     <div class="form-section">
       <h2 class="form-section__title">Timezone</h2>
       <div class="form-group">
@@ -171,7 +151,6 @@
           <div class="priority-color-row">
             <span class="priority-color-row__label">{{ level.label }}</span>
 
-            {# Preview: show only the currently selected swatch #}
             {% for color in gcal_colors %}{% if level.current == color.id %}
             <span class="gcal-swatch-preview" style="background:{{ color.hex }}" title="{{ color.name }}"></span>
             {% endif %}{% endfor %}
@@ -202,6 +181,7 @@
       </div>
     </div>
 
+    {# ── Google Calendar ── #}
     <div class="form-section">
       <h2 class="form-section__title">Google Calendar</h2>
 
@@ -229,37 +209,6 @@
       </div>
     </div>
 
-
-    <div class="form-section">
-      <h2 class="form-section__title">Username</h2>
-      <div class="form-group">
-        <label>Current username</label>
-        <p><strong>{{ request.user.username }}</strong></p>
-        <p class="form-hint">
-          Your NeverDue inbox is <strong>{{ request.user.username }}@{{ DOMAIN }}</strong>.
-          Changing your username costs <strong>CA$5</strong>, charged immediately to your card on file.
-          Remember to update any email rules or forwards pointing to your old address.
-        </p>
-      </div>
-      <div class="form-group">
-        <label for="new-username">New username</label>
-        <input
-          type="text"
-          id="new-username"
-          placeholder="lowercase, numbers, underscores"
-          pattern="[a-z0-9_]+"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="150"
-        >
-        <button type="button" class="btn btn-primary btn--sm" id="username-change-btn">
-          Change username — CA$5
-        </button>
-        <p class="form-hint form-hint--error" id="username-change-error" hidden></p>
-        <p class="form-hint form-hint--success" id="username-change-ok" hidden></p>
-      </div>
-    </div>
-
     <div class="form-actions">
       <button type="submit" class="btn-primary">Save preferences</button>
       <a href="{% url 'dashboard:index' %}" class="btn-ghost btn">Cancel</a>
@@ -274,16 +223,16 @@
 <script src="{% static 'js/pages/preferences.js' %}"></script>
 <script>
 (function () {
-  const btn   = document.getElementById('username-change-btn');
-  const input = document.getElementById('new-username');
-  const err   = document.getElementById('username-change-error');
-  const ok    = document.getElementById('username-change-ok');
+  const btn    = document.getElementById('username-change-btn');
+  const input  = document.getElementById('new-username');
+  const err    = document.getElementById('username-change-error');
+  const ok     = document.getElementById('username-change-ok');
+  const display = document.getElementById('current-username-display');
   if (!btn) return;
 
   btn.addEventListener('click', () => {
     const username = input.value.trim().toLowerCase();
     if (!username) { showErr('Please enter a username.'); return; }
-
     if (!confirm('Change your username to "' + username + '" for CA$5? This will be charged to your card on file.')) return;
 
     btn.disabled = true;
@@ -299,21 +248,22 @@
       .then(r => r.json())
       .then(data => {
         btn.disabled = false;
-        btn.textContent = 'Change username — CA$5';
+        btn.textContent = 'Change — CA$5';
         if (data.ok) {
           input.value = '';
+          if (display) {
+            display.textContent = data.username;
+            display.nextElementSibling.textContent = data.username + '@{{ DOMAIN }}';
+          }
           ok.textContent = 'Username changed to "' + data.username + '". Update any email forwards pointing to your old address.';
           ok.hidden = false;
-          document.querySelectorAll('.form-section strong').forEach(el => {
-            if (el.closest('.form-group label') === null && el.textContent === document.title.split('—')[0].trim()) return;
-          });
         } else {
           showErr(data.error || 'Something went wrong.');
         }
       })
       .catch(() => {
         btn.disabled = false;
-        btn.textContent = 'Change username — CA$5';
+        btn.textContent = 'Change — CA$5';
         showErr('Network error. Please try again.');
       });
   });
