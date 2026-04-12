@@ -104,7 +104,7 @@ def coupon_lookup(request):
 
     head = coupon.head
     head_active = head is None or head.is_pro
-    head_label = head.username if head else 'NeverDue'
+    head_label = 'NeverDue' if head is None else 'a NeverDue member'
 
     redeemer_count = coupon.redemptions.filter(
         user__subscription__status='active'
