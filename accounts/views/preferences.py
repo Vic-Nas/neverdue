@@ -145,10 +145,16 @@ def change_username(request):
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
     try:
+        customer = stripe.Customer.retrieve(sub.stripe_customer_id)
+        pm_id = customer.get('invoice_settings', {}).get('default_payment_method')
+        if not pm_id:
+            return JsonResponse({'error': 'No payment method on file.'}, status=400)
+
         stripe.PaymentIntent.create(
             amount=500,          # CA$5.00
             currency='cad',
             customer=sub.stripe_customer_id,
+            payment_method=pm_id,
             payment_method_types=['card'],
             off_session=True,
             confirm=True,
