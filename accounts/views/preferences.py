@@ -115,6 +115,32 @@ def revoke_google(request):
 
 
 @login_required
+def check_username(request):
+    """
+    GET /accounts/preferences/username/check/?u=<username>
+    Returns JSON availability status — used for live validation.
+    """
+    from accounts.models import User
+    from emails.webhook import RESERVED_USERNAMES
+
+    val = request.GET.get('u', '').strip().lower()
+
+    if not val:
+        return JsonResponse({'status': 'empty'})
+    if len(val) < 3:
+        return JsonResponse({'status': 'invalid', 'error': 'Too short — minimum 3 characters.'})
+    if not val.replace('_', '').isalnum():
+        return JsonResponse({'status': 'invalid', 'error': 'Only lowercase letters, numbers, and underscores allowed.'})
+    if val == request.user.username:
+        return JsonResponse({'status': 'invalid', 'error': 'That is already your username.'})
+    if val in RESERVED_USERNAMES:
+        return JsonResponse({'status': 'taken', 'error': 'That username is reserved.'})
+    if User.objects.filter(username=val).exclude(pk=request.user.pk).exists():
+        return JsonResponse({'status': 'taken', 'error': 'That username is already taken.'})
+
+    return JsonResponse({'status': 'available'})
+
+@login_required
 @require_POST
 def change_username(request):
     """

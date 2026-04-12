@@ -59,52 +59,82 @@
     });
   }
 })();
-// ── Live username validation ──
+// ── Live username validation with server availability check ──
 (function () {
-  var input  = document.getElementById('new-username');
-  var btn    = document.getElementById('username-change-btn');
-  var err    = document.getElementById('username-change-error');
-  var ok     = document.getElementById('username-change-ok');
+  var input = document.getElementById('new-username');
+  var btn   = document.getElementById('username-change-btn');
+  var err   = document.getElementById('username-change-error');
+  var ok    = document.getElementById('username-change-ok');
   if (!input || !btn) return;
 
-  var VALID_RE = /^[a-z0-9_]+$/;
-  var MIN_LEN  = 3;
+  var VALID_RE      = /^[a-z0-9_]+$/;
+  var debounceTimer = null;
+  var lastChecked   = '';
 
-  function validate(val) {
-    if (!val)                        return null; // empty — neutral, button disabled
-    if (val.length < MIN_LEN)        return 'Too short — minimum ' + MIN_LEN + ' characters.';
-    if (!VALID_RE.test(val))         return 'Only lowercase letters, numbers, and underscores allowed.';
-    return '';                                    // valid
-  }
-
-  function setValidationUI(val) {
-    var result = validate(val);
-    ok.hidden  = true;
-    if (result === null) {
-      // Empty input — reset to neutral
-      err.hidden = true;
-      input.classList.remove('input--valid', 'input--invalid');
-      btn.disabled = true;
-    } else if (result === '') {
-      // Valid
-      err.hidden = true;
-      input.classList.add('input--valid');
-      input.classList.remove('input--invalid');
-      btn.disabled = false;
-    } else {
-      // Invalid
-      err.textContent = result;
-      err.hidden = false;
-      input.classList.add('input--invalid');
-      input.classList.remove('input--valid');
-      btn.disabled = true;
-    }
-  }
-
-  // Start disabled
   btn.disabled = true;
 
+  function setNeutral() {
+    err.hidden = true;
+    ok.hidden  = true;
+    input.classList.remove('input--valid', 'input--invalid');
+    btn.disabled = true;
+  }
+
+  function setInvalid(msg) {
+    err.textContent = msg;
+    err.hidden  = false;
+    ok.hidden   = true;
+    input.classList.add('input--invalid');
+    input.classList.remove('input--valid');
+    btn.disabled = true;
+  }
+
+  function setChecking() {
+    err.hidden  = true;
+    ok.hidden   = true;
+    input.classList.remove('input--valid', 'input--invalid');
+    btn.disabled = true;
+  }
+
+  function setAvailable() {
+    err.hidden      = true;
+    ok.hidden       = false;
+    ok.textContent  = 'Available';
+    input.classList.add('input--valid');
+    input.classList.remove('input--invalid');
+    btn.disabled = false;
+  }
+
+  function checkServer(val) {
+    if (val === lastChecked) return;
+    lastChecked = val;
+    var url = '/preferences/username/check/?u=' + encodeURIComponent(val);
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        // Discard stale response if the input changed while fetching
+        if (input.value.trim().toLowerCase() !== val) return;
+        if (data.status === 'available') {
+          setAvailable();
+        } else if (data.status === 'empty') {
+          setNeutral();
+        } else {
+          setInvalid(data.error || 'Not available.');
+        }
+      })
+      .catch(function () { setNeutral(); });
+  }
+
   input.addEventListener('input', function () {
-    setValidationUI(this.value.trim().toLowerCase());
+    var val = this.value.trim().toLowerCase();
+    clearTimeout(debounceTimer);
+
+    if (!val)              { setNeutral();  return; }
+    if (val.length < 3)    { setInvalid('Too short — minimum 3 characters.'); return; }
+    if (!VALID_RE.test(val)) { setInvalid('Only lowercase letters, numbers, and underscores allowed.'); return; }
+
+    // Format is fine — check availability after 400 ms of inactivity
+    setChecking();
+    debounceTimer = setTimeout(function () { checkServer(val); }, 400);
   });
 }());

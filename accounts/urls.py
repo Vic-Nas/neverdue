@@ -12,6 +12,7 @@ urlpatterns = [
     path('preferences/',              views.preferences,         name='preferences'),
     path('preferences/revoke-google/', views.revoke_google,     name='revoke_google'),
     path('preferences/username/',     views.change_username,     name='change_username'),
+    path('preferences/username/check/', views.check_username,   name='check_username'),
     path('tz/auto/',                  views.set_timezone_auto,   name='set_timezone_auto'),
     path('tz/set/',                   views.set_timezone_manual, name='set_timezone_manual'),
 ]

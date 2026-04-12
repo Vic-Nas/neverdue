@@ -2,7 +2,7 @@
 from .auth import login, logout
 from .google import google_login, google_callback, SCOPES
 from .preferences import (
-    preferences, revoke_google, change_username,
+    preferences, revoke_google, change_username, check_username,
     GCAL_COLORS, GCAL_COLOR_HEX, LANGUAGES,
     VALID_PRIORITY_COLOR_IDS,
 )
