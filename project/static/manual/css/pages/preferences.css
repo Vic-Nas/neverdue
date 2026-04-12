@@ -272,9 +272,12 @@
   display: none;
 }
 
-/* Hide the <details> toggle entirely — swatches are always shown */
+/* <details> forced open via JS on load; summary hidden */
 .gcal-picker-details {
-  display: contents;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1;
 }
 
 .gcal-picker-summary {
@@ -342,4 +345,15 @@
     margin-left: 0;
     width: 100%;
   }
+}
+
+/* ── Live username validation states ── */
+.username-change-row input.input--valid {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.1);
+}
+
+.username-change-row input.input--invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.1);
 }
