@@ -30,10 +30,7 @@ def compute_discount(user):
     ):
         coupon = redemption.coupon
         head = coupon.head
-        head_ok = (
-            head is None or
-            (hasattr(head, 'subscription') and head.subscription.status == 'active')
-        )
+        head_ok = head is None or head.is_pro
         if head_ok:
             total += float(coupon.percent)
 
@@ -99,10 +96,7 @@ class Coupon(models.Model):
             duration='forever',
         )
         stripe_coupon = stripe.Coupon.create(**kwargs)
-        promo_kwargs = dict(
-            promotion={"type": "coupon", "coupon": stripe_coupon.id},
-            code=self.code,
-        )
+        promo_kwargs = dict(discount=stripe_coupon.id, code=self.code)
         if self.max_redemptions is not None:
             promo_kwargs['max_redemptions'] = self.max_redemptions
         promo = stripe.PromotionCode.create(**promo_kwargs)
