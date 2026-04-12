@@ -1,101 +1,79 @@
-// project/static/manual/js/pages/categories.js
+/* js/pages/categories.js — categories list page */
+
 (function () {
-  var bulkBar = document.getElementById('cat-bulk-bar');
-  if (!bulkBar) return;
+  'use strict';
 
-  var BULK_URL = bulkBar.dataset.bulkUrl;
-  var CSRF = document.querySelector('meta[name="csrf-token"]').content;
-
-  var selectToggle = document.getElementById('cat-select-toggle');
-  var selectedCountEl = document.getElementById('cat-selected-count');
-  var selectAllBtn = document.getElementById('cat-select-all-btn');
-  var bulkDeleteBtn = document.getElementById('cat-bulk-delete-btn');
-
-  var selecting = false;
-
-  function getCheckboxes() {
-    return document.querySelectorAll('.cat-card__checkbox');
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
   }
+
+  const selectToggle = document.getElementById('cat-select-toggle');
+  const bulkBar      = document.getElementById('cat-bulk-bar');
+  const countEl      = document.getElementById('cat-selected-count');
+  const selectAllBtn = document.getElementById('cat-select-all-btn');
+  const deleteBtn    = document.getElementById('cat-bulk-delete-btn');
+  const catList      = document.querySelector('.cat-list');
+
+  let selecting = false;
 
   function getChecked() {
-    return [...getCheckboxes()].filter(function (c) { return c.checked; });
+    return catList ? [...catList.querySelectorAll('.cat-card__checkbox:checked')] : [];
   }
 
-  function getSelectedIds() {
-    return getChecked().map(function (c) { return parseInt(c.value); });
+  function updateBar() {
+    if (countEl) countEl.textContent = getChecked().length;
+    if (bulkBar) bulkBar.classList.toggle('is-active', selecting);
   }
 
-  function updateBulkBar() {
-    var count = getChecked().length;
-    selectedCountEl.textContent = count;
-    bulkBar.classList.toggle('visible', count > 0);
-    selectAllBtn.textContent = count === getCheckboxes().length ? 'Deselect all' : 'Select all';
-  }
-
-  function enterSelectMode() {
-    selecting = true;
-    document.body.classList.add('cat-selecting');
-    if (selectToggle) selectToggle.textContent = 'Done';
-  }
-
-  function exitSelectMode() {
-    selecting = false;
-    document.body.classList.remove('cat-selecting');
-    if (selectToggle) selectToggle.textContent = 'Select';
-    getCheckboxes().forEach(function (c) { c.checked = false; });
-    bulkBar.classList.remove('visible');
-  }
-
-  if (selectToggle) {
-    selectToggle.addEventListener('click', function () {
-      if (selecting) exitSelectMode(); else enterSelectMode();
+  if (selectToggle && catList) {
+    selectToggle.addEventListener('click', () => {
+      selecting = !selecting;
+      selectToggle.textContent = selecting ? 'Done' : 'Select';
+      if (!selecting) catList.querySelectorAll('.cat-card__checkbox').forEach(cb => { cb.checked = false; });
+      updateBar();
+    });
+    catList.addEventListener('change', (e) => {
+      if (e.target.classList.contains('cat-card__checkbox')) updateBar();
     });
   }
 
-  document.querySelectorAll('.cat-card').forEach(function (card) {
-    card.addEventListener('click', function (e) {
-      if (!selecting) return;
-      if (e.target.closest('a, button')) return;
-      e.preventDefault();
-      var cb = card.querySelector('.cat-card__checkbox');
-      if (cb) {
-        cb.checked = !cb.checked;
-        card.classList.toggle('cat-card--selected', cb.checked);
-        updateBulkBar();
-      }
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      const all = catList ? [...catList.querySelectorAll('.cat-card__checkbox')] : [];
+      const allChecked = all.every(cb => cb.checked);
+      all.forEach(cb => { cb.checked = !allChecked; });
+      updateBar();
     });
-  });
+  }
 
-  getCheckboxes().forEach(function (cb) {
-    cb.addEventListener('change', function () {
-      var card = cb.closest('.cat-card');
-      if (card) card.classList.toggle('cat-card--selected', cb.checked);
-      updateBulkBar();
-    });
-  });
+  if (deleteBtn && bulkBar) {
+    deleteBtn.addEventListener('click', () => {
+      const ids = getChecked().map(cb => cb.value);
+      if (!ids.length) return;
+      if (!confirm(`Delete ${ids.length} categor${ids.length === 1 ? 'y' : 'ies'}? Events will be uncategorized.`)) return;
 
-  selectAllBtn && selectAllBtn.addEventListener('click', function () {
-    var cbs = getCheckboxes();
-    var allChecked = [...cbs].every(function (c) { return c.checked; });
-    cbs.forEach(function (c) {
-      c.checked = !allChecked;
-      var card = c.closest('.cat-card');
-      if (card) card.classList.toggle('cat-card--selected', c.checked);
+      fetch(bulkBar.dataset.bulkUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrf(),
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ ids }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            ids.forEach(id => {
+              const card = catList.querySelector(`.cat-card[data-cat-id="${id}"]`);
+              if (card) card.remove();
+            });
+            updateBar();
+          }
+        })
+        .catch(() => alert('Error deleting categories.'));
     });
-    updateBulkBar();
-  });
+  }
 
-  bulkDeleteBtn && bulkDeleteBtn.addEventListener('click', async function () {
-    var ids = getSelectedIds();
-    if (!ids.length) return;
-    if (!confirm('Delete ' + ids.length + ' categor' + (ids.length !== 1 ? 'ies' : 'y') + ' and all their events? This cannot be undone.')) return;
-    var res = await fetch(BULK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ ids: ids }),
-    });
-    var data = await res.json();
-    if (data.ok) location.reload();
-    else alert('Error: ' + (data.error || 'Unknown error'));
-  });
 })();

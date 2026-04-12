@@ -1,311 +1,99 @@
-/* project/static/manual/css/pages/categories.css */
-
-/* ── Category badge (shared, used in event list too) ── */
-.category-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.65rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--cat-color, var(--accent)) 15%, transparent);
-  color: var(--cat-color, var(--accent));
-  letter-spacing: 0.02em;
-}
-
-/* ── Priority badge ── */
-.priority-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.55rem;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.priority-badge--1 {
-  background: #e6f4ea;
-  color: #2d6a4f;
-}
-
-.priority-badge--2 {
-  background: #fef9e0;
-  color: #7d6608;
-}
-
-.priority-badge--3 {
-  background: #fdebd0;
-  color: #a04000;
-}
-
-.priority-badge--4 {
-  background: #fdecea;
-  color: #922b21;
-}
+/* css/pages/categories.css — category and rule list styles */
 
 /* ── Category list ── */
-.cat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-/* ── Selection mode (shared pattern: checkbox in header flex row, hidden by default) ── */
-.cat-card__checkbox {
-  display: none;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-body.cat-selecting .cat-card { cursor: pointer; }
-body.cat-selecting .cat-card__checkbox { display: inline-block; }
-.cat-card--selected { background: var(--accent-muted); }
-
+.cat-list { display: flex; flex-direction: column; gap: .5rem; }
 .cat-card {
-  position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem;
-  transition: box-shadow 0.15s;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: .85rem 1rem;
+  transition: border-color var(--transition);
 }
-
-.cat-card:hover {
-  box-shadow: var(--shadow);
-}
-
+.cat-card:hover { border-color: var(--color-border-2); }
 .cat-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.4rem;
-  gap: 0.75rem;
+  gap: .5rem;
+  flex-wrap: wrap;
 }
-
 .cat-card__name {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  font-weight: 600;
-  font-size: 0.95rem;
+  gap: .55rem;
+  flex-wrap: wrap;
 }
-
+.cat-card__checkbox { accent-color: var(--color-accent); width: 15px; height: 15px; cursor: pointer; }
 .cat-card__dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--color-border-2);
   flex-shrink: 0;
 }
-
-.cat-card__actions {
-  display: flex;
-  gap: 0.25rem;
+.cat-card__name-link {
+  font-weight: 500;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: .9375rem;
 }
+.cat-card__name-link:hover { color: var(--color-accent-3); text-decoration: none; }
+.cat-card__actions { display: flex; gap: .35rem; }
 
 .cat-card__meta {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  gap: .4rem;
+  margin-top: .5rem;
+  font-size: .8rem;
+  color: var(--color-text-3);
 }
-
-.cat-card__sep {
-  color: var(--border);
-}
-
-.cat-card__stat {
-  /* inherits from .cat-card__meta */
-}
+.cat-card__sep { color: var(--color-border-2); }
+.cat-card__stat {}
 
 .cat-card__rules {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: .35rem;
+  margin-top: .5rem;
 }
-
 .cat-rule-tag {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  display: inline-block;
+  padding: .15em .55em;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
   border-radius: 20px;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-family: monospace;
+  font-size: .72rem;
+  color: var(--color-text-3);
+  font-family: var(--font-mono);
 }
 
-/* ── Delete action (danger tint on ghost btn) ── */
-.btn-ghost--danger {
-  color: var(--danger);
-}
+/* Category detail */
+.cat-detail-events { margin-top: .75rem; }
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Google Calendar color swatches */
-/* ──────────────────────────────────────────────────────────────── */
-
-.gcal-swatches {
+/* Rule add / edit */
+.rule-add-form { max-width: 560px; }
+.rule-type-options {
   display: flex;
+  gap: .5rem;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
 }
-
-.gcal-swatch {
-  position: relative;
+.rule-type-option {
+  flex: 1;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+.rule-type-option input[type="radio"] { position: absolute; opacity: 0; }
+.rule-type-option label {
+  display: block;
+  padding: .65rem .85rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  font-size: .875rem;
+  transition: border-color var(--transition);
 }
-
-.gcal-swatch input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.gcal-swatch span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  transition: all 0.15s;
-  font-size: 0.65rem;
-  font-weight: 500;
-}
-
-.gcal-swatch input:checked + span {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 1px white;
-}
-
-.gcal-swatch--auto span {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text-muted);
-}
-
-.gcal-swatch--auto input:checked + span {
-  background: var(--surface);
-  border-color: var(--accent);
-}
-
-
-/* ──────────────────────────────────────────────────────────────── */
-/* Rules page                                                      */
-/* ──────────────────────────────────────────────────────────────── */
-
-/* ── Rule card (matches cat-card layout) ── */
-.rule-card {
-  position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem;
-  transition: box-shadow 0.15s;
-}
-
-.rule-card:hover {
-  box-shadow: var(--shadow);
-}
-
-.rule-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.rule-card__name {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-weight: 600;
-  font-size: 0.95rem;
-  min-width: 0;
-}
-
-.rule-card__pattern {
-  font-family: monospace;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rule-card__pattern--muted { color: var(--text-muted); font-family: inherit; }
-
-.rule-card__actions {
-  display: flex;
-  gap: 0.25rem;
-  flex-shrink: 0;
-}
-
-.rule-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 0.4rem;
-}
-
-.rule-card__detail { /* inherits from meta */ }
-
-/* Type badge */
-.rule-type-badge {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
-  border-radius: 20px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.rule-type-badge--sender  { background: #e0f0ff; color: #1a5a99; }
-.rule-type-badge--keyword { background: #e6f4ea; color: #2d6a4f; }
-.rule-type-badge--prompt  { background: #fef3e0; color: #92400e; }
-
-.rule-discard-badge {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
-  border-radius: 20px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: #fdecea;
-  color: #922b21;
-  text-transform: uppercase;
-}
-
-.rule-prompt-preview {
-  color: var(--text-muted);
-  font-style: italic;
-  font-size: 0.82rem;
-}
-
-/* ── Rule list + selection mode ── */
-.rule-list { display: flex; flex-direction: column; gap: 0.75rem; }
-
-.rule-card__checkbox {
-  display: none;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-body.selecting-rules .rule-card { cursor: pointer; }
-body.selecting-rules .rule-card__checkbox { display: inline-block; }
-.rule-card--selected { background: var(--accent-muted); }
-body.selecting-rules .rule-card__actions { display: none; }
+.rule-type-option input:checked + label { border-color: var(--color-accent); color: var(--color-accent-3); }

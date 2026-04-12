@@ -1,139 +1,108 @@
-// project/static/manual/js/pages/rules.js
+/* js/pages/rules.js — rules list page */
+
 (function () {
-  function getCsrf() {
-    var meta = document.querySelector('meta[name="csrf-token"]');
-    if (meta && meta.content && meta.content !== 'NOTPROVIDED') return meta.content;
-    var match = document.cookie.match(/csrftoken=([^;]+)/);
-    return match ? match[1] : '';
+  'use strict';
+
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
   }
 
-  var pageEl = document.querySelector('.page[data-rule-delete-url-tpl]');
-  var DELETE_URL_TPL = pageEl ? pageEl.dataset.ruleDeleteUrlTpl : '';
+  const page         = document.querySelector('[data-rule-delete-url-tpl]');
+  const deleteTpl    = page ? page.dataset.ruleDeleteUrlTpl : null;
+  const selectToggle = document.getElementById('rule-select-toggle');
+  const bulkBar      = document.getElementById('rule-bulk-bar');
+  const countEl      = document.getElementById('rule-selected-count');
+  const selectAllBtn = document.getElementById('rule-select-all-btn');
+  const deleteBulk   = document.getElementById('rule-bulk-delete-btn');
+  const ruleList     = document.querySelector('.rule-list');
 
-  // ─── Delete ───────────────────────────────────────────────────────────────
-
-  function deleteRule(pk, card) {
-    fetch(DELETE_URL_TPL.replace('__PK__', pk), {
-      method: 'POST',
-      headers: { 'X-CSRFToken': getCsrf() },
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.ok) card.remove();
-        else alert('Error: ' + data.error);
-      })
-      .catch(function () { alert('Network error.'); });
-  }
-
-  document.querySelectorAll('.rule-delete-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var card = btn.closest('.rule-card');
-      deleteRule(btn.dataset.pk, card);
-    });
-  });
-
-  // ─── Select mode / bulk delete ─────────────────────────────────────────────
-
-  var selectToggle = document.getElementById('rule-select-toggle');
-  var bulkBar = document.getElementById('rule-bulk-bar');
-  var selectedCountEl = document.getElementById('rule-selected-count');
-  var bulkDeleteBtn = document.getElementById('rule-bulk-delete-btn');
-  var selectAllBtn = document.getElementById('rule-select-all-btn');
-  var selecting = false;
-
-  function getCheckboxes() {
-    return document.querySelectorAll('.rule-card__checkbox');
-  }
+  let selecting = false;
 
   function getChecked() {
-    return Array.from(getCheckboxes()).filter(function (c) { return c.checked; });
+    return ruleList ? [...ruleList.querySelectorAll('.rule-card__checkbox:checked')] : [];
   }
 
-  function updateCount() {
-    var count = getChecked().length;
-    if (selectedCountEl) selectedCountEl.textContent = count;
-    if (selectAllBtn) selectAllBtn.textContent = count === getCheckboxes().length ? 'Deselect all' : 'Select all';
+  function updateBar() {
+    if (countEl) countEl.textContent = getChecked().length;
+    if (bulkBar) bulkBar.classList.toggle('is-active', selecting);
   }
 
-  function enterSelectMode() {
-    selecting = true;
-    document.body.classList.add('selecting-rules');
-    if (bulkBar) bulkBar.classList.add('visible');
-    if (selectToggle) selectToggle.textContent = 'Done';
-    updateCount();
-  }
-
-  function exitSelectMode() {
-    selecting = false;
-    document.body.classList.remove('selecting-rules');
-    getCheckboxes().forEach(function (c) { c.checked = false; });
-    document.querySelectorAll('.rule-card--selected').forEach(function (el) { el.classList.remove('rule-card--selected'); });
-    if (bulkBar) bulkBar.classList.remove('visible');
-    if (selectToggle) selectToggle.textContent = 'Select';
-    updateCount();
-  }
-
-  if (selectToggle) {
-    selectToggle.addEventListener('click', function () {
-      selecting ? exitSelectMode() : enterSelectMode();
+  if (selectToggle && ruleList) {
+    selectToggle.addEventListener('click', () => {
+      selecting = !selecting;
+      selectToggle.textContent = selecting ? 'Done' : 'Select';
+      if (!selecting) ruleList.querySelectorAll('.rule-card__checkbox').forEach(cb => { cb.checked = false; });
+      updateBar();
+    });
+    ruleList.addEventListener('change', (e) => {
+      if (e.target.classList.contains('rule-card__checkbox')) updateBar();
     });
   }
-
-  // Click card to toggle checkbox in select mode
-  document.querySelectorAll('.rule-card').forEach(function (card) {
-    card.addEventListener('click', function (e) {
-      if (!selecting) return;
-      if (e.target.closest('button, a')) return;
-      e.preventDefault();
-      var cb = card.querySelector('.rule-card__checkbox');
-      if (cb) {
-        cb.checked = !cb.checked;
-        card.classList.toggle('rule-card--selected', cb.checked);
-        updateCount();
-      }
-    });
-  });
-
-  getCheckboxes().forEach(function (cb) {
-    cb.addEventListener('change', function () {
-      var card = cb.closest('.rule-card');
-      if (card) card.classList.toggle('rule-card--selected', cb.checked);
-      updateCount();
-    });
-  });
 
   if (selectAllBtn) {
-    selectAllBtn.addEventListener('click', function () {
-      var cbs = getCheckboxes();
-      var allChecked = Array.from(cbs).every(function (c) { return c.checked; });
-      cbs.forEach(function (c) {
-        c.checked = !allChecked;
-        var card = c.closest('.rule-card');
-        if (card) card.classList.toggle('rule-card--selected', c.checked);
-      });
-      updateCount();
+    selectAllBtn.addEventListener('click', () => {
+      const all = ruleList ? [...ruleList.querySelectorAll('.rule-card__checkbox')] : [];
+      const allChecked = all.every(cb => cb.checked);
+      all.forEach(cb => { cb.checked = !allChecked; });
+      updateBar();
     });
   }
 
-  if (bulkDeleteBtn && bulkBar) {
-    bulkDeleteBtn.addEventListener('click', function () {
-      var ids = getChecked().map(function (c) { return parseInt(c.value, 10); });
+  if (deleteBulk && bulkBar) {
+    deleteBulk.addEventListener('click', () => {
+      const ids = getChecked().map(cb => cb.value);
       if (!ids.length) return;
-      if (!confirm('Delete ' + ids.length + ' rule' + (ids.length !== 1 ? 's' : '') + '?')) return;
-      var url = bulkBar.dataset.bulkUrl;
-      bulkDeleteBtn.disabled = true;
-      fetch(url, {
+      if (!confirm(`Delete ${ids.length} rule(s)?`)) return;
+
+      fetch(bulkBar.dataset.bulkUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify({ ids: ids }),
-        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': csrf(),
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ ids }),
       })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.ok) location.reload();
-          else { alert(data.error || 'Delete failed.'); bulkDeleteBtn.disabled = false; }
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            ids.forEach(id => {
+              const card = ruleList.querySelector(`.rule-card[data-rule-id="${id}"]`);
+              if (card) card.remove();
+            });
+            updateBar();
+          }
         })
-        .catch(function () { alert('Network error.'); bulkDeleteBtn.disabled = false; });
+        .catch(() => alert('Error deleting rules.'));
     });
   }
+
+  // ── Single rule delete via row button ─────────────────────────────────────
+  if (ruleList && deleteTpl) {
+    ruleList.addEventListener('click', (e) => {
+      const btn = e.target.closest('.rule-delete-btn');
+      if (!btn) return;
+      const pk = btn.dataset.pk;
+      if (!pk || !confirm('Delete this rule?')) return;
+
+      const url = deleteTpl.replace('__PK__', pk);
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            const card = ruleList.querySelector(`.rule-card[data-rule-id="${pk}"]`);
+            if (card) card.remove();
+          }
+        })
+        .catch(() => alert('Error deleting rule.'));
+    });
+  }
+
 })();

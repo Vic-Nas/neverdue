@@ -46,13 +46,10 @@
   {% endif %}
 
   <div class="referral-code-box">
-    {% if referral_code %}
+      {# ── Referral code box ── #}
       <span class="referral-code-box__label">Your referral code</span>
       <code class="referral-code-box__code" id="referral-code">{{ referral_code }}</code>
-      <button class="btn-ghost btn btn--sm" id="copy-code-btn" onclick="copyCode()">Copy</button>
-    {% else %}
-      <button class="btn-primary btn btn--sm" id="generate-code-btn">Get my referral code</button>
-    {% endif %}
+      <button class="btn-ghost btn btn--sm" id="copy-code-btn">Copy</button>
   </div>
 
   {% if is_pro %}

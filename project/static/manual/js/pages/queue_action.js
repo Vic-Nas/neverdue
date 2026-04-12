@@ -1,67 +1,94 @@
-// project/static/manual/js/pages/queue_action.js
-// Handles both the reprocess button (needs_review jobs) and the retry button
-// (failed jobs) on queue_job_detail.html. Replaces queue_job_detail.js and
-// queue_job_retry.js — loaded once, each section guards on element existence.
+/* js/pages/queue_action.js — queue job detail page actions */
+
 (function () {
-  var CSRF = document.querySelector('meta[name="csrf-token"]').content;
+  'use strict';
 
-  // Reprocess: needs_review job — user submits a correction prompt.
-  var reprocessBtn = document.getElementById('reprocess-btn');
-  if (reprocessBtn) {
-    reprocessBtn.addEventListener('click', function () {
-      var prompt = document.getElementById('reprocess-prompt').value.trim();
-      if (!prompt) { document.getElementById('reprocess-prompt').focus(); return; }
-      window.neverdue.submitWithStatus({
-        btn:          reprocessBtn,
-        statusEl:     document.getElementById('reprocess-status'),
-        url:          reprocessBtn.dataset.reprocessUrl,
-        body:         { event_ids: JSON.parse(reprocessBtn.dataset.pendingIds), prompt: prompt },
-        csrf:         CSRF,
-        originalText: 'Re-process',
-        successText:  'Queued. Updating this job\u2026',
-        onSuccess: function () {
-          setTimeout(function () { window.location.href = reprocessBtn.dataset.queueUrl; }, 1200);
-        },
-      });
-    });
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
   }
 
-  // Retry: failed job — re-dispatch with original task_args.
-  var retryBtn = document.getElementById('retry-btn');
+  function postAction(url, body, onOk, statusEl) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrf(),
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(body || {}),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) onOk(data);
+        else if (statusEl) statusEl.textContent = data.error || 'Error.';
+      })
+      .catch(() => { if (statusEl) statusEl.textContent = 'Network error.'; });
+  }
+
+  // ── Retry ─────────────────────────────────────────────────────────────────
+  const retryBtn    = document.getElementById('retry-btn');
+  const retryStatus = document.getElementById('retry-status');
+
   if (retryBtn) {
-    retryBtn.addEventListener('click', function () {
-      window.neverdue.submitWithStatus({
-        btn:          retryBtn,
-        statusEl:     document.getElementById('retry-status'),
-        url:          retryBtn.dataset.retryUrl,
-        body:         {},
-        csrf:         CSRF,
-        originalText: 'Retry job',
-        successText:  'Job queued for retry.',
-        onSuccess: function () {
-          setTimeout(function () { window.location.href = retryBtn.dataset.queueUrl; }, 1200);
-        },
+    retryBtn.addEventListener('click', () => {
+      retryBtn.disabled = true;
+      retryBtn.textContent = 'Retrying…';
+      postAction(
+        retryBtn.dataset.retryUrl, {},
+        () => { window.location.href = retryBtn.dataset.queueUrl; },
+        retryStatus
+      ).finally(() => {
+        if (retryBtn.disabled) { retryBtn.disabled = false; retryBtn.textContent = 'Retry job'; }
       });
     });
   }
 
-  // Delete: remove job and stored data.
-  var deleteBtn = document.getElementById('delete-job-btn');
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', function () {
-      if (!confirm('Delete this job? Any stored email body and attachments will be permanently removed. Events already created are kept.')) return;
-      window.neverdue.submitWithStatus({
-        btn:          deleteBtn,
-        statusEl:     document.getElementById('delete-status'),
-        url:          deleteBtn.dataset.deleteUrl,
-        body:         {},
-        csrf:         CSRF,
-        originalText: 'Delete job',
-        successText:  'Deleted.',
-        onSuccess: function () {
-          setTimeout(function () { window.location.href = deleteBtn.dataset.queueUrl; }, 800);
-        },
+  // ── Reprocess pending events ──────────────────────────────────────────────
+  const reprocessBtn    = document.getElementById('reprocess-btn');
+  const reprocessStatus = document.getElementById('reprocess-status');
+  const reprocessPrompt = document.getElementById('reprocess-prompt');
+
+  if (reprocessBtn) {
+    reprocessBtn.addEventListener('click', () => {
+      const prompt = reprocessPrompt ? reprocessPrompt.value.trim() : '';
+      const ids    = JSON.parse(reprocessBtn.dataset.pendingIds || '[]');
+
+      reprocessBtn.disabled = true;
+      reprocessBtn.textContent = 'Sending…';
+      postAction(
+        reprocessBtn.dataset.reprocessUrl,
+        { prompt, pending_ids: ids },
+        () => { window.location.href = reprocessBtn.dataset.queueUrl; },
+        reprocessStatus
+      ).finally(() => {
+        if (reprocessBtn.disabled) { reprocessBtn.disabled = false; reprocessBtn.textContent = 'Re-process'; }
+      });
+    });
+    if (reprocessPrompt) {
+      reprocessPrompt.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') reprocessBtn.click();
+      });
+    }
+  }
+
+  // ── Delete job ────────────────────────────────────────────────────────────
+  const deleteJobBtn = document.getElementById('delete-job-btn');
+  const deleteStatus = document.getElementById('delete-status');
+
+  if (deleteJobBtn) {
+    deleteJobBtn.addEventListener('click', () => {
+      if (!confirm('Delete this job permanently?')) return;
+      deleteJobBtn.disabled = true;
+      deleteJobBtn.textContent = 'Deleting…';
+      postAction(
+        deleteJobBtn.dataset.deleteUrl, {},
+        () => { window.location.href = deleteJobBtn.dataset.queueUrl; },
+        deleteStatus
+      ).finally(() => {
+        if (deleteJobBtn.disabled) { deleteJobBtn.disabled = false; deleteJobBtn.textContent = 'Delete job'; }
       });
     });
   }
+
 })();

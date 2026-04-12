@@ -1,142 +1,98 @@
-// project/static/manual/js/core/base.js
+/* js/core/base.js — global JS loaded for authenticated users */
+
 (function () {
-  var meta = document.querySelector('meta[name="csrf-token"]');
-  var CSRF = meta ? meta.content : '';
+  'use strict';
 
-  // ── Timezone auto-detect ──
-  var timezoneUrl = document.body.dataset.timezoneUrl;
-  if (timezoneUrl) {
+  // ── Hamburger nav ────────────────────────────────────────────────────────
+  const hamburger = document.getElementById('nav-hamburger');
+  const navLinks  = document.getElementById('nav-links');
+  if (hamburger && navLinks) {
+    hamburger.addEventListener('click', () => {
+      const open = navLinks.classList.toggle('is-open');
+      hamburger.setAttribute('aria-expanded', String(open));
+    });
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!hamburger.contains(e.target) && !navLinks.contains(e.target)) {
+        navLinks.classList.remove('is-open');
+        hamburger.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // ── Queue badge polling ───────────────────────────────────────────────────
+  const body = document.body;
+  const queueStatusUrl = body.dataset.queueStatusUrl;
+  const badgeProcessing = document.getElementById('queue-badge-processing');
+  const badgeAttention  = document.getElementById('queue-badge-attention');
+
+  if (queueStatusUrl && (badgeProcessing || badgeAttention)) {
+    let pollInterval = 8000;
+    let timerId;
+
+    function poll() {
+      fetch(queueStatusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data) return;
+          if (badgeProcessing) badgeProcessing.hidden = !data.processing;
+          if (badgeAttention)  badgeAttention.hidden  = !data.attention;
+          // Back off when nothing is in flight
+          pollInterval = (data.processing) ? 5000 : 12000;
+        })
+        .catch(() => { pollInterval = 20000; })
+        .finally(() => { timerId = setTimeout(poll, pollInterval); });
+    }
+
+    timerId = setTimeout(poll, 3000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearTimeout(timerId);
+      } else {
+        timerId = setTimeout(poll, 1000);
+      }
+    });
+  }
+
+  // ── Timezone auto-detect ─────────────────────────────────────────────────
+  const tzUrl = body.dataset.timezoneUrl;
+  if (tzUrl) {
     try {
-      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) {
-        fetch(timezoneUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-          body: JSON.stringify({ timezone: tz })
-        });
+        const fd = new FormData();
+        fd.append('timezone', tz);
+        fd.append('csrfmiddlewaretoken', csrfToken());
+        fetch(tzUrl, { method: 'POST', body: fd }).catch(() => {});
       }
-    } catch (e) {}
+    } catch (_) {}
   }
 
-  // ── Mobile hamburger ──
-  var hamburger = document.getElementById('nav-hamburger');
-  var topnav = document.getElementById('topnav');
-  var navLinks = document.getElementById('nav-links');
+  // ── Shared helper: CSRF token ─────────────────────────────────────────────
+  function csrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+  }
+  // Expose globally for inline scripts (e.g. preferences page)
+  window.csrfToken = csrfToken;
 
-  if (hamburger) {
-    hamburger.addEventListener('click', function () {
-      var isOpen = topnav.classList.toggle('topnav--open');
-      hamburger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  // ── Shared helper: copy text ──────────────────────────────────────────────
+  window.copyText = function (text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = orig; }, 1800);
+    }).catch(() => {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
     });
-
-    navLinks.querySelectorAll('.topnav__link').forEach(function (link) {
-      link.addEventListener('click', function () {
-        topnav.classList.remove('topnav--open');
-        hamburger.setAttribute('aria-expanded', 'false');
-      });
-    });
-
-    document.addEventListener('click', function (e) {
-      if (!topnav.contains(e.target)) {
-        topnav.classList.remove('topnav--open');
-        hamburger.setAttribute('aria-expanded', 'false');
-      }
-    });
-  }
-
-  // ── Queue badge polling ──
-  var badgeProcessing = document.getElementById('queue-badge-processing');
-  var badgeAttention = document.getElementById('queue-badge-attention');
-  if (!badgeProcessing) return;
-
-  var QUEUE_STATUS_URL = document.body.dataset.queueStatusUrl;
-  var pollInterval = null;
-  var POLL_MS = 5000;
-
-  function updateBadges(activeCount, attentionCount) {
-    if (activeCount > 0) {
-      badgeProcessing.textContent = activeCount;
-      badgeProcessing.hidden = false;
-    } else {
-      badgeProcessing.hidden = true;
-    }
-    if (attentionCount > 0) {
-      badgeAttention.textContent = attentionCount;
-      badgeAttention.hidden = false;
-    } else {
-      badgeAttention.hidden = true;
-    }
-  }
-
-  function poll() {
-    fetch(QUEUE_STATUS_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (!data) return;
-        updateBadges(data.active_count, data.attention_count);
-        if (data.active_count === 0 && pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
-      })
-      .catch(function () {});
-  }
-
-  function startPolling() {
-    if (!pollInterval) {
-      poll();
-      pollInterval = setInterval(poll, POLL_MS);
-    }
-  }
-
-  poll();
-
-  document.addEventListener('submit', function () {
-    setTimeout(startPolling, 1000);
-  });
-
-  window.neverdue = window.neverdue || {};
-  window.neverdue.startQueuePolling = startPolling;
-
-  window.neverdue.submitWithStatus = function (opts) {
-    // opts: { btn, statusEl, url, body, csrf, originalText, onSuccess }
-    opts.btn.disabled = true;
-    opts.btn.textContent = 'Queuing\u2026';
-    if (opts.statusEl) opts.statusEl.textContent = '';
-
-    fetch(opts.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': opts.csrf },
-      body: JSON.stringify(opts.body || {}),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.ok) {
-          if (opts.statusEl) {
-            opts.statusEl.textContent = opts.successText || 'Queued.';
-            opts.statusEl.style.color = 'var(--color-success, #16a34a)';
-          }
-          opts.onSuccess(data);
-        } else {
-          if (opts.statusEl) {
-            opts.statusEl.textContent = 'Error: ' + (data.error || 'unknown');
-            opts.statusEl.style.color = '#ef4444';
-          } else {
-            alert('Error: ' + data.error);
-          }
-          opts.btn.disabled = false;
-          opts.btn.textContent = opts.originalText || 'Submit';
-        }
-      })
-      .catch(function () {
-        if (opts.statusEl) {
-          opts.statusEl.textContent = 'Network error.';
-          opts.statusEl.style.color = '#ef4444';
-        } else {
-          alert('Network error. Please try again.');
-        }
-        opts.btn.disabled = false;
-        opts.btn.textContent = opts.originalText || 'Submit';
-      });
   };
+
 })();

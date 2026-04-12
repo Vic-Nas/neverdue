@@ -1,38 +1,50 @@
-// project/static/manual/js/pages/support.js
+/* js/pages/support.js — ticket detail resolve interaction */
+
 (function () {
-  const block  = document.getElementById('resolve-block');
-  if (!block) return;
+  'use strict';
 
-  const btnYes = document.getElementById('btn-yes');
-  const btnNo  = document.getElementById('btn-no');
-  const msg    = document.getElementById('resolve-msg');
-  const url    = block.dataset.resolveUrl;
-  const csrf   = document.querySelector('meta[name="csrf-token"]').content;
+  const resolveBlock = document.getElementById('resolve-block');
+  if (!resolveBlock) return;
 
-  async function resolve(satisfied) {
-    btnYes.disabled = true;
-    btnNo.disabled  = true;
+  const resolveUrl = resolveBlock.dataset.resolveUrl;
+  const btnYes     = document.getElementById('btn-yes');
+  const btnNo      = document.getElementById('btn-no');
+  const msg        = document.getElementById('resolve-msg');
 
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-      body: JSON.stringify({ satisfied }),
-    });
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      msg.textContent = data.error || 'Something went wrong.';
-      msg.hidden = false;
-      btnYes.disabled = false;
-      btnNo.disabled  = false;
-      return;
-    }
-
-    block.innerHTML = satisfied
-      ? '<p class="support-notice">✓ Glad it helped! Ticket closed.</p>'
-      : `<p class="support-notice">Issue opened on GitHub. <a href="${data.gh_url}" target="_blank" rel="noopener">View it here →</a></p>`;
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
   }
 
-  btnYes.addEventListener('click', () => resolve(true));
-  btnNo.addEventListener('click',  () => resolve(false));
-}());
+  function resolve(satisfied) {
+    if (btnYes) btnYes.disabled = true;
+    if (btnNo)  btnNo.disabled  = true;
+
+    const fd = new FormData();
+    fd.append('satisfied', satisfied ? 'true' : 'false');
+    fd.append('csrfmiddlewaretoken', csrf());
+
+    fetch(resolveUrl, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(data => {
+        if (msg) {
+          msg.hidden = false;
+          msg.textContent = satisfied
+            ? '✓ Marked as resolved. Thanks!'
+            : 'Got it — we\'ll take another look.';
+        }
+        // Hide the action buttons
+        const actions = resolveBlock.querySelector('.ticket-resolve__actions');
+        if (actions) actions.hidden = true;
+      })
+      .catch(() => {
+        if (btnYes) btnYes.disabled = false;
+        if (btnNo)  btnNo.disabled  = false;
+        if (msg) { msg.hidden = false; msg.textContent = 'Network error. Please try again.'; }
+      });
+  }
+
+  if (btnYes) btnYes.addEventListener('click', () => resolve(true));
+  if (btnNo)  btnNo.addEventListener('click',  () => resolve(false));
+
+})();

@@ -1,359 +1,170 @@
-// project/static/manual/js/pages/queue.js
+/* js/pages/queue.js — processing queue list with live polling */
+
 (function () {
-  var tbody = document.getElementById('queue-tbody');
-  var table = document.getElementById('queue-table');
-  var emptyMsg = document.getElementById('queue-empty-msg');
-  if (!tbody) return;
+  'use strict';
 
-  var QUEUE_STATUS_URL = document.body.dataset.queueStatusUrl;
-  var pollInterval = null;
-  var POLL_MS = 4000;
-
-  var SOURCE_LABELS = { email: 'Email', upload: 'Upload' };
-  var STATUS_LABELS = {
-    queued: 'Queued',
-    processing: 'Processing…',
-    needs_review: 'Needs review',
-    done: 'Done',
-    failed: 'Failed',
-  };
-  var STATUS_CLASSES = {
-    queued: 'status--queued',
-    processing: 'status--processing',
-    needs_review: 'status--needs-review',
-    done: 'status--done',
-    failed: 'status--failed',
-  };
-
-  var FAILURE_REASON_LABELS = {
-    llm_error: 'AI service error',
-    scan_limit: 'Scan limit reached',
-    pro_required: 'Pro plan required',
-    internal_error: 'Internal error',
-    discarded_by_rule: 'Discarded by rule',
-  };
-
-  // ─── Filter state ─────────────────────────────────────────────────────────
-
-  var filterStatus = '';
-  var filterSource = '';
-  var filterSearch = '';
-
-  var filterStatusEl = document.getElementById('queue-filter-status');
-  var filterSourceEl = document.getElementById('queue-filter-source');
-  var filterSearchEl = document.getElementById('queue-search');
-
-  if (filterStatusEl) {
-    filterStatusEl.addEventListener('change', function () {
-      filterStatus = filterStatusEl.value;
-      currentPage = 1;
-      if (lastJobs) render(lastJobs);
-    });
-  }
-  if (filterSourceEl) {
-    filterSourceEl.addEventListener('change', function () {
-      filterSource = filterSourceEl.value;
-      currentPage = 1;
-      if (lastJobs) render(lastJobs);
-    });
-  }
-  if (filterSearchEl) {
-    filterSearchEl.addEventListener('input', function () {
-      filterSearch = filterSearchEl.value.toLowerCase().trim();
-      currentPage = 1;
-      if (lastJobs) render(lastJobs);
-    });
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
   }
 
-  var lastJobs = null;
-  var currentPage = 1;
-  var PAGE_SIZE = 25;
+  const tbody       = document.getElementById('queue-tbody');
+  const tableEl     = document.getElementById('queue-table');
+  const emptyMsg    = document.getElementById('queue-empty-msg');
+  const searchInput = document.getElementById('queue-search');
+  const filterSel   = document.getElementById('queue-filter-status');
 
-  // ─── Select mode ──────────────────────────────────────────────────────────
+  let allJobs = [];
+  let pollTimer;
 
-  var selectMode = false;
-  var selectedIds = new Set();
-  var bulkBar = document.getElementById('queue-bulk-bar');
-  var selectedCountEl = document.getElementById('queue-selected-count');
-  var bulkDeleteBtn = document.getElementById('queue-bulk-delete');
-  var cancelSelectBtn = document.getElementById('queue-cancel-select');
-  var enterSelectBtn = document.getElementById('queue-enter-select');
-  var selectAllCb = document.getElementById('queue-select-all');
-
-  function updateSelectedCount() {
-    if (selectedCountEl) selectedCountEl.textContent = selectedIds.size + ' selected';
-    if (bulkDeleteBtn) bulkDeleteBtn.disabled = selectedIds.size === 0;
+  // ── Status badge map ──────────────────────────────────────────────────────
+  function statusBadge(status) {
+    const labels = {
+      queued: 'Queued', processing: 'Processing',
+      done: 'Done', needs_review: 'Needs review', failed: 'Failed',
+    };
+    return `<span class="badge badge--${status}">${labels[status] || status}</span>`;
   }
 
-  function enterSelectMode() {
-    selectMode = true;
-    selectedIds.clear();
-    if (bulkBar) bulkBar.classList.add('visible');
-    if (enterSelectBtn) enterSelectBtn.hidden = true;
-    document.body.classList.add('selecting-queue');
-    if (lastJobs) render(lastJobs);
-    updateSelectedCount();
+  function sourceLabel(src) {
+    return { email: 'Email', upload: 'Upload', manual: 'Manual', api: 'API' }[src] || src;
   }
 
-  function exitSelectMode() {
-    selectMode = false;
-    selectedIds.clear();
-    if (bulkBar) bulkBar.classList.remove('visible');
-    if (enterSelectBtn) enterSelectBtn.hidden = false;
-    document.body.classList.remove('selecting-queue');
-    if (selectAllCb) selectAllCb.checked = false;
-    if (lastJobs) render(lastJobs);
-  }
+  // ── Render ────────────────────────────────────────────────────────────────
+  function render() {
+    if (!tbody) return;
+    const q      = searchInput ? searchInput.value.toLowerCase() : '';
+    const status = filterSel   ? filterSel.value : '';
 
-  if (enterSelectBtn) enterSelectBtn.addEventListener('click', enterSelectMode);
-  if (cancelSelectBtn) cancelSelectBtn.addEventListener('click', exitSelectMode);
-
-  if (selectAllCb) {
-    selectAllCb.addEventListener('change', function () {
-      var cbs = tbody.querySelectorAll('.queue-row-cb');
-      cbs.forEach(function (cb) {
-        cb.checked = selectAllCb.checked;
-        var id = parseInt(cb.dataset.jobId, 10);
-        if (selectAllCb.checked) selectedIds.add(id); else selectedIds.delete(id);
-      });
-      updateSelectedCount();
-    });
-  }
-
-  if (bulkDeleteBtn) {
-    bulkDeleteBtn.addEventListener('click', function () {
-      if (selectedIds.size === 0) return;
-      if (!confirm('Delete ' + selectedIds.size + ' job' + (selectedIds.size !== 1 ? 's' : '') + '? Stored data will be permanently removed. Events already created are kept.')) return;
-      var CSRF = document.querySelector('meta[name="csrf-token"]').content;
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.textContent = 'Deleting…';
-      fetch('/dashboard/queue/bulk-delete/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
-        credentials: 'same-origin',
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.ok) {
-            exitSelectMode();
-            poll();
-          } else {
-            alert(data.error || 'Delete failed.');
-            bulkDeleteBtn.disabled = false;
-            bulkDeleteBtn.textContent = 'Delete selected';
-          }
-        })
-        .catch(function () {
-          alert('Network error.');
-          bulkDeleteBtn.disabled = false;
-          bulkDeleteBtn.textContent = 'Delete selected';
-        });
-    });
-  }
-
-  function applyFilters(jobs) {
-    return jobs.filter(function (j) {
-      if (filterStatus && j.status !== filterStatus) return false;
-      if (filterSource && j.source !== filterSource) return false;
-      if (filterSearch) {
-        var haystack = ((j.from_address || '') + ' ' + (j.notes || '') + ' ' + (j.source || '')).toLowerCase();
-        if (haystack.indexOf(filterSearch) === -1) return false;
-      }
+    const visible = allJobs.filter(j => {
+      if (status && j.status !== status) return false;
+      if (q && !JSON.stringify(j).toLowerCase().includes(q)) return false;
       return true;
     });
-  }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-
-  function fmt(isoStr) {
-    var d = new Date(isoStr);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-           ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  }
-
-  function fmtDuration(secs) {
-    if (secs < 2) return '< 1s';
-    if (secs < 60) return secs + 's';
-    return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
-  }
-
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  function render(jobs) {
-    var visible = applyFilters(jobs);
-
-    // Show/hide select button based on data availability (skip in select mode)
-    if (enterSelectBtn && !selectMode) enterSelectBtn.hidden = !visible || visible.length === 0;
-
-    if (!visible || visible.length === 0) {
-      table.hidden = true;
-      emptyMsg.hidden = false;
-      emptyMsg.textContent = jobs.length > 0
-        ? 'No jobs match the current filters.'
-        : 'No jobs yet.';
-      removePagination();
+    if (!visible.length) {
+      if (tableEl) tableEl.hidden = true;
+      if (emptyMsg) emptyMsg.hidden = false;
       return;
     }
-    emptyMsg.hidden = true;
-    table.hidden = false;
 
-    // Pagination
-    var totalPages = Math.ceil(visible.length / PAGE_SIZE);
-    if (currentPage > totalPages) currentPage = totalPages;
-    var start = (currentPage - 1) * PAGE_SIZE;
-    var pageItems = visible.slice(start, start + PAGE_SIZE);
+    if (tableEl) tableEl.hidden = false;
+    if (emptyMsg) emptyMsg.hidden = true;
 
-    tbody.innerHTML = '';
+    tbody.innerHTML = visible.map(j => `
+      <tr id="qrow-${j.pk}" class="${j._selected ? 'is-selected' : ''}">
+        <td class="queue-select-col">
+          <input type="checkbox" class="queue-job-cb" value="${j.pk}" ${j._selected ? 'checked' : ''}>
+        </td>
+        <td><a href="${j.detail_url}" style="color:inherit;font-size:.8125rem">${sourceLabel(j.source)}</a></td>
+        <td style="color:#9ca3af;font-size:.8125rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.from_address || ''}">${j.from_address || '—'}</td>
+        <td style="color:#9ca3af;font-size:.8125rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.notes || ''}">${j.notes || ''}</td>
+        <td>${statusBadge(j.status)}</td>
+        <td style="color:#9ca3af;font-size:.8125rem">${j.duration != null ? j.duration + 's' : '—'}</td>
+        <td style="color:#9ca3af;font-size:.8125rem;white-space:nowrap">${j.started}</td>
+      </tr>
+    `).join('');
 
-    pageItems.forEach(function (j) {
-      var tr = document.createElement('tr');
-
-      var isTerminal = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
-      var hasPending = j.pending_event_count > 0;
-      var isFailed = j.status === 'failed';
-      var isDiscarded = j.status === 'done' && j.notes && j.notes.startsWith('Discarded —');
-
-      var attentionBadge = hasPending
-        ? '<span class="queue-pending-badge">' + j.pending_event_count + ' pending</span>'
-        : '';
-
-      var activeInfo = j.active_event_count > 0
-        ? j.active_event_count + ' event' + (j.active_event_count !== 1 ? 's' : '') + ' created'
-        : (j.status === 'done' && !hasPending && !isDiscarded ? 'No events' : '');
-
-      // For failed jobs, surface the reason in the notes cell.
-      // For discarded-by-rule jobs, the note IS the message — surface it directly.
-      var notesCell;
-      if (isFailed && j.failure_reason) {
-        var failureLabel = FAILURE_REASON_LABELS[j.failure_reason] || j.failure_reason;
-        notesCell = '<span style="color:#dc2626;font-weight:500;">' + failureLabel + '</span>'
-          + (j.notes ? ' · ' + j.notes : '');
-      } else if (isDiscarded) {
-        notesCell = '<span class="queue-discarded-note">' + j.notes + '</span>';
-      } else {
-        notesCell = (j.notes || '') + (j.notes && activeInfo ? ' · ' : '') + (activeInfo || '');
-      }
-
-      var sourceLabel = SOURCE_LABELS[j.source] || j.source;
-      var sourceCell = isTerminal
-        ? '<a href="/dashboard/queue/' + j.id + '/" class="queue-source-link">' + sourceLabel + '</a>'
-        : sourceLabel;
-
-      var isDurationVisible = j.status === 'done' || j.status === 'failed' || j.status === 'needs_review';
-
-      var cbCell = '<td class="queue-select-col"><input type="checkbox" class="queue-row-cb" data-job-id="' + j.id + '"' + (selectMode && selectedIds.has(j.id) ? ' checked' : '') + '></td>';
-
-      tr.innerHTML = cbCell +
-        '<td>' + sourceCell + attentionBadge + '</td>' +
-        '<td class="queue-from" data-label="From">' + (j.from_address || '—') + '</td>' +
-        '<td class="queue-notes" data-label="Notes">' + notesCell + '</td>' +
-        '<td data-label="Status"><span class="queue-status ' + (STATUS_CLASSES[j.status] || '') + '">' + (STATUS_LABELS[j.status] || j.status) + '</span></td>' +
-        '<td data-label="Duration">' + (isDurationVisible ? fmtDuration(j.duration_seconds) : '—') + '</td>' +
-        '<td data-label="Started">' + fmt(j.created_at) + '</td>';
-
-      if (isTerminal && !selectMode) {
-        tr.classList.add('queue-row--clickable');
-        tr.addEventListener('click', function (e) {
-          if (e.target.tagName !== 'A') {
-            window.location.href = '/dashboard/queue/' + j.id + '/';
-          }
-        });
-      }
-
-      // In select mode, wire up checkbox
-      if (selectMode) {
-        var cb = tr.querySelector('.queue-row-cb');
-        if (cb) {
-          cb.addEventListener('change', function () {
-            var id = parseInt(cb.dataset.jobId, 10);
-            if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
-            updateSelectedCount();
-          });
-        }
-      }
-
-      tbody.appendChild(tr);
+    // Checkbox listeners
+    tbody.querySelectorAll('.queue-job-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const job = allJobs.find(j => String(j.pk) === cb.value);
+        if (job) job._selected = cb.checked;
+        updateBulkBar();
+      });
     });
-
-    renderPagination(totalPages);
   }
 
-  // ─── Client-side pagination nav ──────────────────────────────────────────
-
-  function removePagination() {
-    var existing = document.getElementById('queue-pagination');
-    if (existing) existing.remove();
-  }
-
-  function renderPagination(totalPages) {
-    removePagination();
-    // Always render pagination nav so the user sees [1] even with a single page,
-    // matching the behaviour of the server-rendered pagination partial.
-    if (totalPages < 1) totalPages = 1;
-
-    var nav = document.createElement('nav');
-    nav.id = 'queue-pagination';
-    nav.className = 'pagination';
-
-    if (currentPage > 1) {
-      var prev = document.createElement('a');
-      prev.href = '#'; prev.className = 'pagination__link'; prev.textContent = '←';
-      prev.addEventListener('click', function (e) { e.preventDefault(); currentPage--; render(lastJobs); });
-      nav.appendChild(prev);
-    }
-
-    for (var i = 1; i <= totalPages; i++) {
-      if (i === currentPage) {
-        var active = document.createElement('span');
-        active.className = 'pagination__num pagination__num--active';
-        active.textContent = i;
-        nav.appendChild(active);
-      } else if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-        var link = document.createElement('a');
-        link.href = '#'; link.className = 'pagination__num'; link.textContent = i;
-        (function (p) {
-          link.addEventListener('click', function (e) { e.preventDefault(); currentPage = p; render(lastJobs); });
-        })(i);
-        nav.appendChild(link);
-      } else if (i === currentPage - 3 || i === currentPage + 3) {
-        var ellipsis = document.createElement('span');
-        ellipsis.className = 'pagination__ellipsis'; ellipsis.textContent = '…';
-        nav.appendChild(ellipsis);
-      }
-    }
-
-    if (currentPage < totalPages) {
-      var next = document.createElement('a');
-      next.href = '#'; next.className = 'pagination__link'; next.textContent = '→';
-      next.addEventListener('click', function (e) { e.preventDefault(); currentPage++; render(lastJobs); });
-      nav.appendChild(next);
-    }
-
-    table.parentNode.insertBefore(nav, table.nextSibling);
-  }
-
-  function hasActive(jobs) {
-    return jobs && jobs.some(function (j) { return j.status === 'queued' || j.status === 'processing'; });
-  }
-
-  // ─── Poll ─────────────────────────────────────────────────────────────────
-
-  function poll() {
-    fetch(QUEUE_STATUS_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
+  // ── Fetch jobs ────────────────────────────────────────────────────────────
+  function fetchJobs() {
+    fetch('/dashboard/queue/jobs/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
         if (!data) return;
-        lastJobs = data.jobs;
-        render(lastJobs);
-        if (!hasActive(data.jobs) && pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
+        // Preserve selection state
+        const selected = new Set(allJobs.filter(j => j._selected).map(j => j.pk));
+        allJobs = data.jobs.map(j => ({ ...j, _selected: selected.has(j.pk) }));
+        render();
+
+        const hasActive = allJobs.some(j => j.status === 'queued' || j.status === 'processing');
+        pollTimer = setTimeout(fetchJobs, hasActive ? 4000 : 12000);
       })
-      .catch(function () {});
+      .catch(() => { pollTimer = setTimeout(fetchJobs, 20000); });
   }
 
-  poll();
-  pollInterval = setInterval(poll, POLL_MS);
+  if (tbody) {
+    fetchJobs();
+    document.addEventListener('visibilitychange', () => {
+      clearTimeout(pollTimer);
+      if (!document.hidden) fetchJobs();
+    });
+  }
+
+  if (searchInput) searchInput.addEventListener('input', render);
+  if (filterSel)   filterSel.addEventListener('change', render);
+
+  // ── Select mode ───────────────────────────────────────────────────────────
+  const enterSelect  = document.getElementById('queue-enter-select');
+  const bulkBar      = document.getElementById('queue-bulk-bar');
+  const bulkCountEl  = document.getElementById('queue-selected-count');
+  const cancelSelect = document.getElementById('queue-cancel-select');
+  const bulkDelete   = document.getElementById('queue-bulk-delete');
+  const selectAll    = document.getElementById('queue-select-all');
+
+  if (enterSelect) enterSelect.hidden = false;
+
+  function updateBulkBar() {
+    const n = allJobs.filter(j => j._selected).length;
+    if (bulkCountEl) bulkCountEl.textContent = n + ' selected';
+    if (bulkBar) bulkBar.classList.toggle('is-active', n > 0);
+  }
+
+  if (enterSelect) {
+    enterSelect.addEventListener('click', () => {
+      bulkBar && bulkBar.classList.add('is-active');
+    });
+  }
+  if (cancelSelect) {
+    cancelSelect.addEventListener('click', () => {
+      allJobs.forEach(j => { j._selected = false; });
+      if (selectAll) selectAll.checked = false;
+      render();
+      updateBulkBar();
+    });
+  }
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      allJobs.forEach(j => { j._selected = selectAll.checked; });
+      render();
+      updateBulkBar();
+    });
+  }
+
+  if (bulkDelete) {
+    bulkDelete.addEventListener('click', () => {
+      const pks = allJobs.filter(j => j._selected).map(j => j.pk);
+      if (!pks.length) return;
+      if (!confirm(`Delete ${pks.length} job(s)?`)) return;
+
+      fetch('/dashboard/queue/bulk-delete/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrf(),
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ pks }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            allJobs = allJobs.filter(j => !pks.includes(j.pk));
+            render();
+            updateBulkBar();
+          }
+        })
+        .catch(() => alert('Error deleting jobs.'));
+    });
+  }
+
 })();

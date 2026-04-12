@@ -1,109 +1,49 @@
-// project/static/manual/js/pages/rule_add.js
+/* js/pages/rule_add.js — rule add/edit form dynamic fields */
+
 (function () {
-  function getCsrf() {
-    var meta = document.querySelector('meta[name="csrf-token"]');
-    if (meta && meta.content && meta.content !== 'NOTPROVIDED') return meta.content;
-    var match = document.cookie.match(/csrftoken=([^;]+)/);
-    return match ? match[1] : '';
-  }
+  'use strict';
 
-  // ─── Rule type registry ────────────────────────────────────────────────────
-  var RULE_TYPES = {
-    sender: {
-      collectData: function (form) {
-        var catSelect = form.querySelector('[name="category_id"]');
-        return {
-          rule_type: 'sender',
-          pattern: form.querySelector('[name="pattern"]').value.trim(),
-          action: form.querySelector('[name="action"]').value,
-          category_id: catSelect ? catSelect.value || null : null,
-        };
-      },
-    },
-    keyword: {
-      collectData: function (form) {
-        var catSelect = form.querySelector('[name="category_id"]');
-        return {
-          rule_type: 'keyword',
-          pattern: form.querySelector('[name="pattern"]').value.trim(),
-          action: form.querySelector('[name="action"]').value,
-          category_id: catSelect ? catSelect.value || null : null,
-        };
-      },
-    },
-    prompt: {
-      collectData: function (form) {
-        return {
-          rule_type: 'prompt',
-          prompt_text: form.querySelector('[name="prompt_text"]').value.trim(),
-          pattern: (form.querySelector('[name="prompt_pattern"]') || { value: '' }).value.trim(),
-        };
-      },
-    },
-  };
+  // Rule type radios drive which fields are visible
+  const typeRadios   = document.querySelectorAll('input[name="rule_type"]');
+  const actionGroup  = document.getElementById('action-group');
+  const patternGroup = document.getElementById('pattern-group');
+  const promptGroup  = document.getElementById('prompt-group');
+  const patternLabel = document.getElementById('pattern-label');
 
-  // ─── Rule type dropdown → show/hide field blocks ──────────────────────────
-  var typeSelect = document.getElementById('rule-type-select');
+  function update() {
+    const type = document.querySelector('input[name="rule_type"]:checked')?.value;
+    if (!type) return;
 
-  function showFieldsForType(type) {
-    document.querySelectorAll('.rule-fields').forEach(function (el) {
-      el.hidden = true;
-    });
-    if (type && document.getElementById('rule-fields-' + type)) {
-      document.getElementById('rule-fields-' + type).hidden = false;
+    const isPrompt  = type === 'prompt';
+    const isSender  = type === 'sender';
+    const isKeyword = type === 'keyword';
+
+    if (actionGroup)  actionGroup.style.display  = isPrompt ? 'none' : '';
+    if (promptGroup)  promptGroup.style.display   = isPrompt ? '' : 'none';
+    if (patternGroup) {
+      // For prompt rules, pattern is optional (sender filter) — always show it
+      patternGroup.style.display = '';
+      if (patternLabel) {
+        patternLabel.textContent = isPrompt  ? 'Sender filter (optional)'
+                                 : isSender  ? 'Sender / domain'
+                                 : 'Keyword';
+      }
     }
   }
 
-  if (typeSelect) {
-    typeSelect.addEventListener('change', function () {
-      showFieldsForType(typeSelect.value);
-    });
-    showFieldsForType(typeSelect.value);
+  typeRadios.forEach(r => r.addEventListener('change', update));
+  update();
+
+  // Action radio drives category picker
+  const actionRadios = document.querySelectorAll('input[name="action"]');
+  const categoryGroup = document.getElementById('category-group');
+
+  function updateAction() {
+    const action = document.querySelector('input[name="action"]:checked')?.value;
+    if (categoryGroup) categoryGroup.style.display = (action === 'categorize') ? '' : 'none';
   }
 
-  // ─── Category select visibility ──────────────────────────────────────────
-  function toggleCatGroup(sel) {
-    var catGroup = sel.closest('form').querySelector('.cat-select-group');
-    if (catGroup) catGroup.hidden = sel.value !== 'categorize';
-  }
+  actionRadios.forEach(r => r.addEventListener('change', updateAction));
+  updateAction();
 
-  document.querySelectorAll('select[name="action"]').forEach(function (sel) {
-    sel.addEventListener('change', function () { toggleCatGroup(sel); });
-    toggleCatGroup(sel);
-  });
-
-  // ─── Submit ───────────────────────────────────────────────────────────────
-  document.querySelectorAll('.rule-add-form').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var ruleType = form.dataset.ruleType;
-      var handler = RULE_TYPES[ruleType];
-      if (!handler) { alert('Unknown rule type: ' + ruleType); return; }
-
-      var data = handler.collectData(form);
-      var btn = form.querySelector('button[type="submit"]');
-      btn.disabled = true;
-
-      var addUrl = form.dataset.addUrl;
-      fetch(addUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify(data),
-        credentials: 'same-origin',
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (res) {
-          if (res.ok) {
-            window.location.href = form.dataset.cancelUrl;
-          } else {
-            alert('Error: ' + (res.error || 'Unknown error'));
-            btn.disabled = false;
-          }
-        })
-        .catch(function (err) {
-          alert('Network error: ' + err.message);
-          btn.disabled = false;
-        });
-    });
-  });
 })();

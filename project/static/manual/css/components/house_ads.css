@@ -1,88 +1,52 @@
-/* project/static/manual/css/components/house_ads.css */
+/* css/components/house_ads.css — sidebar ad cards */
 
 .house-ad {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.75rem;
+  gap: .4rem;
+  padding: .85rem .8rem;
   border-radius: var(--radius);
-  width: 100%;
-  height: 100%;
   text-decoration: none;
-  transition: transform 0.15s, box-shadow 0.15s;
-  overflow: hidden;
-  box-sizing: border-box;
+  transition: opacity var(--transition), transform var(--transition);
+  border: 1px solid transparent;
+  color: inherit;
 }
+.house-ad:hover { opacity: .85; transform: translateY(-1px); text-decoration: none; }
 
-.house-ad:hover {
-  transform: translateY(-2px);
-  text-decoration: none;
+.house-ad--railway {
+  background: #1a1a2e;
+  border-color: #2d2d4e;
+}
+.house-ad--koho {
+  background: #1a2a1a;
+  border-color: #2a3a2a;
 }
 
 .house-ad__eyebrow {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: .65rem;
+  font-weight: 600;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  opacity: 0.7;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--color-text-3);
 }
-
 .house-ad__logo {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-family: 'Syne', sans-serif;
+  gap: .4rem;
+  font-size: .95rem;
   font-weight: 700;
-  font-size: 0.9rem;
-  white-space: nowrap;
+  color: var(--color-text);
 }
-
 .house-ad__text {
-  font-size: 0.72rem;
-  line-height: 1.35;
-  opacity: 0.85;
-  flex: 1;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  font-size: .75rem;
+  color: var(--color-text-2);
+  line-height: 1.4;
 }
-
 .house-ad__cta {
-  font-size: 0.72rem;
+  font-size: .75rem;
   font-weight: 600;
-  margin-top: auto;
-  white-space: nowrap;
+  color: var(--color-accent-3);
+  margin-top: .1rem;
 }
-
-/* ── Railway ── */
-.house-ad--railway {
-  background: #0B0D0E;
-  border: 1px solid #2a2d30;
-  color: #f0f0f0;
-}
-
-.house-ad--railway .house-ad__eyebrow { color: #a78bfa; }
-.house-ad--railway .house-ad__logo    { color: #ffffff; }
-.house-ad--railway .house-ad__cta     { color: #a78bfa; }
-
-.house-ad--railway:hover {
-  box-shadow: 0 4px 20px rgba(167, 139, 250, 0.2);
-}
-
-/* ── Koho ── */
-.house-ad--koho {
-  background: #1a0533;
-  border: 1px solid #2e0f52;
-  color: #f0f0f0;
-}
-
-.house-ad--koho .house-ad__eyebrow { color: #C8F135; }
-.house-ad--koho .house-ad__cta     { color: #C8F135; }
-
-.house-ad--koho:hover {
-  box-shadow: 0 4px 20px rgba(200, 241, 53, 0.15);
-}
+.house-ad--railway .house-ad__cta { color: #818cf8; }
+.house-ad--koho .house-ad__cta { color: #C8F135; }

@@ -1,51 +1,58 @@
-// project/static/manual/js/pages/event_edit.js
+/* js/pages/event_edit.js — event edit/create form extras */
+
 (function () {
-  // ── Dynamic rows ──────────────────────────────────────────────
-  var addReminderBtn = document.getElementById('add-reminder-btn');
-  if (addReminderBtn) {
-    addReminderBtn.addEventListener('click', function () {
-      addDynamicRow(
-        'event-reminders-list',
-        'reminder-row',
-        '<input type="number" name="reminders" min="1" placeholder="Minutes before">' +
-        '<span class="reminder-row__label">minutes before</span>' +
-        '<button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>'
-      );
+  'use strict';
+
+  function csrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
+  }
+
+  // ── AI prompt edit ────────────────────────────────────────────────────────
+  const submitBtn   = document.getElementById('prompt-submit-btn');
+  const promptInput = document.getElementById('prompt-input');
+
+  if (submitBtn && promptInput) {
+    const promptUrl    = submitBtn.dataset.promptUrl;
+    const dashboardUrl = submitBtn.dataset.dashboardUrl;
+
+    submitBtn.addEventListener('click', () => {
+      const prompt = promptInput.value.trim();
+      if (!prompt) { promptInput.focus(); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Applying…';
+
+      fetch(promptUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrf(),
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ prompt }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            window.location.href = dashboardUrl;
+          } else {
+            alert(data.error || 'Error applying prompt.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Apply';
+          }
+        })
+        .catch(() => {
+          alert('Network error. Please try again.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Apply';
+        });
+    });
+
+    // Submit on Ctrl/Cmd+Enter
+    promptInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitBtn.click();
     });
   }
 
-  var addLinkBtn = document.getElementById('add-link-btn');
-  if (addLinkBtn) {
-    addLinkBtn.addEventListener('click', function () {
-      addDynamicRow(
-        'event-links-list',
-        'reminder-row',
-        '<input type="url" name="link_urls" placeholder="https://…">' +
-        '<input type="text" name="link_titles" placeholder="Label (optional)">' +
-        '<button type="button" class="reminder-row__remove" onclick="this.parentElement.remove()">✕</button>'
-      );
-    });
-  }
-
-  // ── AI prompt edit (existing events only) ────────────────────
-  var btn = document.getElementById('prompt-submit-btn');
-  if (!btn) return;
-  var CSRF = document.querySelector('meta[name="csrf-token"]').content;
-
-  btn.addEventListener('click', function () {
-    var prompt = document.getElementById('prompt-input').value.trim();
-    if (!prompt) { document.getElementById('prompt-input').focus(); return; }
-
-    window.neverdue.submitWithStatus({
-      btn: btn,
-      statusEl: null,
-      url: btn.dataset.promptUrl,
-      body: { prompt: prompt },
-      csrf: CSRF,
-      originalText: 'Apply',
-      onSuccess: function () {
-        window.location.href = btn.dataset.dashboardUrl;
-      },
-    });
-  });
 })();

@@ -1,267 +1,231 @@
-/* project/static/manual/css/pages/billing.css */
+/* css/pages/billing.css — membership, plans, referral, checkout status */
 
 .billing-page {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 2rem 0;
+  max-width: 640px;
 }
 
+/* ── Headings used in non-referral plan view ── */
 .billing-page__heading {
-  font-size: 2rem;
-  letter-spacing: -0.04em;
-  margin-bottom: 0.4rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -.03em;
+  margin-bottom: .35rem;
 }
-
 .billing-page__sub {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  margin-bottom: 3rem;
+  color: var(--color-text-2);
+  margin-bottom: 2rem;
 }
 
 /* ── Plans grid ── */
 .plans-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
+@media (max-width: 560px) { .plans-grid { grid-template-columns: 1fr; } }
 
 .plan-card {
-  border: 1.5px solid var(--border);
-  border-radius: calc(var(--radius) * 1.5);
-  padding: 2rem 1.75rem;
-  background: var(--surface);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
   position: relative;
-  transition: box-shadow 0.2s;
 }
-
-.plan-card:hover {
-  box-shadow: var(--shadow);
-}
-
 .plan-card--pro {
-  border-color: var(--accent);
-  background: var(--accent-muted);
+  border-color: var(--color-accent);
+  background: rgba(99,102,241,.04);
 }
 
 .plan-card__badge {
   position: absolute;
-  top: -12px;
-  left: 1.75rem;
-  background: var(--accent);
-  color: white;
-  font-size: 0.7rem;
+  top: -10px;
+  left: 1.25rem;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: .7rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.2rem 0.6rem;
+  padding: .15em .6em;
   border-radius: 20px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
-
 .plan-card__name {
-  font-family: 'Syne', sans-serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--color-text-2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
 }
-
 .plan-card__price {
-  font-family: 'Syne', sans-serif;
   font-size: 2.25rem;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -.03em;
   line-height: 1;
-  margin-bottom: 0.3rem;
+  margin: .25rem 0;
 }
-
 .plan-card__price span {
-  font-size: 0.95rem;
+  font-size: .9rem;
   font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0;
+  color: var(--color-text-2);
 }
-
 .plan-card__trial {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 0.8rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: .8125rem;
+  color: var(--color-success);
+  font-weight: 500;
+  margin-bottom: .25rem;
 }
-
 .plan-card__desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-bottom: 1.75rem;
+  font-size: .8375rem;
+  color: var(--color-text-2);
+  line-height: 1.4;
+  margin-bottom: .5rem;
+  flex: 1;
 }
 
 .plan-features {
   list-style: none;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: .4rem;
 }
-
 .plan-features li {
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  font-size: .8375rem;
+  color: var(--color-text-2);
+  padding-left: 1.25rem;
+  position: relative;
 }
-
 .plan-features li::before {
   content: '✓';
-  color: var(--accent);
-  font-weight: 700;
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  color: var(--color-success);
+  font-size: .75rem;
 }
+.plan-features li.disabled { color: var(--color-text-3); }
+.plan-features li.disabled::before { content: '✕'; color: var(--color-text-3); }
 
-.plan-features li.disabled {
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-
-.plan-features li.disabled::before {
-  content: '✕';
-  color: var(--border);
-}
-
-/* ── Button modifiers (billing context) ── */
-.btn--disabled {
-  opacity: 0.5;
-  cursor: default;
-  pointer-events: none;
-}
-
-.btn--sm {
-  font-size: 0.8rem;
-  padding: 0.3rem 0.75rem;
-}
-
-/* ── Status pages ── */
-.status-page {
-  max-width: 480px;
-  margin: 4rem auto;
+/* ── Referral hint below plans ── */
+.billing-referral-hint {
+  font-size: .8375rem;
+  color: var(--color-text-3);
   text-align: center;
 }
 
-.status-page__icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  display: block;
-}
-
-.status-page__title {
-  font-size: 1.75rem;
-  letter-spacing: -0.03em;
-  margin-bottom: 0.6rem;
-}
-
-.status-page__text {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  margin-bottom: 2rem;
-}
-
-.status-page__actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-/* ── Referral section ── */
+/* ── Referral page components ── */
 .referral-notice {
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
+  padding: .75rem 1rem;
+  background: rgba(245,158,11,.08);
+  border: 1px solid rgba(245,158,11,.2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.25rem;
+  font-size: .875rem;
+  color: var(--color-text-2);
 }
-
 .referral-discount-badge {
   display: inline-block;
-  background: var(--accent-muted);
-  border: 1.5px solid var(--accent);
+  padding: .5rem 1rem;
+  background: rgba(99,102,241,.12);
+  border: 1px solid rgba(99,102,241,.3);
   border-radius: var(--radius);
-  padding: 0.4rem 0.9rem;
-  font-size: 0.875rem;
-  margin-bottom: 1.25rem;
-  color: var(--text);
+  font-size: .9rem;
+  margin-bottom: 1rem;
 }
-
 .referral-partners {
-  font-size: 0.9rem;
-  margin-bottom: 1.25rem;
-  color: var(--text-muted);
+  font-size: .875rem;
+  color: var(--color-text-2);
+  margin-bottom: 1rem;
 }
-
 .referral-empty {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  margin-bottom: 1.25rem;
+  font-size: .875rem;
+  color: var(--color-text-3);
+  margin-bottom: 1rem;
 }
 
+/* ── Referral code box ── */
 .referral-code-box {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.75rem;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
 }
-
 .referral-code-box__label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: .8125rem;
+  color: var(--color-text-3);
+  flex-shrink: 0;
 }
-
 .referral-code-box__code {
-  font-family: monospace;
-  font-size: 1.1rem;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.3rem 0.75rem;
-  letter-spacing: 0.08em;
-}
-
-.referral-manage {
-  margin-top: 2rem;
-}
-
-.billing-referral-hint {
-  margin-top: 2rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-/* ── Badge ── */
-.badge {
-  display: inline-block;
-  font-size: 0.75rem;
+  flex: 1;
+  font-size: 1.05rem;
   font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 20px;
-  text-transform: capitalize;
+  letter-spacing: .05em;
+  user-select: all;
+  cursor: text;
+  font-family: var(--font-mono);
 }
 
-.badge--active   { background: #d1fae5; color: #065f46; }
-.badge--trialing { background: #dbeafe; color: #1e3a8a; }
-.badge--cancelled,
-.badge--no_subscription { background: #f3f4f6; color: #6b7280; }
-.badge--past_due { background: #fef3c7; color: #92400e; }
-
-@media (max-width: 640px) {
-  .plans-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .billing-page__heading {
-    font-size: 1.5rem;
-  }
+/* ── Referral manage link ── */
+.referral-manage {
+  margin-bottom: 1.5rem;
 }
+
+/* ── Referral lookup ── */
+.referral-lookup {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+.referral-lookup__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: .75rem;
+}
+.referral-lookup__bar {
+  display: flex;
+  gap: .5rem;
+}
+.referral-lookup__input {
+  flex: 1;
+}
+.referral-lookup__result {
+  margin-top: .75rem;
+  padding: .65rem .9rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: .875rem;
+}
+
+/* ── Referral table (plans.html) ── */
+.referral-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .875rem;
+  margin-top: .75rem;
+}
+.referral-table th, .referral-table td {
+  padding: .5rem .75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.referral-table th {
+  color: var(--color-text-3);
+  font-weight: 500;
+  font-size: .8rem;
+}
+.referral-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+}
+.referral-section__heading { font-size: 1.1rem; font-weight: 600; margin-bottom: .4rem; }
+.referral-section__desc { font-size: .875rem; color: var(--color-text-2); margin-bottom: 1rem; }
