@@ -7,16 +7,84 @@ import math
 from datetime import timezone as dt_timezone
 
 import stripe
-from stripe import StripeError
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from procrastinate.contrib.django import app
 
 logger = logging.getLogger(__name__)
-
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _prev_month_window(now):
+    """Return (start, end) aware datetimes bracketing the previous calendar month."""
+    first_of_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_day_prev = first_of_this - timezone.timedelta(days=1)
+    start = last_day_prev.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return start, first_of_this
+
+
+def _get_paid_invoice(user, month_start, month_end):
+    """
+    Return the dj-stripe Invoice that user paid last month, or None.
+    Looks up via the local djstripe Invoice table (no Stripe API call).
+    """
+    import djstripe.models as djstripe
+
+    sub_obj = getattr(user, 'subscription', None)
+    if not sub_obj or not sub_obj.stripe_customer_id:
+        return None
+
+    start_ts = int(month_start.timestamp())
+    end_ts = int(month_end.timestamp())
+    return (
+        djstripe.Invoice.objects
+        .filter(
+            customer__id=sub_obj.stripe_customer_id,
+            stripe_data__status='paid',
+            stripe_data__period_start__gte=start_ts,
+            stripe_data__period_start__lt=end_ts,
+        )
+        .order_by('-stripe_data__period_start')
+        .first()
+    )
+
+
+def _issue_refund(invoice, percent, label):
+    """
+    Issue a Stripe refund for percent% of invoice.amount_paid.
+    Returns (stripe_refund_id, amount_cents) or raises StripeError.
+    """
+    amount_cents = math.ceil(invoice.stripe_data['amount_paid'] * percent / 100)
+    if amount_cents <= 0:
+        return None, 0
+
+    charge_id = invoice.stripe_data.get('charge')
+    if not charge_id:
+        logger.warning('_issue_refund: no charge on invoice=%s (%s)', invoice.id, label)
+        return None, 0
+
+    refund = stripe.Refund.create(charge=charge_id, amount=amount_cents)
+    return refund.id, amount_cents
+
+
+def _safe_create_refund_record(model_kwargs):
+    """Write a RefundRecord atomically; swallow IntegrityError on race retry."""
+    from billing.models import RefundRecord
+    try:
+        with transaction.atomic():
+            RefundRecord.objects.create(**model_kwargs)
+    except IntegrityError:
+        logger.info('_safe_create_refund_record: duplicate skipped | %s', model_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Task
+# ---------------------------------------------------------------------------
 
 @app.periodic(cron='0 6 1 * *')
 @app.task(queue='billing')
@@ -24,164 +92,132 @@ def process_monthly_refunds(timestamp: int) -> None:
     """
     Runs on the 1st of each month at 06:00 UTC.
 
-    For each UserCoupon, for each user on it:
-      1. Find that user's paid invoice for the previous calendar month
-         in the dj-stripe local Invoice table.
-      2. Skip if: no paid invoice, user sub cancelled, invoice date is before
-         the coupon's created_at, or a RefundRecord already exists for
-         (coupon, invoice).
-      3. Verify all other users on the coupon also paid that month.
-         If any did not: skip everyone on this coupon for this month.
-      4. Compute refund = invoice.amount_paid * (percent / 100), in cents.
-      5. Create the Stripe Refund.
-      6. Write a RefundRecord atomically (unique_together makes it idempotent).
+    For each CouponRedemption:
+      - Redeemer receives coupon.percent refund if head paid (or head=None).
 
-    Admin sentinel (username='admin') never has an invoice and is never
-    considered when checking whether partners paid.
+    For each Coupon where head is set:
+      - Head receives coupon.percent * count(redeemers who paid) refund,
+        capped at 100% of their own invoice.
 
-    Each UserCoupon is processed independently — one failure does not block
-    others. Exceptions are logged and re-raised so Procrastinate retries
-    the individual coupon's work on the next attempt. RefundRecord
-    unique_together ensures the whole job is safe to re-run.
+    All refund records are idempotent via RefundRecord unique constraints.
+    A failure on one coupon does not block others.
     """
-    from billing.models import RefundRecord, UserCoupon
-    import djstripe.models as djstripe
+    from billing.models import Coupon, CouponRedemption, RefundRecord
 
     now = timezone.now()
-    # Previous calendar month
-    first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    last_month_end = first_of_this_month
-    last_month_start = (first_of_this_month.replace(day=1) - timezone.timedelta(days=1)).replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    )
+    month_start, month_end = _prev_month_window(now)
 
-    try:
-        admin = __import__('django.contrib.auth', fromlist=['get_user_model']).get_user_model()
-        admin_user = admin.objects.get(username='admin')
-        admin_pk = admin_user.pk
-    except Exception:
-        admin_pk = None
+    # -----------------------------------------------------------------------
+    # 1. Redeemer refunds
+    # -----------------------------------------------------------------------
+    for redemption in CouponRedemption.objects.select_related(
+        'coupon__head__subscription', 'user__subscription'
+    ):
+        coupon = redemption.coupon
+        user = redemption.user
+        label = f'redemption={redemption.pk}'
 
-    def _get_paid_invoice(user):
-        """
-        Return the dj-stripe Invoice for this user that was paid last month,
-        or None.
-        """
-        sub_obj = getattr(user, 'subscription', None)
-        if not sub_obj or not sub_obj.stripe_customer_id:
-            return None
-        last_month_start_ts = int(last_month_start.timestamp())
-        last_month_end_ts = int(last_month_end.timestamp())
-        return (
-            djstripe.Invoice.objects
-            .filter(
-                customer__id=sub_obj.stripe_customer_id,
-                stripe_data__status='paid',
-                stripe_data__period_start__gte=last_month_start_ts,
-                stripe_data__period_start__lt=last_month_end_ts,
+        # Head must have paid (or be None — NeverDue grant)
+        head = coupon.head
+        if head is not None:
+            head_invoice = _get_paid_invoice(head, month_start, month_end)
+            if head_invoice is None:
+                logger.info(
+                    'process_monthly_refunds: %s skipped — head=%s did not pay',
+                    label, head.pk,
+                )
+                continue
+
+        # Redeemer must have paid
+        inv = _get_paid_invoice(user, month_start, month_end)
+        if inv is None:
+            logger.info(
+                'process_monthly_refunds: %s skipped — redeemer=%s did not pay',
+                label, user.pk,
             )
-            .order_by('-stripe_data__period_start')
-            .first()
+            continue
+
+        # Invoice must post-date redemption
+        period_start = timezone.datetime.fromtimestamp(
+            inv.stripe_data['period_start'], tz=dt_timezone.utc
         )
-
-    for coupon in UserCoupon.objects.prefetch_related('users__subscription'):
-        users = list(coupon.users.all())
-        # Filter out admin sentinel — they never pay and never receive refunds
-        paying_users = [u for u in users if u.pk != admin_pk]
-
-        if not paying_users:
-            continue
-
-        # --- Step 1: Collect invoices for all paying users on this coupon ---
-        invoices = {}
-        for u in paying_users:
-            inv = _get_paid_invoice(u)
-            invoices[u.pk] = inv
-
-        # --- Step 2: Check all paying users paid last month ---
-        all_paid = all(inv is not None for inv in invoices.values())
-        if not all_paid:
-            unpaid = [u.username for u in paying_users if invoices[u.pk] is None]
+        if period_start < redemption.redeemed_at:
             logger.info(
-                'process_monthly_refunds: coupon=%s skipped — unpaid users: %s',
-                coupon.pk, unpaid,
+                'process_monthly_refunds: %s skipped — invoice pre-dates redemption', label,
             )
             continue
 
-        # --- Step 3: Issue refunds ---
-        coupon_failed = False
-        for u in paying_users:
-            inv = invoices[u.pk]
+        # Idempotency check
+        if RefundRecord.objects.filter(
+            redemption=redemption, stripe_invoice_id=inv.id
+        ).exists():
+            continue
 
-            # Skip if invoice pre-dates coupon creation
-            period_start_ts = inv.period_start  # raw int from stripe_data
-            period_start = timezone.datetime.fromtimestamp(period_start_ts, tz=dt_timezone.utc)
-            if period_start < coupon.created_at:
-                logger.info(
-                    'process_monthly_refunds: coupon=%s user=%s skipped — '
-                    'invoice pre-dates coupon', coupon.pk, u.pk,
-                )
-                continue
+        try:
+            refund_id, amount = _issue_refund(inv, float(coupon.percent), label)
+        except stripe.error.StripeError:
+            logger.exception('process_monthly_refunds: Stripe error | %s', label)
+            raise RuntimeError(f'Stripe error on {label}')
 
-            # Skip if RefundRecord already exists (idempotency)
-            if RefundRecord.objects.filter(
-                user_coupon=coupon,
+        if refund_id:
+            _safe_create_refund_record(dict(
+                redemption=redemption,
                 stripe_invoice_id=inv.id,
-            ).exists():
-                logger.debug(
-                    'process_monthly_refunds: coupon=%s user=%s invoice=%s already refunded',
-                    coupon.pk, u.pk, inv.id,
-                )
-                continue
-
-            refund_cents = math.ceil(inv.stripe_data['amount_paid'] * float(coupon.percent) / 100)
-            if refund_cents <= 0:
-                continue
-
-            charge_id = inv.stripe_data.get('charge')
-            if not charge_id:
-                logger.warning(
-                    'process_monthly_refunds: coupon=%s user=%s invoice=%s has no charge — skip',
-                    coupon.pk, u.pk, inv.id,
-                )
-                continue
-
-            try:
-                refund = stripe.Refund.create(
-                    charge=charge_id,
-                    amount=refund_cents,
-                )
-            except StripeError:
-                logger.exception(
-                    'process_monthly_refunds: Stripe refund failed | '
-                    'coupon=%s user=%s invoice=%s', coupon.pk, u.pk, inv.id,
-                )
-                coupon_failed = True
-                break  # do not write a partial RefundRecord; Procrastinate will retry
-
-            try:
-                with transaction.atomic():
-                    RefundRecord.objects.create(
-                        user_coupon=coupon,
-                        stripe_invoice_id=inv.id,
-                        stripe_refund_id=refund.id,
-                        amount=refund_cents,
-                    )
-            except IntegrityError:
-                # Race between parallel retries — safe to ignore
-                logger.info(
-                    'process_monthly_refunds: duplicate RefundRecord skipped | '
-                    'coupon=%s invoice=%s', coupon.pk, inv.id,
-                )
-
+                stripe_refund_id=refund_id,
+                amount=amount,
+            ))
             logger.info(
-                'process_monthly_refunds: refunded %d cents | '
-                'coupon=%s user=%s invoice=%s refund=%s',
-                refund_cents, coupon.pk, u.pk, inv.id, refund.id,
+                'process_monthly_refunds: redeemer refund %d cents | %s refund=%s',
+                amount, label, refund_id,
             )
 
-        if coupon_failed:
-            raise RuntimeError(
-                f'process_monthly_refunds: coupon={coupon.pk} had a Stripe error; '
-                'Procrastinate will retry.'
+    # -----------------------------------------------------------------------
+    # 2. Head refunds
+    # -----------------------------------------------------------------------
+    for coupon in Coupon.objects.filter(head__isnull=False).prefetch_related(
+        'redemptions__user__subscription'
+    ):
+        head = coupon.head
+        label = f'coupon={coupon.pk} head={head.pk}'
+
+        head_inv = _get_paid_invoice(head, month_start, month_end)
+        if head_inv is None:
+            logger.info(
+                'process_monthly_refunds: head refund skipped — head did not pay | %s', label,
+            )
+            continue
+
+        # Count redeemers who paid this month
+        paid_redeemer_count = 0
+        for redemption in coupon.redemptions.all():
+            if _get_paid_invoice(redemption.user, month_start, month_end) is not None:
+                paid_redeemer_count += 1
+
+        if paid_redeemer_count == 0:
+            continue
+
+        effective_percent = min(float(coupon.percent) * paid_redeemer_count, 100.0)
+
+        # Idempotency check
+        if RefundRecord.objects.filter(
+            coupon_head=coupon, stripe_invoice_id=head_inv.id
+        ).exists():
+            continue
+
+        try:
+            refund_id, amount = _issue_refund(head_inv, effective_percent, label)
+        except stripe.error.StripeError:
+            logger.exception('process_monthly_refunds: Stripe error | %s', label)
+            raise RuntimeError(f'Stripe error on {label}')
+
+        if refund_id:
+            _safe_create_refund_record(dict(
+                coupon_head=coupon,
+                stripe_invoice_id=head_inv.id,
+                stripe_refund_id=refund_id,
+                amount=amount,
+            ))
+            logger.info(
+                'process_monthly_refunds: head refund %d cents (%d redeemers) | %s refund=%s',
+                amount, paid_redeemer_count, label, refund_id,
             )

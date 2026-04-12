@@ -15,30 +15,34 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = logging.getLogger(__name__)
 
 
+def _get_or_create_customer(user):
+    sub, created = Subscription.objects.get_or_create(
+        user=user,
+        defaults={
+            'stripe_customer_id': stripe.Customer.create(
+                email=user.email, name=user.username
+            ).id
+        },
+    )
+    return sub, created
+
+
 @login_required
 def plans(request):
+    from billing.models import compute_discount
+
     sub = getattr(request.user, 'subscription', None)
-    is_pro = sub and sub.is_pro
+    is_pro = bool(sub and sub.is_pro)
+    show_referral = bool(sub and (is_pro or sub.referral_coupon_id))
 
-    show_referral = bool(sub and (is_pro or sub.referral_code))
+    discount = compute_discount(request.user) if is_pro else 0
 
-    discount = 0
+    # Active redeemer partners (users who redeemed this user's referral coupon and are active)
     active_partners = 0
-
-    if sub:
-        from billing.models import compute_discount, UserCoupon
-        if is_pro:
-            discount = compute_discount(request.user)
-
-        # Count distinct coupon partners who are currently active
-        partner_pks = set()
-        for coupon in request.user.coupons.prefetch_related('users__subscription'):
-            for u in coupon.users.all():
-                if u.pk != request.user.pk:
-                    partner_sub = getattr(u, 'subscription', None)
-                    if partner_sub and partner_sub.status == 'active':
-                        partner_pks.add(u.pk)
-        active_partners = len(partner_pks)
+    if sub and sub.referral_coupon_id:
+        active_partners = sub.referral_coupon.redemptions.filter(
+            user__subscription__status='active'
+        ).count()
 
     ctx = {
         'is_pro': is_pro,
@@ -59,7 +63,7 @@ def generate_referral_code(request):
     sub = getattr(request.user, 'subscription', None)
     if not sub or not sub.is_pro:
         return JsonResponse({'error': 'Pro subscription required.'}, status=403)
-    if sub.referral_code:
+    if sub.referral_coupon_id:
         return JsonResponse({'code': sub.referral_code})
     try:
         code = sub.generate_referral_code()
@@ -75,9 +79,9 @@ def generate_referral_code(request):
 @login_required
 def checkout(request):
     """
-    Simple GET redirect to Stripe Checkout.
-    Promotion codes (referral and any future staff codes) are entered directly
-    on Stripe's hosted page — allow_promotion_codes=True enables the native UI.
+    Redirect to Stripe Checkout with allow_promotion_codes=True.
+    Users enter their coupon/referral code on Stripe's hosted page.
+    Custom text clarifies that refunds are issued month-end.
     """
     try:
         sub, _ = _get_or_create_customer(request.user)
@@ -91,8 +95,8 @@ def checkout(request):
             custom_text={
                 'after_submit': {
                     'message': (
-                        'Referral discounts are applied as monthly refunds '
-                        'once your linked account is confirmed active. '
+                        'Coupon discounts are applied as monthly refunds once '
+                        'your subscription is confirmed active. '
                         'You will see the refund on your next statement.'
                     )
                 }
@@ -139,10 +143,7 @@ def portal(request):
         return redirect('billing:membership')
     if not sub.stripe_customer_id or not sub.stripe_customer_id.startswith('cus_'):
         logger.error('billing.portal: invalid customer_id | user_id=%s', request.user.pk)
-        messages.error(
-            request,
-            'There is an issue with your billing account. Please contact support.',
-        )
+        messages.error(request, 'There is an issue with your billing account. Contact support.')
         return redirect('billing:membership')
     try:
         session = stripe.billing_portal.Session.create(
@@ -161,50 +162,44 @@ def portal(request):
 
 def coupon_status(request, code):
     """
-    Unauthenticated GET. Returns the current state of a referral code:
-    how many slots have been used and how many remain.
-
-    Fetches the PromotionCode live from Stripe so the count is always current.
-    Returns a minimal HTML partial — no login required so anyone can check
-    a code before subscribing.
+    Unauthenticated GET. Returns current state of a coupon code:
+    head active status, redemptions used / max_redemptions.
+    Fetches PromotionCode live from Stripe so count is always current.
     """
-    import stripe as stripe_lib
-    stripe_lib.api_key = settings.STRIPE_SECRET_KEY
+    from billing.models import Coupon
 
     try:
-        results = stripe_lib.PromotionCode.list(code=code, limit=1)
-        if not results.data:
-            return render(request, 'billing/coupon_status.html', {
-                'valid': False,
-                'code': code,
-            })
+        coupon = Coupon.objects.select_related('head__subscription').get(code=code.upper())
+    except Coupon.DoesNotExist:
+        return render(request, 'billing/coupon_status.html', {'valid': False, 'code': code})
 
+    head = coupon.head
+    head_active = (
+        head is None or
+        (hasattr(head, 'subscription') and head.subscription.status == 'active')
+    )
+
+    try:
+        results = stripe.PromotionCode.list(code=code.upper(), limit=1)
+        if not results.data:
+            return render(request, 'billing/coupon_status.html', {'valid': False, 'code': code})
         promo = results.data[0]
-        max_r = promo.get('max_redemptions')
         used = promo.get('times_redeemed', 0)
+        max_r = promo.get('max_redemptions')
         remaining = (max_r - used) if max_r is not None else None
 
         return render(request, 'billing/coupon_status.html', {
             'valid': True,
             'code': code,
             'active': promo.get('active', False),
+            'head_active': head_active,
+            'head_label': head.username if head else 'NeverDue',
             'used': used,
             'max_redemptions': max_r,
             'remaining': remaining,
         })
-    except stripe_lib.error.StripeError:
+    except stripe.error.StripeError:
         logger.exception('coupon_status: Stripe error | code=%s', code)
         return render(request, 'billing/coupon_status.html', {
-            'valid': False,
-            'code': code,
-            'error': True,
+            'valid': False, 'code': code, 'error': True,
         }, status=502)
-    sub, created = Subscription.objects.get_or_create(
-        user=user,
-        defaults={
-            'stripe_customer_id': stripe.Customer.create(
-                email=user.email, name=user.username
-            ).id
-        },
-    )
-    return sub, created
