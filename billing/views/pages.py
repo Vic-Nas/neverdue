@@ -31,11 +31,12 @@ def _get_or_create_customer(user):
 def plans(request):
     from billing.models import compute_discount
 
-    sub = getattr(request.user, 'subscription', None)
-    is_pro = bool(sub and sub.is_pro)
-    show_referral = bool(sub and (is_pro or sub.referral_coupon_id))
+    user = request.user
+    sub = getattr(user, 'subscription', None)
+    is_pro = user.is_pro
+    show_referral = is_pro or bool(sub and sub.referral_coupon_id)
 
-    discount = compute_discount(request.user) if is_pro else 0
+    discount = compute_discount(user) if is_pro else 0
 
     # Active redeemer partners (users who redeemed this user's referral coupon and are active)
     active_partners = 0
@@ -61,7 +62,7 @@ def plans(request):
 @require_POST
 def generate_referral_code(request):
     sub = getattr(request.user, 'subscription', None)
-    if not sub or not sub.is_pro:
+    if not request.user.is_pro:
         return JsonResponse({'error': 'Pro subscription required.'}, status=403)
     if sub.referral_coupon_id:
         return JsonResponse({'code': sub.referral_code})
