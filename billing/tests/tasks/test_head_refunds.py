@@ -162,13 +162,20 @@ class TestHeadRefunds(TestCase):
         _sub(redeemer)
         period_start = _prev_month_start()
         head_inv = make_djstripe_invoice(head, 800, period_start, charge_id='ch_idem_h')
-        make_djstripe_invoice(redeemer, 800, period_start, charge_id='ch_idem_r')
+        red_inv = make_djstripe_invoice(redeemer, 800, period_start, charge_id='ch_idem_r')
         coupon = _coupon(percent='12.50', head=head)
-        CouponRedemption.objects.create(coupon=coupon, user=redeemer)
+        redemption = CouponRedemption.objects.create(coupon=coupon, user=redeemer)
+        # Pre-seed both RefundRecords so neither pass calls Stripe
         RefundRecord.objects.create(
             coupon_head=coupon,
             stripe_invoice_id=head_inv.id,
-            stripe_refund_id='re_existing',
+            stripe_refund_id='re_existing_head',
+            amount=100,
+        )
+        RefundRecord.objects.create(
+            redemption=redemption,
+            stripe_invoice_id=red_inv.id,
+            stripe_refund_id='re_existing_red',
             amount=100,
         )
 

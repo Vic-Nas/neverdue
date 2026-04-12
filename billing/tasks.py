@@ -92,6 +92,10 @@ def process_monthly_refunds(timestamp: int) -> None:
     """
     Runs on the 1st of each month at 06:00 UTC.
 
+    Eligibility is simple: did the user pay during the previous calendar month?
+    _get_paid_invoice enforces the billing window — no additional date checks
+    against redeemed_at are needed.
+
     For each CouponRedemption:
       - Redeemer receives coupon.percent refund if head paid (or head=None).
 
@@ -117,6 +121,13 @@ def process_monthly_refunds(timestamp: int) -> None:
         user = redemption.user
         label = f'redemption={redemption.pk}'
 
+        # Skip future-dated redemptions (clock skew guard)
+        if redemption.redeemed_at > now:
+            logger.info(
+                'process_monthly_refunds: %s skipped — redemption is future-dated', label,
+            )
+            continue
+
         # Head must have paid (or be None — NeverDue grant)
         head = coupon.head
         if head is not None:
@@ -134,16 +145,6 @@ def process_monthly_refunds(timestamp: int) -> None:
             logger.info(
                 'process_monthly_refunds: %s skipped — redeemer=%s did not pay',
                 label, user.pk,
-            )
-            continue
-
-        # Invoice must post-date redemption
-        period_start = timezone.datetime.fromtimestamp(
-            inv.stripe_data['period_start'], tz=dt_timezone.utc
-        )
-        if period_start < redemption.redeemed_at:
-            logger.info(
-                'process_monthly_refunds: %s skipped — invoice pre-dates redemption', label,
             )
             continue
 
@@ -187,9 +188,11 @@ def process_monthly_refunds(timestamp: int) -> None:
             )
             continue
 
-        # Count redeemers who paid this month
+        # Count redeemers who paid this month (exclude future-dated redemptions)
         paid_redeemer_count = 0
         for redemption in coupon.redemptions.all():
+            if redemption.redeemed_at > now:
+                continue
             if _get_paid_invoice(redemption.user, month_start, month_end) is not None:
                 paid_redeemer_count += 1
 

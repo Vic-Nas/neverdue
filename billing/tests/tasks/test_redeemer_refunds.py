@@ -146,15 +146,21 @@ class TestRedeemerRefunds(TestCase):
         _sub(head)
         _sub(redeemer)
         period_start = _prev_month_start()
-        make_djstripe_invoice(head, 800, period_start, charge_id='ch_idem_h')
+        head_inv = make_djstripe_invoice(head, 800, period_start, charge_id='ch_idem_h')
         red_inv = make_djstripe_invoice(redeemer, 800, period_start, charge_id='ch_idem_r')
         coupon = _coupon(percent='10.00', head=head)
         redemption = CouponRedemption.objects.create(coupon=coupon, user=redeemer)
-        # Pre-seed existing RefundRecord
+        # Pre-seed both RefundRecords so neither pass calls Stripe
         RefundRecord.objects.create(
             redemption=redemption,
             stripe_invoice_id=red_inv.id,
-            stripe_refund_id='re_existing',
+            stripe_refund_id='re_existing_red',
+            amount=80,
+        )
+        RefundRecord.objects.create(
+            coupon_head=coupon,
+            stripe_invoice_id=head_inv.id,
+            stripe_refund_id='re_existing_head',
             amount=80,
         )
 
@@ -265,7 +271,7 @@ class TestRedeemerRefunds(TestCase):
         _sub(head)
         _sub(redeemer)
         period_start = _prev_month_start()
-        make_djstripe_invoice(head, 800, period_start, charge_id='ch_noc_h')
+        head_inv = make_djstripe_invoice(head, 800, period_start, charge_id='ch_noc_h')
         inv = make_djstripe_invoice(redeemer, 800, period_start, charge_id='ch_noc_r')
         # Patch the stripe_data to remove charge
         import djstripe.models as djstripe
@@ -276,6 +282,15 @@ class TestRedeemerRefunds(TestCase):
 
         coupon = _coupon(percent='10.00', head=head)
         redemption = CouponRedemption.objects.create(coupon=coupon, user=redeemer)
+        # Pre-seed head RefundRecord so the head pass doesn't call Stripe.
+        # The redeemer's invoice is paid (amount_paid=800), so paid_redeemer_count=1
+        # and the head pass would otherwise issue a refund on head's valid invoice.
+        RefundRecord.objects.create(
+            coupon_head=coupon,
+            stripe_invoice_id=head_inv.id,
+            stripe_refund_id='re_existing_head',
+            amount=80,
+        )
 
         self._run()
 
