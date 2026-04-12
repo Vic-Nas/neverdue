@@ -24,6 +24,16 @@ def _get_or_create_customer(user):
             ).id
         },
     )
+    if not created:
+        # Verify the customer still exists on Stripe — it may have been deleted
+        try:
+            stripe.Customer.retrieve(sub.stripe_customer_id)
+        except stripe.error.InvalidRequestError:
+            new_customer = stripe.Customer.create(email=user.email, name=user.username)
+            sub.stripe_customer_id = new_customer.id
+            sub.stripe_subscription_id = None
+            sub.status = 'cancelled'
+            sub.save(update_fields=['stripe_customer_id', 'stripe_subscription_id', 'status'])
     return sub, created
 
 
@@ -153,6 +163,17 @@ def portal(request):
             return_url=request.build_absolute_uri('/billing/membership/'),
         )
         return redirect(session.url)
+    except stripe.error.InvalidRequestError as exc:
+        if 'No such customer' in str(exc):
+            # Customer was deleted on Stripe — wipe the stale IDs so they can resubscribe
+            sub.stripe_subscription_id = None
+            sub.status = 'cancelled'
+            sub.save(update_fields=['stripe_subscription_id', 'status'])
+            messages.warning(request, 'Your billing account was reset. Please resubscribe.')
+            return redirect('billing:membership')
+        logger.exception('billing portal failed for user=%s', request.user.pk)
+        messages.error(request, 'We could not open the billing portal right now. Please try again or contact support.')
+        return redirect('billing:membership')
     except stripe.error.StripeError:
         logger.exception('billing portal failed for user=%s', request.user.pk)
         messages.error(
