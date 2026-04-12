@@ -25,7 +25,6 @@ def _get_or_create_customer(user):
         },
     )
     if not created:
-        # Verify the customer still exists on Stripe — it may have been deleted
         try:
             stripe.Customer.retrieve(sub.stripe_customer_id)
         except stripe.error.InvalidRequestError:
@@ -48,7 +47,6 @@ def plans(request):
 
     discount = compute_discount(user) if is_pro else 0
 
-    # Active redeemer partners (users who redeemed this user's referral coupon and are active)
     active_partners = 0
     if sub and sub.referral_coupon_id:
         active_partners = sub.referral_coupon.redemptions.filter(
@@ -86,6 +84,41 @@ def generate_referral_code(request):
             request.user.pk, exc, exc_info=True,
         )
         return JsonResponse({'error': 'Could not generate code.'}, status=500)
+
+
+def coupon_lookup(request):
+    """
+    Unauthenticated GET /billing/referral/lookup/?code=XYZ
+    Returns JSON: head_active, head_label, redeemer_count.
+    """
+    from billing.models import Coupon
+
+    code = request.GET.get('code', '').strip().upper()
+    if not code:
+        return JsonResponse({'error': 'No code provided.'}, status=400)
+
+    try:
+        coupon = Coupon.objects.select_related('head__subscription').get(code=code)
+    except Coupon.DoesNotExist:
+        return JsonResponse({'error': 'Code not found.'}, status=404)
+
+    head = coupon.head
+    head_active = (
+        head is None or
+        (hasattr(head, 'subscription') and head.subscription.status == 'active')
+    )
+    head_label = head.username if head else 'NeverDue'
+
+    redeemer_count = coupon.redemptions.filter(
+        user__subscription__status='active'
+    ).count()
+
+    return JsonResponse({
+        'code': code,
+        'head_active': head_active,
+        'head_label': head_label,
+        'redeemer_count': redeemer_count,
+    })
 
 
 @login_required
@@ -165,7 +198,6 @@ def portal(request):
         return redirect(session.url)
     except stripe.error.InvalidRequestError as exc:
         if 'No such customer' in str(exc):
-            # Customer was deleted on Stripe — wipe the stale IDs so they can resubscribe
             sub.stripe_subscription_id = None
             sub.status = 'cancelled'
             sub.save(update_fields=['stripe_subscription_id', 'status'])
@@ -181,48 +213,3 @@ def portal(request):
             'We could not open the billing portal right now. Please try again or contact support.',
         )
         return redirect('billing:membership')
-
-
-def coupon_status(request, code):
-    """
-    Unauthenticated GET. Returns current state of a coupon code:
-    head active status, redemptions used / max_redemptions.
-    Fetches PromotionCode live from Stripe so count is always current.
-    """
-    from billing.models import Coupon
-
-    try:
-        coupon = Coupon.objects.select_related('head__subscription').get(code=code.upper())
-    except Coupon.DoesNotExist:
-        return render(request, 'billing/coupon_status.html', {'valid': False, 'code': code})
-
-    head = coupon.head
-    head_active = (
-        head is None or
-        (hasattr(head, 'subscription') and head.subscription.status == 'active')
-    )
-
-    try:
-        results = stripe.PromotionCode.list(code=code.upper(), limit=1)
-        if not results.data:
-            return render(request, 'billing/coupon_status.html', {'valid': False, 'code': code})
-        promo = results.data[0]
-        used = promo.get('times_redeemed', 0)
-        max_r = promo.get('max_redemptions')
-        remaining = (max_r - used) if max_r is not None else None
-
-        return render(request, 'billing/coupon_status.html', {
-            'valid': True,
-            'code': code,
-            'active': promo.get('active', False),
-            'head_active': head_active,
-            'head_label': head.username if head else 'NeverDue',
-            'used': used,
-            'max_redemptions': max_r,
-            'remaining': remaining,
-        })
-    except stripe.error.StripeError:
-        logger.exception('coupon_status: Stripe error | code=%s', code)
-        return render(request, 'billing/coupon_status.html', {
-            'valid': False, 'code': code, 'error': True,
-        }, status=502)

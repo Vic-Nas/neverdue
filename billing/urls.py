@@ -11,5 +11,5 @@ urlpatterns = [
     path('cancel/',                 views.cancel,                 name='cancel'),
     path('portal/',                 views.portal,                 name='portal'),
     path('referral-code/generate/', views.generate_referral_code, name='generate_referral_code'),
-    path('referral/<str:code>/',    views.coupon_status,          name='coupon_status'),
+    path('referral/lookup/',        views.coupon_lookup,          name='coupon_lookup'),
 ]

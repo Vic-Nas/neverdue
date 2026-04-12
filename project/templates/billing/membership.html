@@ -19,6 +19,7 @@
     <p class="page__sub">
       Earn <strong>12.5% off</strong> your monthly bill for every active subscriber you refer.
       Refer 8 and your subscription pays for itself.
+      <a href="{% url 'help' %}#referrals">How it works →</a>
     </p>
   </div>
 
@@ -59,6 +60,24 @@
     <a href="{% url 'billing:portal' %}" class="btn-ghost btn">Manage subscription ↗</a>
   </div>
   {% endif %}
+
+  {# ── Code lookup ── #}
+  <div class="referral-lookup">
+    <h2 class="referral-lookup__title">Check a referral code</h2>
+    <div class="referral-lookup__bar">
+      <input
+        type="text"
+        id="lookup-input"
+        class="referral-lookup__input"
+        placeholder="Enter a code…"
+        maxlength="32"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button class="btn btn-primary btn--sm" id="lookup-btn">Search</button>
+    </div>
+    <div id="lookup-result" class="referral-lookup__result" hidden></div>
+  </div>
 
   {% else %}
   {# ── Non-pro, no code: plan comparison ── #}

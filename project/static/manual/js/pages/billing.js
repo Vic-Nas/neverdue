@@ -1,23 +1,20 @@
 // project/static/manual/js/pages/billing.js
-(function () {
-  'use strict';
 
-  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+// ── Referral code generation ──────────────────────────────────────────────────
 
-  // ── Generate referral code ────────────────────────────────────────────────
-  const generateBtn = document.getElementById('generate-code-btn');
-  if (generateBtn) {
-    generateBtn.addEventListener('click', async function () {
-      generateBtn.disabled = true;
-      generateBtn.textContent = 'Generating…';
-      try {
-        const res = await fetch('/billing/referral-code/generate/', {
-          method: 'POST',
-          headers: { 'X-CSRFToken': csrfToken },
-        });
-        const data = await res.json();
+const generateBtn = document.getElementById('generate-code-btn');
+if (generateBtn) {
+  generateBtn.addEventListener('click', () => {
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating…';
+
+    fetch('/billing/referral-code/generate/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content },
+    })
+      .then(r => r.json())
+      .then(data => {
         if (data.code) {
-          // Replace button with code display
           const box = generateBtn.closest('.referral-code-box');
           box.innerHTML = `
             <span class="referral-code-box__label">Your referral code</span>
@@ -25,27 +22,79 @@
             <button class="btn-ghost btn btn--sm" onclick="copyCode()">Copy</button>
           `;
         } else {
-          generateBtn.textContent = 'Error — try again';
           generateBtn.disabled = false;
+          generateBtn.textContent = 'Get my referral code';
+          alert(data.error || 'Could not generate code.');
         }
-      } catch {
-        generateBtn.textContent = 'Error — try again';
+      })
+      .catch(() => {
         generateBtn.disabled = false;
-      }
-    });
-  }
+        generateBtn.textContent = 'Get my referral code';
+        alert('Network error. Please try again.');
+      });
+  });
+}
 
-  // ── Copy code to clipboard ────────────────────────────────────────────────
-  window.copyCode = function () {
-    const code = document.getElementById('referral-code')?.textContent?.trim();
-    if (!code) return;
-    navigator.clipboard.writeText(code).then(() => {
-      const btn = document.getElementById('copy-code-btn');
-      if (btn) {
-        const orig = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = orig; }, 1500);
+function copyCode() {
+  const code = document.getElementById('referral-code');
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+    const btn = document.getElementById('copy-code-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 2000); }
+  });
+}
+
+// ── Referral code lookup ──────────────────────────────────────────────────────
+
+const lookupInput = document.getElementById('lookup-input');
+const lookupBtn   = document.getElementById('lookup-btn');
+const lookupResult = document.getElementById('lookup-result');
+
+function doLookup() {
+  const code = lookupInput.value.trim().toUpperCase();
+  if (!code) return;
+
+  lookupBtn.disabled = true;
+  lookupBtn.textContent = 'Searching…';
+  lookupResult.hidden = true;
+  lookupResult.className = 'referral-lookup__result';
+
+  fetch(`/billing/referral/lookup/?code=${encodeURIComponent(code)}`)
+    .then(r => r.json())
+    .then(data => {
+      lookupBtn.disabled = false;
+      lookupBtn.textContent = 'Search';
+      lookupResult.hidden = false;
+
+      if (data.error) {
+        lookupResult.classList.add('referral-lookup__result--error');
+        lookupResult.textContent = data.error;
+        return;
       }
+
+      const headStatus = data.head_active
+        ? `<span class="lookup-ok">Active</span>`
+        : `<span class="lookup-warn">Inactive</span>`;
+
+      lookupResult.classList.add('referral-lookup__result--ok');
+      lookupResult.innerHTML = `
+        <strong>${data.code}</strong> —
+        referred by <strong>${data.head_label}</strong> (${headStatus}),
+        <strong>${data.redeemer_count}</strong> active redeemer${data.redeemer_count !== 1 ? 's' : ''}.
+      `;
+    })
+    .catch(() => {
+      lookupBtn.disabled = false;
+      lookupBtn.textContent = 'Search';
+      lookupResult.hidden = false;
+      lookupResult.classList.add('referral-lookup__result--error');
+      lookupResult.textContent = 'Network error. Please try again.';
     });
-  };
-}());
+}
+
+if (lookupBtn) {
+  lookupBtn.addEventListener('click', doLookup);
+}
+if (lookupInput) {
+  lookupInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLookup(); });
+}

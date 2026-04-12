@@ -97,7 +97,7 @@ def google_callback(request):
 
     user, created = User.objects.get_or_create(
         google_id=google_id,
-        defaults={"email": email, "username": email.split("@")[0]},
+        defaults={"email": email, "username": _assign_username(email)},
     )
     user.google_calendar_token = creds.token
     if creds.refresh_token:
@@ -116,4 +116,27 @@ def google_callback(request):
     from dashboard.gcal import register_gcal_watch
     register_gcal_watch(user)
 
-    return redirect("accounts:username_pick") if created else redirect("dashboard:index")
+    return redirect("dashboard:index")
+
+
+def _assign_username(email):
+    """
+    Derive a unique username from the email local-part.
+    Appends an incrementing integer suffix if the base is taken.
+    """
+    from emails.webhook import RESERVED_USERNAMES
+
+    base = email.split("@")[0].lower()
+    # Sanitise: keep only alphanumerics and underscores
+    base = "".join(c for c in base if c.isalnum() or c == "_") or "user"
+
+    candidate = base
+    if candidate not in RESERVED_USERNAMES and not User.objects.filter(username=candidate).exists():
+        return candidate
+
+    counter = 1
+    while True:
+        candidate = f"{base}{counter}"
+        if candidate not in RESERVED_USERNAMES and not User.objects.filter(username=candidate).exists():
+            return candidate
+        counter += 1

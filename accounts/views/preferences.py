@@ -2,10 +2,13 @@
 import logging
 import zoneinfo
 
+import stripe
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +112,58 @@ def revoke_google(request):
     request.user.save_to_gcal = False
     request.user.save(update_fields=['save_to_gcal'])
     return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def change_username(request):
+    """
+    POST /accounts/preferences/username/
+    Charges CA$5 via Stripe off-session, then updates the username.
+    Falls back to the old username if payment fails.
+    Returns JSON so the preferences page can handle it inline.
+    """
+    from accounts.models import User
+    from emails.webhook import RESERVED_USERNAMES
+
+    new_username = request.POST.get('username', '').strip().lower()
+
+    if not new_username:
+        return JsonResponse({'error': 'Username cannot be empty.'}, status=400)
+    if not new_username.replace('_', '').isalnum():
+        return JsonResponse({'error': 'Only letters, numbers, and underscores allowed.'}, status=400)
+    if new_username in RESERVED_USERNAMES:
+        return JsonResponse({'error': 'That username is reserved.'}, status=400)
+    if User.objects.filter(username=new_username).exclude(pk=request.user.pk).exists():
+        return JsonResponse({'error': 'That username is already taken.'}, status=400)
+    if new_username == request.user.username:
+        return JsonResponse({'error': 'That is already your username.'}, status=400)
+
+    sub = getattr(request.user, 'subscription', None)
+    if not sub or not sub.stripe_customer_id:
+        return JsonResponse({'error': 'No billing account found. Subscribe first.'}, status=400)
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    try:
+        stripe.PaymentIntent.create(
+            amount=500,          # CA$5.00
+            currency='cad',
+            customer=sub.stripe_customer_id,
+            payment_method_types=['card'],
+            off_session=True,
+            confirm=True,
+            description='NeverDue username change',
+        )
+    except stripe.error.StripeError as exc:
+        logger.error(
+            'change_username: payment failed | user_id=%s error=%s',
+            request.user.pk, exc,
+        )
+        return JsonResponse(
+            {'error': 'Payment failed. Your username was not changed.'},
+            status=402,
+        )
+
+    request.user.username = new_username
+    request.user.save(update_fields=['username'])
+    return JsonResponse({'ok': True, 'username': new_username})
