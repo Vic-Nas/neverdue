@@ -261,8 +261,8 @@
   font-size: 0.75rem;
   color: var(--text-muted);
   cursor: pointer;
-  user-select: none;
   -webkit-user-select: none;
+  user-select: none;
   list-style: none;
   padding: 3px 8px;
   border-radius: 4px;
