@@ -117,6 +117,31 @@
   flex-shrink: 0;
 }
 
+#username-change-btn {
+  background: var(--text);
+  color: var(--surface);
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+#username-change-btn:hover {
+  opacity: 0.82;
+  transform: translateY(-1px);
+}
+
+#username-change-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* ── Checkbox rows ── */
 .form-group--checkbox {
   display: flex;
@@ -220,126 +245,63 @@
 .priority-color-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
+/* Each row: label + swatches on one line, no toggle needed */
 .priority-color-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  flex-wrap: wrap;
 }
 
 .priority-color-row__label {
-  width: 56px;
+  width: 52px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text);
   flex-shrink: 0;
 }
 
+/* Hide the preview circle — redundant when swatches are always visible */
 .gcal-swatch-preview {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: inline-block;
-  border: 2px solid rgba(0, 0, 0, 0.08);
+  display: none;
 }
 
+/* Hide the <details> toggle entirely — swatches are always shown */
 .gcal-picker-details {
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
+  display: contents;
 }
 
 .gcal-picker-summary {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--accent);
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  list-style: none;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--accent-light);
-  background: var(--accent-muted);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.gcal-picker-summary::-webkit-details-marker { display: none; }
-
-.gcal-picker-summary:hover {
-  background: var(--accent-light);
-  border-color: var(--accent-light);
-  color: white;
-}
-
-.gcal-picker-details[open] .gcal-picker-summary {
-  background: var(--border);
-  border-color: var(--border);
-  color: var(--text-muted);
-}
-
-/* OK confirm button — shown after a swatch is picked, replaces Change */
-.gcal-confirm-btn {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: white;
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: none;
-  background: var(--accent);
-  transition: background 0.15s, transform 0.1s;
-  display: none;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.gcal-confirm-btn:hover {
-  background: var(--accent-light);
-  transform: translateY(-1px);
-}
-
-.priority-color-row--changed .gcal-picker-details {
   display: none;
 }
 
-.priority-color-row--changed .gcal-confirm-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Swatch tray — expands inline below the row */
+/* Swatch tray — always visible, inline */
 .gcal-swatches {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
-  padding: 0.6rem 0 0.1rem;
-  width: 100%;
-  flex-basis: 100%;
+  align-items: center;
 }
 
-.gcal-picker-details[open] {
-  flex-wrap: wrap;
-  width: 100%;
+.gcal-swatch-radio {
+  display: none;
 }
 
 .gcal-swatch {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2.5px solid transparent;
   cursor: pointer;
   transition: transform 0.12s, border-color 0.12s;
   outline: none;
+  flex-shrink: 0;
 }
 
 .gcal-swatch:hover {
@@ -348,11 +310,8 @@
 
 .gcal-swatch.selected {
   border-color: var(--text);
-  transform: scale(1.18);
-}
-
-.gcal-swatch-radio {
-  display: none;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text);
 }
 
 /* ── Responsive ── */

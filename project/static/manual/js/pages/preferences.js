@@ -13,36 +13,11 @@
 
   autoDelete.addEventListener('change', toggleCleanupFields);
 
-  document.querySelectorAll('.priority-color-row').forEach(function (row) {
-    var confirmBtn = document.createElement('button');
-    confirmBtn.type = 'button';
-    confirmBtn.className = 'gcal-confirm-btn';
-    confirmBtn.textContent = 'OK';
-    row.appendChild(confirmBtn);
-    confirmBtn.addEventListener('click', function () {
-      row.classList.remove('priority-color-row--changed');
-    });
-  });
-
   document.querySelectorAll('.gcal-swatches').forEach(function (group) {
     group.addEventListener('change', function (e) {
-      // Update selected ring
       group.querySelectorAll('.gcal-swatch').forEach(function (s) { s.classList.remove('selected'); });
       var label = group.querySelector('label[for="' + e.target.id + '"]');
       if (label) label.classList.add('selected');
-
-      // Update the preview swatch in the row
-      var row = group.closest('.priority-color-row');
-      var preview = row && row.querySelector('.gcal-swatch-preview');
-      if (preview && label) {
-        preview.style.background = label.style.background;
-        preview.title = label.title;
-      }
-
-      // Close <details> and reveal the OK confirm button
-      var details = group.closest('.gcal-picker-details');
-      if (details) details.removeAttribute('open');
-      if (row) row.classList.add('priority-color-row--changed');
     });
   });
 
