@@ -1,3 +1,7 @@
+/* Remove underline from nav links */
+.topnav__link {
+  text-decoration: none !important;
+}
 /* css/base/base.css — NeverDue design tokens + global resets */
 
 :root {
