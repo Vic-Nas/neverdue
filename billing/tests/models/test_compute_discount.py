@@ -1,6 +1,5 @@
 # billing/tests/models/test_compute_discount.py
 import uuid
-from unittest.mock import patch
 
 from django.test import TestCase
 
@@ -9,12 +8,11 @@ from billing.tests.helpers import make_user
 
 
 def _coupon(code=None, percent='10.00', head=None):
-    with patch.object(Coupon, '_push_to_stripe'):
-        return Coupon.objects.create(
-            code=code or f'C{uuid.uuid4().hex[:7].upper()}',
-            percent=percent,
-            head=head,
-        )
+    return Coupon.objects.create(
+        code=code or f'C{uuid.uuid4().hex[:7].upper()}',
+        percent=percent,
+        head=head,
+    )
 
 
 def _sub(user, status='active', customer_id=None):

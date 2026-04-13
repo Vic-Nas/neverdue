@@ -9,8 +9,6 @@ from billing.tests.helpers import make_user
 
 
 def _coupon(code=None):
-    from unittest.mock import patch
-    with patch.object(Coupon, '_push_to_stripe'):
         return Coupon.objects.create(
             code=code or f'RDM{uuid.uuid4().hex[:5].upper()}',
             percent='10.00',

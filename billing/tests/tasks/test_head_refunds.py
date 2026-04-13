@@ -16,8 +16,7 @@ def _cus_id():
 
 
 def _coupon(code=None, head=None, percent='12.50'):
-    with patch.object(Coupon, '_push_to_stripe'):
-        return Coupon.objects.create(
+    return Coupon.objects.create(
             code=code or f'HR{uuid.uuid4().hex[:6].upper()}',
             percent=percent,
             head=head,

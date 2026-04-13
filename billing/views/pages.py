@@ -43,7 +43,8 @@ def plans(request):
     user = request.user
     sub = getattr(user, 'subscription', None)
     is_pro = user.is_pro
-    show_referral = True
+    has_referral_code = sub is not None and sub.referral_coupon_id is not None
+    show_referral = is_pro or has_referral_code
 
     discount = compute_discount(user) if is_pro else 0
 
@@ -72,6 +73,8 @@ def generate_referral_code(request):
     sub = getattr(request.user, 'subscription', None)
     if not sub:
         return JsonResponse({'error': 'No billing account found.'}, status=400)
+    if not sub.is_pro:
+        return JsonResponse({'error': 'Pro subscription required.'}, status=403)
     if sub.referral_coupon_id:
         return JsonResponse({'code': sub.referral_code})
     try:

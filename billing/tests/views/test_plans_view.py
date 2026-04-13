@@ -22,8 +22,7 @@ def _sub(user, status='active', customer_id=None):
 
 
 def _coupon(head=None, percent='12.50'):
-    with patch.object(Coupon, '_push_to_stripe'):
-        return Coupon.objects.create(
+    return Coupon.objects.create(
             code=f'PV{uuid.uuid4().hex[:6].upper()}',
             percent=percent,
             head=head,

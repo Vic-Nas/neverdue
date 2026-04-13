@@ -49,8 +49,7 @@ class TestReferralFlow(TestCase):
 
     @patch('billing.tasks.stripe.Refund.create', return_value=MagicMock(id='re_full_flow'))
     @patch('billing.signals.stripe.Customer.delete_discount')
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_referral_flow(self, _mock_push, _mock_del, mock_refund):
+    def test_referral_flow(self, _mock_del, mock_refund):
         head = make_user('fl_head')
         redeemer = make_user('fl_redeemer')
         head_sub = _sub(head)
@@ -91,8 +90,7 @@ class TestStaffGrantFlow(TestCase):
 
     @patch('billing.tasks.stripe.Refund.create', return_value=MagicMock(id='re_grant'))
     @patch('billing.signals.stripe.Customer.delete_discount')
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_staff_grant_flow(self, _mock_push, _mock_del, mock_refund):
+    def test_staff_grant_flow(self, _mock_del, mock_refund):
         redeemer = make_user('sg_redeemer')
         red_sub = _sub(redeemer)
 
@@ -119,8 +117,7 @@ class TestStaffGrantFlow(TestCase):
 class TestUnsubClearsRedemption(TestCase):
 
     @patch('billing.signals.stripe.Customer.delete_discount')
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_unsub_clears_redemption(self, _mock_push, _mock_del):
+    def test_unsub_clears_redemption(self, _mock_del):
         head = make_user('unsub_head')
         redeemer = make_user('unsub_red')
         head_sub = _sub(head)
@@ -151,8 +148,7 @@ class TestUnsubClearsRedemption(TestCase):
 class TestResubWithNewCode(TestCase):
 
     @patch('billing.signals.stripe.Customer.delete_discount')
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_resub_with_new_code(self, _mock_push, _mock_del):
+    def test_resub_with_new_code(self, _mock_del):
         redeemer = make_user('resub_red')
         red_sub = _sub(redeemer)
 
@@ -184,8 +180,7 @@ class TestResubWithNewCode(TestCase):
 class TestSelfReferralBlockedEndToEnd(TestCase):
 
     @patch('billing.signals.stripe.Customer.delete_discount')
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_self_referral_blocked_end_to_end(self, _mock_push, mock_del):
+    def test_self_referral_blocked_end_to_end(self, mock_del):
         user = make_user('self_ref')
         sub = _sub(user)
 

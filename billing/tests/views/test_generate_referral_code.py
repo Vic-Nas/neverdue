@@ -22,8 +22,7 @@ def _sub(user, status='active', customer_id=None):
 
 
 def _coupon(head=None):
-    with patch.object(Coupon, '_push_to_stripe'):
-        return Coupon.objects.create(
+    return Coupon.objects.create(
             code=f'GEN{uuid.uuid4().hex[:5].upper()}',
             percent='12.50',
             head=head,
@@ -40,8 +39,7 @@ class TestGenerateReferralCodeView(TestCase):
         self.client.force_login(user)
         return self.client.post(self.url)
 
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_generates_code_for_pro_user(self, _mock):
+    def test_generates_code_for_pro_user(self):
         user = make_user('gen_pro')
         _sub(user, 'active')
         response = self._post(user)
@@ -50,8 +48,7 @@ class TestGenerateReferralCodeView(TestCase):
         self.assertIn('code', data)
         self.assertTrue(data['code'].startswith('NVD-'))
 
-    @patch.object(Coupon, '_push_to_stripe')
-    def test_returns_existing_code_if_already_generated(self, _mock):
+    def test_returns_existing_code_if_already_generated(self):
         user = make_user('gen_existing')
         sub = _sub(user, 'active')
         coupon = _coupon(head=user)
@@ -78,7 +75,6 @@ class TestGenerateReferralCodeView(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
 
-    @patch.object(Coupon, '_push_to_stripe')
     def test_stripe_error_returns_500(self, mock_push):
         user = make_user('gen_err')
         _sub(user, 'active')

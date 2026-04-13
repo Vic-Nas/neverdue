@@ -21,14 +21,12 @@ def _make_sub(username=None, status='active', customer_id=None):
 class TestGenerateReferralCode(TestCase):
 
     def _make_sub_with_stripe_stub(self):
-        """Return a sub; Coupon._push_to_stripe is patched for the test."""
         return _make_sub()
 
     def test_generate_referral_code_creates_coupon(self):
         """Creates a Coupon row with head=user, percent=12.5, max_redemptions=12."""
         sub = _make_sub()
-        with patch.object(Coupon, '_push_to_stripe'):
-            code = sub.generate_referral_code()
+        code = sub.generate_referral_code()
         self.assertTrue(code.startswith('NVD-'))
         coupon = Coupon.objects.get(code=code)
         self.assertEqual(coupon.head, sub.user)
@@ -38,8 +36,7 @@ class TestGenerateReferralCode(TestCase):
     def test_generate_referral_code_idempotent(self):
         """Calling twice returns the same code; no second Coupon row created."""
         sub = _make_sub()
-        with patch.object(Coupon, '_push_to_stripe'):
-            code1 = sub.generate_referral_code()
+        code1 = sub.generate_referral_code()
             code2 = sub.generate_referral_code()
         self.assertEqual(code1, code2)
         self.assertEqual(Coupon.objects.filter(head=sub.user).count(), 1)
@@ -52,8 +49,7 @@ class TestGenerateReferralCode(TestCase):
     def test_referral_code_property_after_generation(self):
         """referral_code returns code string after generation."""
         sub = _make_sub()
-        with patch.object(Coupon, '_push_to_stripe'):
-            code = sub.generate_referral_code()
+        code = sub.generate_referral_code()
         sub.refresh_from_db()
         self.assertEqual(sub.referral_code, code)
 
@@ -62,11 +58,9 @@ class TestGenerateReferralCode(TestCase):
         sub = _make_sub()
         colliding_code = 'NVD-AAAAA'
 
-        with patch.object(Coupon, '_push_to_stripe'), \
-             patch('billing.models.random.choices') as mc:
+        with patch('billing.models.random.choices') as mc:
             # First call returns a colliding code (pre-create it), second succeeds
-            with patch.object(Coupon, '_push_to_stripe'):
-                Coupon.objects.create(
+            Coupon.objects.create(
                     code=colliding_code, percent='10.00',
                 )
             mc.side_effect = [
@@ -81,8 +75,7 @@ class TestGenerateReferralCode(TestCase):
         """After 10 collisions, raises RuntimeError."""
         sub = _make_sub()
 
-        with patch.object(Coupon, '_push_to_stripe'), \
-             patch('billing.models.Coupon.objects') as mock_qs:
+        with patch('billing.models.Coupon.objects') as mock_qs:
             # filter().exists() always returns True → always collides
             mock_qs.filter.return_value.exists.return_value = True
             with self.assertRaises(RuntimeError):

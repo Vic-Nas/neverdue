@@ -12,8 +12,7 @@ import stripe
 
 
 def _coupon(code=None, head=None, max_redemptions=None):
-    with patch.object(Coupon, '_push_to_stripe'):
-        return Coupon.objects.create(
+    return Coupon.objects.create(
             code=code or f'CS{uuid.uuid4().hex[:6].upper()}',
             percent='12.50',
             max_redemptions=max_redemptions,
