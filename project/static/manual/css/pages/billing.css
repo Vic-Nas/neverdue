@@ -168,6 +168,7 @@
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: .05em;
+  -webkit-user-select: all;
   user-select: all;
   cursor: text;
   font-family: var(--font-mono);

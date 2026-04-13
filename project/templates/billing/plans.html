@@ -52,7 +52,7 @@
       {% if request.user.is_pro %}
         <a href="{% url 'billing:portal' %}" class="btn-primary btn--full">Manage subscription</a>
       {% else %}
-        <a href="{% url 'billing:checkout' %}" class="btn-primary btn--full">Upgrade to Pro →</a>
+        <a href="{% url 'billing:coupon_interstitial' %}" class="btn-primary btn--full">Upgrade to Pro →</a>
       {% endif %}
     </div>
 
