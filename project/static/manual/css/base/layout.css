@@ -3,7 +3,7 @@
 /* ── Two-column layout ── */
 .layout {
   margin-left: 200px;   /* leave room for fixed ad sidebar */
-  min-height: calc(100vh - 52px - 44px); /* nav + footer */
+  min-height: calc(100vh - 52px - 44px - 52px); /* nav + footer + body padding-top */
   width: calc(100% - 200px);
 }
 

@@ -21,27 +21,6 @@
     syncSubFields();
   }
 
-  // ── GCal color swatch picker — close <details> after picking ─────────────
-  document.querySelectorAll('.gcal-swatches[data-field]').forEach(swatchGroup => {
-    swatchGroup.addEventListener('change', (e) => {
-      if (e.target.type === 'radio') {
-        const details = swatchGroup.closest('details');
-        if (details) details.open = false;
-
-        // Update preview swatch
-        const row = swatchGroup.closest('.priority-color-row');
-        if (row) {
-          const preview = row.querySelector('.gcal-swatch-preview');
-          if (preview) {
-            // Find the selected label's background color
-            const lbl = swatchGroup.querySelector(`label[for="${e.target.id}"]`);
-            if (lbl) preview.style.background = lbl.style.background;
-          }
-        }
-      }
-    });
-  });
-
   // ── Google revoke/restore button ──────────────────────────────────────────
   const googleBtn  = document.getElementById('google-permissions-btn');
   const googleHint = document.getElementById('google-permissions-hint');

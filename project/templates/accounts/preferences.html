@@ -150,31 +150,23 @@
           {% for level in priority_levels %}
           <div class="priority-color-row">
             <span class="priority-color-row__label">{{ level.label }}</span>
-
-            {% for color in gcal_colors %}{% if level.current == color.id %}
-            <span class="gcal-swatch-preview" style="background:{{ color.hex }}" title="{{ color.name }}"></span>
-            {% endif %}{% endfor %}
-
-            <details class="gcal-picker-details">
-              <summary class="gcal-picker-summary">Change</summary>
-              <div class="gcal-swatches" data-field="{{ level.field }}">
-                {% for color in gcal_colors %}
-                <input
-                  type="radio"
-                  class="gcal-swatch-radio"
-                  name="{{ level.field }}"
-                  id="{{ level.field }}_{{ color.id }}"
-                  value="{{ color.id }}"
-                  {% if level.current == color.id %}checked{% endif %}>
-                <label
-                  class="gcal-swatch {% if level.current == color.id %}selected{% endif %}"
-                  for="{{ level.field }}_{{ color.id }}"
-                  style="background: {{ color.hex }}"
-                  title="{{ color.name }}">
-                </label>
-                {% endfor %}
-              </div>
-            </details>
+            <div class="gcal-swatches">
+              {% for color in gcal_colors %}
+              <input
+                type="radio"
+                class="gcal-swatch-radio"
+                name="{{ level.field }}"
+                id="{{ level.field }}_{{ color.id }}"
+                value="{{ color.id }}"
+                {% if level.current == color.id %}checked{% endif %}>
+              <label
+                class="gcal-swatch"
+                for="{{ level.field }}_{{ color.id }}"
+                style="background: {{ color.hex }}"
+                title="{{ color.name }}">
+              </label>
+              {% endfor %}
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -230,9 +222,52 @@
   const display = document.getElementById('current-username-display');
   if (!btn) return;
 
+  // ── Live validation ──────────────────────────────────────────────────────
+  let debounceTimer = null;
+  let lastChecked = '';
+  let inputValid = false;
+
+  function setInputState(state, msg) {
+    // state: '' | 'invalid' | 'taken' | 'available'
+    err.hidden = !msg;
+    err.textContent = msg || '';
+    ok.hidden = true;
+    inputValid = (state === 'available');
+    btn.disabled = (state === 'invalid' || state === 'taken');
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const val = input.value.trim().toLowerCase();
+
+    if (!val) { setInputState('', ''); return; }
+
+    // Client-side quick checks first
+    if (val.length < 3) { setInputState('invalid', 'Too short — minimum 3 characters.'); return; }
+    if (!/^[a-z0-9_]+$/.test(val)) { setInputState('invalid', 'Only lowercase letters, numbers, and underscores allowed.'); return; }
+
+    if (val === lastChecked) return; // don't re-check same value
+
+    debounceTimer = setTimeout(() => {
+      lastChecked = val;
+      fetch('{% url "accounts:check_username" %}?u=' + encodeURIComponent(val))
+        .then(r => r.json())
+        .then(data => {
+          if (input.value.trim().toLowerCase() !== val) return; // stale
+          if (data.status === 'available') {
+            setInputState('available', '');
+          } else {
+            setInputState(data.status, data.error || 'That username is not available.');
+          }
+        })
+        .catch(() => { /* silently allow on network error */ inputValid = true; btn.disabled = false; });
+    }, 400);
+  });
+
+  // ── Submit ───────────────────────────────────────────────────────────────
   btn.addEventListener('click', () => {
     const username = input.value.trim().toLowerCase();
-    if (!username) { showErr('Please enter a username.'); return; }
+    if (!username) { setInputState('invalid', 'Please enter a username.'); return; }
     if (!confirm('Change your username to "' + username + '" for CA$5? This will be charged to your card on file.')) return;
 
     btn.disabled = true;
@@ -251,6 +286,8 @@
         btn.textContent = 'Change — CA$5';
         if (data.ok) {
           input.value = '';
+          lastChecked = '';
+          inputValid = false;
           if (display) {
             display.textContent = data.username;
             display.nextElementSibling.textContent = data.username + '@{{ DOMAIN }}';
@@ -258,17 +295,15 @@
           ok.textContent = 'Username changed to "' + data.username + '". Update any email forwards pointing to your old address.';
           ok.hidden = false;
         } else {
-          showErr(data.error || 'Something went wrong.');
+          setInputState('invalid', data.error || 'Something went wrong.');
         }
       })
       .catch(() => {
         btn.disabled = false;
         btn.textContent = 'Change — CA$5';
-        showErr('Network error. Please try again.');
+        setInputState('invalid', 'Network error. Please try again.');
       });
   });
-
-  function showErr(msg) { err.textContent = msg; err.hidden = false; }
 })();
 </script>
 {% endblock %}

@@ -184,35 +184,45 @@ textarea { resize: vertical; line-height: 1.5; min-height: 80px; }
   gap: .4rem;
   align-items: center;
 }
+/* category_edit.html: label > input + span pattern */
 .gcal-swatch {
   position: relative;
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  border-radius: 50%;
+  overflow: visible;
 }
 .gcal-swatch input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
-.gcal-swatch span:not(:first-of-type) {
+.gcal-swatch span {
   display: block;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 2px solid transparent;
-  transition: border-color var(--transition);
+  transition: outline var(--transition);
 }
-.gcal-swatch input:checked + span, .gcal-swatch.selected { outline: 2px solid #fff; outline-offset: 1px; }
-.gcal-swatch--auto span:first-of-type {
+.gcal-swatch input:checked + span { outline: 3px solid #fff; outline-offset: 2px; }
+.gcal-swatch--auto span {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
-  border-radius: 50%;
   font-size: .65rem;
   color: var(--color-text-3);
 }
+/* preferences.html: hidden radio + adjacent label pattern */
 .gcal-swatch-radio { display: none; }
+.gcal-swatch-radio + label.gcal-swatch {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: outline var(--transition);
+}
+.gcal-swatch-radio:checked + label.gcal-swatch {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
 .gcal-swatch-preview {
   display: inline-block;
   width: 18px;
@@ -224,15 +234,8 @@ textarea { resize: vertical; line-height: 1.5; min-height: 80px; }
 
 /* Priority color picker */
 .priority-color-grid { display: flex; flex-direction: column; gap: .75rem; }
-.priority-color-row { display: flex; align-items: center; gap: .75rem; }
+.priority-color-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .priority-color-row__label { min-width: 80px; font-size: .875rem; color: var(--color-text-2); }
-.gcal-picker-details { font-size: .8125rem; }
-.gcal-picker-summary {
-  cursor: pointer;
-  color: var(--color-accent-3);
-  list-style: none;
-}
-.gcal-picker-summary::-webkit-details-marker { display: none; }
 
 /* ── Input with suffix ── */
 .input-suffix-wrap { display: flex; align-items: center; gap: 0; }
