@@ -199,7 +199,7 @@ textarea { resize: vertical; line-height: 1.5; min-height: 80px; }
   border-radius: 50%;
   transition: outline var(--transition);
 }
-.gcal-swatch input:checked + span { outline: 3px solid #fff; outline-offset: 2px; }
+.gcal-swatch input:checked + span { outline: 2px solid var(--color-text); outline-offset: 2px; }
 .gcal-swatch--auto span {
   display: flex;
   align-items: center;
@@ -220,7 +220,7 @@ textarea { resize: vertical; line-height: 1.5; min-height: 80px; }
   transition: outline var(--transition);
 }
 .gcal-swatch-radio:checked + label.gcal-swatch {
-  outline: 3px solid #fff;
+  outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
 .gcal-swatch-preview {
