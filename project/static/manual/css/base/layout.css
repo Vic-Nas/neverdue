@@ -7,6 +7,8 @@
   min-height: calc(100vh - 52px - 52px); /* nav + footer */
   max-width: 1400px;
   margin: 0 auto;
+  /* Center content accounting for ad sidebar as a "wall" */
+  align-items: start;
 }
 
 .ad-sidebar {
@@ -19,23 +21,46 @@
   top: 52px;
   height: calc(100vh - 52px);
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Ads wrap down when not enough room */
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+/* When sidebar is narrow or ads overflow, allow wrapping */
+@supports (container-type: inline-size) {
+  .ad-sidebar { container-type: inline-size; }
 }
 
 .ad-slot {
   flex-shrink: 0;
+  width: 100%;
 }
+
+/* If an ad-slot has no content height, collapse gracefully */
+.ad-slot:empty { display: none; }
 
 .main-content {
   padding: 1.5rem 2rem;
   min-width: 0;
+  /* Center the inner page containers within the available space */
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Page containers ── */
 .page {
   max-width: 720px;
+  /* Center in available main-content space */
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 .page--wide {
   max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
 
 .page__header {
@@ -157,21 +182,67 @@
   margin-top: 1.25rem;
   flex-wrap: wrap;
 }
-.pagination a, .pagination span {
-  display: inline-block;
-  padding: .3em .65em;
+
+/* Shared base styles for all pagination elements */
+.pagination a,
+.pagination span,
+.pagination__link,
+.pagination__num,
+.pagination__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 .5em;
   border-radius: var(--radius-sm);
   font-size: .8125rem;
   text-decoration: none;
   color: var(--color-text-2);
+  border: 1px solid transparent;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
-.pagination a:hover { background: var(--color-surface-2); color: var(--color-text); }
-.pagination .current {
+
+/* Hoverable links */
+.pagination a:hover,
+.pagination__link:hover,
+.pagination__num:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  text-decoration: none;
+}
+
+/* Active / current page — both old and new class names */
+.pagination .current,
+.pagination__num--active {
   background: var(--color-accent);
   color: #fff;
   font-weight: 600;
+  border-color: transparent;
 }
+.pagination .current:hover,
+.pagination__num--active:hover {
+  background: var(--color-accent-2);
+  color: #fff;
+}
+
+/* Disabled prev/next */
 .pagination .disabled { opacity: .35; pointer-events: none; }
+
+/* Nav arrows */
+.pagination__link {
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+}
+
+/* Ellipsis */
+.pagination__ellipsis {
+  color: var(--color-text-3);
+  border: none;
+  min-width: auto;
+  padding: 0 .25em;
+}
 
 /* ── Trial banner ── */
 .trial-banner {
@@ -212,9 +283,39 @@
 }
 
 @media (max-width: 768px) {
-  .layout { grid-template-columns: 1fr; }
-  .ad-sidebar {
-    display: none; /* hide sidebar on mobile */
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
   }
-  .main-content { padding: 1rem 1rem; }
+  .ad-sidebar {
+    /* On mobile: show ads as a horizontal strip across top, not hidden */
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-y: visible;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    padding: .5rem;
+    gap: .5rem;
+    -webkit-overflow-scrolling: touch;
+    /* Hide on very small phones to avoid clutter */
+  }
+  .ad-slot {
+    flex: 0 0 auto;
+    width: calc(50% - .25rem);
+    min-width: 140px;
+  }
+  .main-content { padding: 1rem; }
+  .page, .page--wide {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
+
+/* On very small phones, hide ads entirely to avoid dancing layout */
+@media (max-width: 480px) {
+  .ad-sidebar { display: none; }
+}
+
