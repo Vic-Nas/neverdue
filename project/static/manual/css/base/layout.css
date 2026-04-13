@@ -10,19 +10,17 @@
 /* ── Ad sidebar — fixed to left, never scrolls with page ── */
 .ad-sidebar {
   position: fixed;
-  top: 52px;                         /* directly below the fixed nav */
+  top: 52px;
   left: 0;
-  bottom: 44px;                      /* stop above fixed footer */
+  bottom: 44px;
   width: 200px;
   border-right: 1px solid var(--color-border);
   padding: 1rem .75rem;
   display: flex;
   flex-direction: column;
   gap: .75rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;        /* no scrollbar ever — ads simply fit */
   align-items: stretch;
-  flex-wrap: nowrap;
   z-index: 80;
   background: var(--color-bg);
 }
@@ -265,16 +263,38 @@
 .inbox-row__addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-row__help { color: var(--color-text-3); margin-left: auto; white-space: nowrap; }
 
-/* ── Responsive — sidebar narrows then disappears ── */
+/* ── Responsive — sidebar narrows then moves to bottom of page ── */
 @media (max-width: 960px) {
-  .ad-sidebar { width: 160px; bottom: 44px; }
+  .ad-sidebar { width: 160px; }
   .layout { margin-left: 160px; width: calc(100% - 160px); }
   .main-content { padding: 1.25rem 1.5rem; }
 }
 
 @media (max-width: 768px) {
-  .ad-sidebar { display: none; }
-  .layout { margin-left: 0; width: 100%; }
+  /* Sidebar leaves the left rail and becomes a horizontal strip at page bottom */
+  .ad-sidebar {
+    position: static;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-top: 1px solid var(--color-border);
+    padding: .75rem 1rem;
+    gap: .75rem;
+    overflow: visible;
+    bottom: auto; top: auto; left: auto;
+  }
+  .ad-sidebar .ad-slot {
+    flex: 1;
+    min-width: 140px;
+    max-width: 260px;
+  }
+  .layout {
+    margin-left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
   .main-content { padding: 1rem; }
   .page, .page--wide {
     margin-left: 0;

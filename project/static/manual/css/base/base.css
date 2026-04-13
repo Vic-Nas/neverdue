@@ -215,8 +215,8 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
   align-items: center;
   gap: .1rem;
   flex: 1;
-  min-width: 0;       /* allow flex children to shrink */
-  overflow: hidden;   /* clip when truly out of space */
+  min-width: 0;
+  overflow: visible;   /* don't clip — breakpoints hide links individually */
 }
 .topnav__link {
   padding: .35em .65em;
@@ -225,10 +225,7 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
   font-size: .875rem;
   white-space: nowrap;
   text-decoration: none !important;
-  flex-shrink: 1;     /* links compress before vanishing */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;      /* never compress — hide via breakpoints instead */
 }
 .topnav__link:hover { background: var(--color-surface-2); color: var(--color-text); }
 .topnav__link--active { color: var(--color-text); font-weight: 500; }

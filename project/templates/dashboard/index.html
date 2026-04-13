@@ -2,6 +2,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load tz_display %}
+{% load page_qs %}
 {% block title %}Dashboard — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
@@ -99,7 +100,7 @@
             {% if event.category %}
               <span class="event-card__sep">·</span>
               <span class="category-badge"
-                {% if event.category.color %}style="--cat-color:{{ event.category.color }}"{% endif %}>
+                style="--cat-color:{{ event.category|cat_display_color }}">
                 {{ event.category.name }}
               </span>
             {% endif %}

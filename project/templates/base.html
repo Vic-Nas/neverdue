@@ -80,34 +80,6 @@
   </div>
 </nav>
 
-{# ── Ad sidebar — fixed to left edge, outside layout flow ── #}
-<aside class="ad-sidebar">
-
-  {% for slot_id in ADSENSE_SLOTS|slice:":3" %}
-  <div class="ad-slot">
-    {% if ADSENSE_CLIENT_ID and slot_id %}
-      <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
-           data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-           data-ad-slot="{{ slot_id }}"
-           data-ad-format="auto"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-    {% else %}
-      {% include 'partials/ad_railway.html' %}
-    {% endif %}
-  </div>
-  {% empty %}
-  {% for _ in "xxx" %}
-  <div class="ad-slot">{% include 'partials/ad_railway.html' %}</div>
-  {% endfor %}
-  {% endfor %}
-
-  {# Slot 4 — always Koho #}
-  <div class="ad-slot">
-    {% include 'partials/ad_koho.html' %}
-  </div>
-
-</aside>
-
 <div class="layout">
 
   {# ── Main content ── #}
@@ -122,6 +94,34 @@
 
     {% block content %}{% endblock %}
   </main>
+
+  {# ── Ad sidebar — fixed on desktop, horizontal strip at bottom on mobile ── #}
+  <aside class="ad-sidebar">
+
+    {% for slot_id in ADSENSE_SLOTS|slice:":3" %}
+    <div class="ad-slot">
+      {% if ADSENSE_CLIENT_ID and slot_id %}
+        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
+             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
+             data-ad-slot="{{ slot_id }}"
+             data-ad-format="auto"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      {% else %}
+        {% include 'partials/ad_railway.html' %}
+      {% endif %}
+    </div>
+    {% empty %}
+    {% for _ in "xxx" %}
+    <div class="ad-slot">{% include 'partials/ad_railway.html' %}</div>
+    {% endfor %}
+    {% endfor %}
+
+    {# Slot 4 — always Koho #}
+    <div class="ad-slot">
+      {% include 'partials/ad_koho.html' %}
+    </div>
+
+  </aside>
 
 </div>
 
