@@ -4,8 +4,6 @@ import math
 import random
 import string
 
-import stripe
-from django.conf import settings
 from django.db import models
 
 from accounts.models import User
@@ -76,34 +74,6 @@ class Coupon(models.Model):
                   'Null = NeverDue grant (always pays out to redeemers).',
     )
     created_at = models.DateTimeField(auto_now_add=True)
-
-    # Stripe IDs stored after push
-    stripe_coupon_id = models.CharField(max_length=255, blank=True)
-    stripe_promotion_code_id = models.CharField(max_length=255, blank=True)
-
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        if is_new:
-            self._push_to_stripe()
-
-    def _push_to_stripe(self):
-        stripe.api_key = settings.STRIPE_SECRET_KEY
-        coupon_id = f'nvd-{self.code.lower()}'
-        kwargs = dict(
-            id=coupon_id,
-            percent_off=float(self.percent),
-            duration='forever',
-        )
-        stripe_coupon = stripe.Coupon.create(**kwargs)
-        promo_kwargs = dict(discount=stripe_coupon.id, code=self.code)
-        if self.max_redemptions is not None:
-            promo_kwargs['max_redemptions'] = self.max_redemptions
-        promo = stripe.PromotionCode.create(**promo_kwargs)
-        Coupon.objects.filter(pk=self.pk).update(
-            stripe_coupon_id=stripe_coupon.id,
-            stripe_promotion_code_id=promo.id,
-        )
 
     def __str__(self):
         return f'{self.code} ({self.percent}%)'

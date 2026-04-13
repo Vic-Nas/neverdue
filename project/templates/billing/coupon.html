@@ -1,0 +1,111 @@
+{# project/templates/billing/coupon.html #}
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Upgrade to Pro — NeverDue{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/billing.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="billing-page">
+
+  <div class="page__header">
+    <h1 class="page__title">NeverDue Pro</h1>
+    <p class="page__sub">Unlimited scans, unlimited categories, and file upload support. CA$8.00 / month after 7 days free.</p>
+  </div>
+
+  {% if not coupon %}
+  {# ── Step 1: ask if they have a code ── #}
+
+  <div class="coupon-question">
+    <p class="coupon-question__label">Do you have a referral or coupon code?</p>
+
+    <form method="post" class="coupon-code-form" id="coupon-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="lookup">
+      <div class="referral-lookup__bar">
+        <input
+          type="text"
+          name="code"
+          id="coupon-input"
+          class="referral-lookup__input"
+          placeholder="Enter code…"
+          maxlength="32"
+          autocomplete="off"
+          spellcheck="false"
+          autofocus
+        >
+        <button type="submit" class="btn btn-primary btn--sm">Apply</button>
+      </div>
+      {% if error %}
+      <p class="coupon-error">{{ error }}</p>
+      {% endif %}
+    </form>
+
+    <form method="post" class="coupon-skip-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="skip">
+      <button type="submit" class="btn-ghost btn btn--sm coupon-skip-btn">No code — go to checkout →</button>
+    </form>
+  </div>
+
+  {% else %}
+  {# ── Step 2: show coupon details and confirm ── #}
+
+  <div class="coupon-result">
+    <div class="referral-code-box">
+      <span class="referral-code-box__label">Code</span>
+      <code class="referral-code-box__code">{{ coupon.code }}</code>
+    </div>
+
+    {% if coupon.head_active %}
+      {% if coupon.head_is_none %}
+      <div class="coupon-info coupon-info--valid">
+        <strong>Valid code.</strong> You'll receive a <strong>{{ coupon.percent }}% refund</strong> every month as long as your subscription is active.
+      </div>
+      {% else %}
+      <div class="coupon-info coupon-info--valid">
+        <strong>Valid code.</strong> You'll receive a <strong>{{ coupon.percent }}% refund</strong> each month as long as the referrer's subscription stays active.
+        {% if coupon.redeemer_count > 0 %}
+        <span class="coupon-redeemer-count">{{ coupon.redeemer_count }} active partner{{ coupon.redeemer_count|pluralize }} already using this code.</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      <form method="post" class="coupon-confirm-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm">
+        <button type="submit" class="btn-primary btn btn--full">Confirm and go to checkout →</button>
+      </form>
+    {% else %}
+    <div class="coupon-info coupon-info--inactive">
+      <strong>Code found, but the referrer's subscription is currently inactive.</strong>
+      You can still use this code — your {{ coupon.percent }}% refund will apply once their subscription is active again.
+      {% if coupon.redeemer_count > 0 %}
+      <span class="coupon-redeemer-count">{{ coupon.redeemer_count }} active partner{{ coupon.redeemer_count|pluralize }} already using this code.</span>
+      {% endif %}
+    </div>
+    <form method="post" class="coupon-confirm-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="confirm">
+      <button type="submit" class="btn-primary btn btn--full">Continue to checkout anyway →</button>
+    </form>
+    {% endif %}
+
+    <form method="post" class="coupon-back-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="lookup">
+      <input type="hidden" name="code" value="">
+      <a href="{% url 'billing:coupon_interstitial' %}" class="btn-ghost btn btn--sm coupon-skip-btn">Try a different code</a>
+    </form>
+
+    <form method="post" class="coupon-skip-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="skip">
+      <button type="submit" class="btn-ghost btn btn--sm coupon-skip-btn">Skip — go to checkout without code</button>
+    </form>
+  </div>
+
+  {% endif %}
+
+</div>
+{% endblock %}

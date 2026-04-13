@@ -68,9 +68,9 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 ### `billing/models.py`
 
-- **`Coupon`** — Staff-created discount coupon pushed to Stripe on first save. Fields: `code` (unique), `percent`, `max_redemptions` (nullable — unlimited if blank, enforced by Stripe at checkout), `head` (nullable FK to User — the user who earns a head refund each month; null = NeverDue grant, always pays out), `stripe_coupon_id`, `stripe_promotion_code_id`, `created_at`. `save()` calls `_push_to_stripe()` on creation: creates a Stripe Coupon (`nvd-<code>`, forever) then a PromotionCode with the same human-readable code. Once created, code/percent/max_redemptions/head are immutable (admin enforces via `get_readonly_fields`).
-- **`CouponRedemption`** — Records that a user subscribed using a coupon. FK to `Coupon` and FK to `User`, `unique_together`. Created by the `customer.discount.created` webhook; deleted when the user unsubscribes. A user may hold redemptions on multiple coupons across subscription cycles.
-- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, `created_at`. `referral_coupon` OneToOne FK to the user's personal referral `Coupon` (head=user, percent=12.5, max_redemptions=12); null until generated. `referral_code` property delegates to `referral_coupon.code`. `is_pro` returns True for active/trialing. `generate_referral_code()` lazily creates the `Coupon` row (which triggers `_push_to_stripe`) and links it. Idempotent.
+- **`Coupon`** — Staff-created discount coupon. Fields: `code` (unique), `percent`, `max_redemptions` (nullable — unlimited if blank), `head` (nullable FK to User — the user who earns a head refund each month; null = NeverDue grant, always pays out), `created_at`. Stripe is no longer involved at coupon creation — codes live only in the local DB and are validated by the interstitial view before checkout. Once created, code/percent/max_redemptions/head are immutable (admin enforces via `get_readonly_fields`).
+- **`CouponRedemption`** — Records that a user subscribed using a coupon. FK to `Coupon` and FK to `User`, `unique_together`. Created by the `checkout.session.completed` webhook signal; deleted when the user unsubscribes. A user may hold redemptions on multiple coupons across subscription cycles.
+- **`Subscription`** — OneToOne to User. Stripe IDs, status (active/trialing/cancelled/past_due), `current_period_end`, `created_at`. `referral_coupon` OneToOne FK to the user's personal referral `Coupon` (head=user, percent=12.5, max_redemptions=12); null until generated. `referral_code` property delegates to `referral_coupon.code`. `is_pro` returns True for active/trialing. `generate_referral_code()` lazily creates the `Coupon` row and links it. Idempotent.
 - **`RefundRecord`** — Idempotency guard for monthly refunds. Two partial unique constraints: `(redemption, stripe_invoice_id)` for redeemer refunds and `(coupon_head, stripe_invoice_id)` for head refunds. `on_delete=PROTECT` on both FKs.
 - **`compute_discount(user)`** — Display-only. Redeemer side: flat `percent` per redemption if head is active (or null). Head side: `percent × active-redeemer-count` per coupon they head. Sums both sides, caps at 100, returns `math.ceil` int.
 
@@ -82,9 +82,9 @@ Maps 9 URL patterns: login/logout, Google OAuth start/callback, username picker,
 
 dj-stripe signal handlers — all Stripe object syncing is handled by dj-stripe automatically. Only NeverDue business logic lives here. Registered via three `WEBHOOK_SIGNALS[event_type].connect()` calls, each wrapped in `_wrap()` which catches and re-raises so Stripe gets a 500 and retries.
 
-- **`handle_customer_discount_created`** — Resolves the `Coupon` by code (from `PromotionCode.code` on the event, or derived from Stripe Coupon ID `nvd-<code>` as fallback). Guards: unknown code (skip silently), self-referral on a referral coupon (strip Stripe discount via `Customer.delete_discount`), duplicate redemption (skip). Creates `CouponRedemption(coupon, user)` on success.
+- **`handle_checkout_session_completed`** — Fires on `checkout.session.completed`. Reads `session.metadata.coupon_code` (written by the `checkout` view when the user confirmed a code on the interstitial). Guards: no metadata code (skip — user went straight to checkout), code not found locally (skip), self-referral (skip), duplicate redemption (skip). Creates `CouponRedemption(coupon, user)` on success.
 - **`handle_subscription_updated`** — Defers `retry_jobs_after_plan_upgrade` on any→active transition.
-- **`handle_subscription_cancelled`** — Fires on `customer.subscription.deleted`. Deletes all `CouponRedemption` rows for the cancelled user. The `Coupon` rows themselves are untouched — other redeemers and the head are unaffected. If the user resubscribes they enter a fresh code at checkout.
+- **`handle_subscription_cancelled`** — Fires on `customer.subscription.deleted`. Deletes all `CouponRedemption` rows for the cancelled user. The `Coupon` rows themselves are untouched — other redeemers and the head are unaffected. If the user resubscribes they enter a fresh code on the interstitial.
 
 ### `billing/tasks.py`
 
@@ -108,11 +108,11 @@ Unregisters all dj-stripe admin models on startup (Coupon, Customer, Subscriptio
 
 ### `billing/views/` (package)
 
-- **`pages.py`** — `plans` renders `billing/membership.html`; context includes `discount` (int %, ceiling via `compute_discount`), `active_partners` (count of active redeemers on the user's referral coupon), `referral_code`, `show_referral`. `generate_referral_code` POST view lazily creates a referral code and returns JSON. `checkout` is a GET that creates a Stripe Checkout Session with `allow_promotion_codes=True` and month-end refund notice in `custom_text`. `coupon_status` is an unauthenticated GET at `/billing/referral/<code>/` that fetches the PromotionCode live from Stripe and renders head_active, head_label, slots used/remaining.
+- **`pages.py`** — `plans` renders `billing/membership.html`; context includes `discount` (int %, ceiling via `compute_discount`), `active_partners` (count of active redeemers on the user's referral coupon), `referral_code`, `show_referral`. `generate_referral_code` POST view lazily creates a referral code and returns JSON. `coupon_interstitial` is the pre-checkout step for free users: GET shows the code entry form; POST `lookup` validates the code locally (no Stripe call) and renders refund details; POST `skip` clears session and redirects to checkout; POST `confirm` redirects to checkout with the code stored in `session['pending_coupon_code']`. `checkout` pops `pending_coupon_code` from session, writes it to Stripe session `metadata`, and creates the session without `allow_promotion_codes`. `coupon_lookup` is an unauthenticated GET returning JSON with `code`, `percent`, `head_active`, `head_is_none`, `head_label`, `redeemer_count`.
 
 ### `billing/urls.py`
 
-`app_name = 'billing'`. Patterns: `membership/`, `checkout/` (GET), `success/`, `cancel/`, `portal/`, `referral-code/generate/`, `referral/<str:code>/` (unauthenticated). dj-stripe webhook mounted at `/stripe/webhook/` via `project/urls.py`.
+`app_name = 'billing'`. Patterns: `membership/`, `coupon/` (interstitial, GET+POST), `checkout/` (GET), `success/`, `cancel/`, `portal/`, `referral-code/generate/`, `referral/lookup/` (unauthenticated). dj-stripe webhook mounted at `/stripe/webhook/` via `project/urls.py`. Stripe webhook events required: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
 ### `billing/tests/` (package)
 
@@ -259,7 +259,11 @@ Base layout with top nav (auth-aware links, queue badges, Pro/Upgrade indicator,
 
 ### `project/templates/billing/membership.html`
 
-Renders plan comparison for free users (simple `<a>` upgrade link). For pro users or users with an existing referral code, renders the referral section: discount badge, `active_partners` count, referral code display with copy button or generate button. Checkout uses `allow_promotion_codes=True` on Stripe's hosted page — codes are entered there. Also renders `coupon_status.html` partial for the unauthenticated code-check endpoint.
+Renders plan comparison for free users — "Upgrade to Pro" links to `billing:coupon_interstitial` (not directly to checkout). For pro users or users with an existing referral code, renders the referral section: discount badge, `active_partners` count, referral code display with copy button or generate button.
+
+### `project/templates/billing/coupon.html`
+
+Pre-checkout interstitial for free users. Step 1: asks if the user has a code, with a "No code — go to checkout" escape. Step 2 (after POST `lookup`): shows the validated code, a refund message tailored to `head_is_none` vs active/inactive head, redeemer count, and confirm/skip/retry-code actions.
 
 ### `project/templates/dashboard/` (13 templates)
 

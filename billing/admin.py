@@ -49,7 +49,7 @@ class CouponAdmin(admin.ModelAdmin):
     list_display = ('code', 'percent', 'head', 'max_redemptions', 'redemption_count', 'created_at')
     list_filter = ('percent',)
     search_fields = ('code', 'head__username', 'head__email')
-    readonly_fields = ('created_at', 'stripe_coupon_id', 'stripe_promotion_code_id')
+    readonly_fields = ('created_at',)
     raw_id_fields = ('head',)
     inlines = [CouponRedemptionInline]
 

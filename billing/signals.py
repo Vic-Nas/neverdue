@@ -37,73 +37,61 @@ def _sub_by_customer(customer_id, ctx=''):
 # Handlers
 # ---------------------------------------------------------------------------
 
-def handle_customer_discount_created(event, **kwargs):
+def handle_checkout_session_completed(event, **kwargs):
     """
-    Fires when a user enters a PromotionCode at Stripe checkout.
+    Fires when a Stripe Checkout session completes successfully.
 
-    Looks up the Coupon by code (from the PromotionCode object on the event).
-    Creates a CouponRedemption row linking coupon → new subscriber.
+    If the user had a coupon code stored in their Django session we can't
+    access it here (no request context), so instead we rely on the
+    checkout session's metadata. The coupon code is written to metadata
+    by the checkout view when a pending_coupon_code is present in the
+    user's session.
 
     Guards:
-    - Code not found locally → skip silently (not our coupon).
-    - Head trying to redeem their own referral coupon → strip Stripe discount.
-    - Duplicate redemption (user already on this coupon) → skip.
+    - No metadata code → skip (user went straight to checkout, no coupon).
+    - Code not found locally → skip.
+    - Self-referral → skip.
+    - Duplicate redemption → skip.
     """
     from billing.models import Coupon, CouponRedemption
 
     obj = event.data['object']
     customer_id = obj.get('customer', '')
-    # The promotion_code object is nested; fall back to coupon.id for referral lookup
-    promo = obj.get('promotion_code') or {}
-    code = promo.get('code', '') if isinstance(promo, dict) else ''
-
-    # If promotion_code isn't expanded, derive code from coupon id (nvd-<code>)
-    if not code:
-        coupon_id = (obj.get('coupon') or {}).get('id', '')
-        if coupon_id.startswith('nvd-'):
-            code = coupon_id[4:].upper()
+    metadata = obj.get('metadata') or {}
+    code = metadata.get('coupon_code', '').strip().upper()
 
     if not code or not customer_id:
         return
 
     try:
-        coupon = Coupon.objects.select_related('head').get(code=code.upper())
+        coupon = Coupon.objects.select_related('head').get(code=code)
     except Coupon.DoesNotExist:
-        logger.debug('handle_customer_discount_created: unknown code=%s', code)
+        logger.debug('handle_checkout_session_completed: unknown code=%s', code)
         return
 
-    new_sub = _sub_by_customer(customer_id, 'handle_customer_discount_created')
-    if not new_sub:
+    sub = _sub_by_customer(customer_id, 'handle_checkout_session_completed')
+    if not sub:
         return
 
-    new_user = new_sub.user
+    new_user = sub.user
 
-    # Self-referral guard: head cannot redeem their own referral coupon
     if coupon.head_id and coupon.head_id == new_user.pk:
         logger.warning(
-            'handle_customer_discount_created: self-referral blocked | user=%s code=%s',
+            'handle_checkout_session_completed: self-referral blocked | user=%s code=%s',
             new_user.pk, code,
         )
-        try:
-            stripe.Customer.delete_discount(customer_id)
-        except stripe.error.StripeError:
-            logger.exception(
-                'handle_customer_discount_created: failed to delete self-referral discount | '
-                'customer=%s', customer_id,
-            )
         return
 
-    # Duplicate guard
     if CouponRedemption.objects.filter(coupon=coupon, user=new_user).exists():
         logger.info(
-            'handle_customer_discount_created: duplicate redemption skipped | '
+            'handle_checkout_session_completed: duplicate redemption skipped | '
             'user=%s code=%s', new_user.pk, code,
         )
         return
 
     CouponRedemption.objects.create(coupon=coupon, user=new_user)
     logger.info(
-        'handle_customer_discount_created: CouponRedemption created | '
+        'handle_checkout_session_completed: CouponRedemption created | '
         'user=%s code=%s coupon=%s', new_user.pk, code, coupon.pk,
     )
 
@@ -164,6 +152,6 @@ def _wrap(handler):
     return receiver
 
 
-WEBHOOK_SIGNALS['customer.discount.created'].connect(_wrap(handle_customer_discount_created))
+WEBHOOK_SIGNALS['checkout.session.completed'].connect(_wrap(handle_checkout_session_completed))
 WEBHOOK_SIGNALS['customer.subscription.updated'].connect(_wrap(handle_subscription_updated))
 WEBHOOK_SIGNALS['customer.subscription.deleted'].connect(_wrap(handle_subscription_cancelled))

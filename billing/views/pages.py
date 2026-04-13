@@ -112,40 +112,89 @@ def coupon_lookup(request):
 
     return JsonResponse({
         'code': code,
+        'percent': float(coupon.percent),
         'head_active': head_active,
+        'head_is_none': head is None,
         'head_label': head_label,
         'redeemer_count': redeemer_count,
     })
 
 
 @login_required
+def coupon_interstitial(request):
+    """
+    Shown after clicking "Upgrade to Pro" for free users.
+    Asks if the user has a coupon code. Validates it locally and shows refund
+    details before confirming and redirecting to checkout.
+    Stores the validated code in the session for CouponRedemption creation
+    on checkout.session.completed.
+    """
+    from billing.models import Coupon
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'skip':
+            request.session.pop('pending_coupon_code', None)
+            return redirect('billing:checkout')
+
+        if action == 'confirm':
+            return redirect('billing:checkout')
+
+        if action == 'lookup':
+            code = request.POST.get('code', '').strip().upper()
+            if not code:
+                return render(request, 'billing/coupon.html', {'error': 'Please enter a code.'})
+            try:
+                coupon = Coupon.objects.select_related('head__subscription').get(code=code)
+            except Coupon.DoesNotExist:
+                return render(request, 'billing/coupon.html', {'error': 'Code not found.'})
+
+            head = coupon.head
+            head_active = head is None or head.is_pro
+            head_is_none = head is None
+
+            request.session['pending_coupon_code'] = code
+
+            return render(request, 'billing/coupon.html', {
+                'coupon': {
+                    'code': code,
+                    'percent': float(coupon.percent),
+                    'head_active': head_active,
+                    'head_is_none': head_is_none,
+                    'redeemer_count': coupon.redemptions.filter(
+                        user__subscription__status='active'
+                    ).count(),
+                },
+            })
+
+    request.session.pop('pending_coupon_code', None)
+    return render(request, 'billing/coupon.html')
+
+
+@login_required
 def checkout(request):
     """
-    Redirect to Stripe Checkout with allow_promotion_codes=True.
-    Users enter their coupon/referral code on Stripe's hosted page.
-    Custom text clarifies that refunds are issued month-end.
+    Redirect to Stripe Checkout. Promotion codes are never passed to Stripe —
+    discounts are handled entirely via our refund system. A pending coupon
+    code validated on the interstitial is stored in the session and used to
+    create a CouponRedemption on checkout.session.completed.
     """
     try:
         sub, _ = _get_or_create_customer(request.user)
-        session = stripe.checkout.Session.create(
+        pending_code = request.session.pop('pending_coupon_code', None)
+        session_kwargs = dict(
             customer=sub.stripe_customer_id,
             payment_method_types=['card'],
             line_items=[{'price': settings.STRIPE_PRICE_ID, 'quantity': 1}],
             mode='subscription',
             subscription_data={'trial_period_days': 7},
-            allow_promotion_codes=True,
-            custom_text={
-                'after_submit': {
-                    'message': (
-                        'Coupon discounts are applied as monthly refunds once '
-                        'your subscription is confirmed active. '
-                        'You will see the refund on your next statement.'
-                    )
-                }
-            },
             success_url=request.build_absolute_uri('/billing/success/'),
             cancel_url=request.build_absolute_uri('/billing/cancel/'),
         )
+        if pending_code:
+            session_kwargs['metadata'] = {'coupon_code': pending_code}
+        session = stripe.checkout.Session.create(**session_kwargs)
         return redirect(session.url)
     except Exception as exc:
         logger.error(
