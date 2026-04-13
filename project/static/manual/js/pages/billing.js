@@ -90,7 +90,7 @@
       lookupBtn.textContent = '…';
       lookupResult.hidden = true;
 
-      fetch(`/billing/lookup-code/?code=${encodeURIComponent(code)}`, {
+      fetch(`/billing/referral/lookup/?code=${encodeURIComponent(code)}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' },
       })
         .then(r => r.json())
