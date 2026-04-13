@@ -7,51 +7,42 @@
   min-height: calc(100vh - 52px - 52px); /* nav + footer */
   max-width: 1400px;
   margin: 0 auto;
-  /* Center content accounting for ad sidebar as a "wall" */
   align-items: start;
 }
 
+/* ── Ad sidebar — always on the left, never moves ── */
 .ad-sidebar {
   border-right: 1px solid var(--color-border);
   padding: 1rem .75rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: column;   /* ads stack downward, never horizontal */
   gap: .75rem;
   position: sticky;
   top: 52px;
   height: calc(100vh - 52px);
-  overflow-y: auto;
+  overflow-y: auto;         /* scroll internally if ads overflow down */
   overflow-x: hidden;
-  /* Ads wrap down when not enough room */
-  flex-wrap: nowrap;
   align-items: stretch;
-}
-
-/* When sidebar is narrow or ads overflow, allow wrapping */
-@supports (container-type: inline-size) {
-  .ad-sidebar { container-type: inline-size; }
+  flex-wrap: nowrap;        /* never wrap to a horizontal row */
 }
 
 .ad-slot {
   flex-shrink: 0;
   width: 100%;
 }
-
-/* If an ad-slot has no content height, collapse gracefully */
 .ad-slot:empty { display: none; }
 
+/* ── Main content ── */
 .main-content {
   padding: 1.5rem 2rem;
   min-width: 0;
-  /* Center the inner page containers within the available space */
   display: flex;
   flex-direction: column;
 }
 
-/* ── Page containers ── */
+/* ── Page containers — centered within available space ── */
 .page {
   max-width: 720px;
-  /* Center in available main-content space */
   margin-left: auto;
   margin-right: auto;
   width: 100%;
@@ -174,16 +165,17 @@
 }
 .empty-state__text { color: var(--color-text-2); font-size: .9375rem; }
 
-/* ── Pagination ── */
+/* ── Pagination — always centered ── */
 .pagination {
   display: flex;
   align-items: center;
+  justify-content: center;   /* centered on every page */
   gap: .4rem;
   margin-top: 1.25rem;
   flex-wrap: wrap;
 }
 
-/* Shared base styles for all pagination elements */
+/* Shared base styles */
 .pagination a,
 .pagination span,
 .pagination__link,
@@ -203,7 +195,6 @@
   transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
 
-/* Hoverable links */
 .pagination a:hover,
 .pagination__link:hover,
 .pagination__num:hover {
@@ -213,7 +204,7 @@
   text-decoration: none;
 }
 
-/* Active / current page — both old and new class names */
+/* Active / current page */
 .pagination .current,
 .pagination__num--active {
   background: var(--color-accent);
@@ -227,16 +218,13 @@
   color: #fff;
 }
 
-/* Disabled prev/next */
 .pagination .disabled { opacity: .35; pointer-events: none; }
 
-/* Nav arrows */
 .pagination__link {
   font-size: 1rem;
   border: 1px solid var(--color-border);
 }
 
-/* Ellipsis */
 .pagination__ellipsis {
   color: var(--color-text-3);
   border: none;
@@ -276,46 +264,19 @@
 .inbox-row__addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-row__help { color: var(--color-text-3); margin-left: auto; white-space: nowrap; }
 
-/* ── Responsive ── */
+/* ── Responsive — sidebar NEVER moves, only hides ── */
 @media (max-width: 960px) {
   .layout { grid-template-columns: 160px 1fr; }
   .main-content { padding: 1.25rem 1.5rem; }
 }
 
 @media (max-width: 768px) {
-  .layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-  }
-  .ad-sidebar {
-    /* On mobile: show ads as a horizontal strip across top, not hidden */
-    position: static;
-    height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    overflow-y: visible;
-    overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-    padding: .5rem;
-    gap: .5rem;
-    -webkit-overflow-scrolling: touch;
-    /* Hide on very small phones to avoid clutter */
-  }
-  .ad-slot {
-    flex: 0 0 auto;
-    width: calc(50% - .25rem);
-    min-width: 140px;
-  }
+  /* Sidebar simply hides — it never goes on top or becomes horizontal */
+  .layout { grid-template-columns: 1fr; }
+  .ad-sidebar { display: none; }
   .main-content { padding: 1rem; }
   .page, .page--wide {
     margin-left: 0;
     margin-right: 0;
   }
 }
-
-/* On very small phones, hide ads entirely to avoid dancing layout */
-@media (max-width: 480px) {
-  .ad-sidebar { display: none; }
-}
-

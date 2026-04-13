@@ -14,12 +14,12 @@
 .house-ad:hover { opacity: .85; transform: translateY(-1px); text-decoration: none; }
 
 .house-ad--railway {
-  background: color-mix(in srgb, #6366f1 12%, var(--color-surface));
-  border-color: color-mix(in srgb, #6366f1 25%, var(--color-border));
+  background: var(--ad-railway-bg);
+  border-color: var(--ad-railway-border);
 }
 .house-ad--koho {
-  background: color-mix(in srgb, #22c55e 10%, var(--color-surface));
-  border-color: color-mix(in srgb, #22c55e 20%, var(--color-border));
+  background: var(--ad-koho-bg);
+  border-color: var(--ad-koho-border);
 }
 
 .house-ad__eyebrow {

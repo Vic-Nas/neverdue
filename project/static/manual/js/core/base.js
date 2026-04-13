@@ -58,10 +58,10 @@
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data) return;
-          if (badgeProcessing) badgeProcessing.hidden = !data.processing;
-          if (badgeAttention)  badgeAttention.hidden  = !data.attention;
+          if (badgeProcessing) badgeProcessing.hidden = !data.active_count;
+          if (badgeAttention)  badgeAttention.hidden  = !data.attention_count;
           // Back off when nothing is in flight
-          pollInterval = (data.processing) ? 5000 : 12000;
+          pollInterval = (data.active_count) ? 5000 : 12000;
         })
         .catch(() => { pollInterval = 20000; })
         .finally(() => { timerId = setTimeout(poll, pollInterval); });

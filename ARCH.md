@@ -136,7 +136,7 @@ Split into 6 modules, re-exported from `__init__.py`:
 - **`events.py`** — `index`, `event_detail`, `event_edit`, `event_delete`. Event edit supports multiple links (URL + label) via form fields and `_parse_links` helper.
 - **`actions.py`** — `event_prompt_edit`, `events_bulk_action`, `export_events`.
 - **`categories.py`** — `categories`, `category_detail`, `category_edit`, `category_delete`, `categories_bulk_delete`.
-- **`queue.py`** — `queue`, `queue_status` (paginated JSON for polling), `queue_job_detail`, `queue_job_reprocess`, `queue_job_retry`.
+- **`queue.py`** — `queue`, `queue_status` (JSON for badge polling — returns `active_count`, `attention_count`, `jobs` array capped at 50), `queue_job_detail`, `queue_job_reprocess`, `queue_job_retry`, `queue_job_delete`, `queue_jobs_bulk_delete`.
 
 ### `dashboard/writer.py`
 
@@ -255,7 +255,7 @@ Staff routes under `/staff/`, app routes delegated to each app's `urls.py`. Supp
 
 ### `project/templates/base.html`
 
-Base layout with top nav (auth-aware links, queue badges, Pro/Upgrade indicator, Referral link), ad sidebar, and CSRF meta tag. Injects `js/core/base.js` for all authenticated users.
+Base layout with top nav (auth-aware links, queue badges, Pro/Upgrade indicator, Referral link, dark/light theme toggle), ad sidebar (left column, hidden on mobile ≤768px), sticky footer, and CSRF meta tag. Inline `<script>` in `<head>` reads `localStorage('nd-theme')` and sets `data-theme` on `<html>` before first paint to avoid flash. Injects `js/core/base.js` for all users (not just authenticated — needed for theme toggle).
 
 ### `project/templates/billing/membership.html`
 
@@ -285,8 +285,8 @@ Includes a Referrals/Coupons section explaining how codes work, the 8-referral f
 
 ### `project/static/manual/css/base/`
 
-- **`base.css`** — Design tokens, global resets, typography, button variants, input styles, messages, footer, badge animations.
-- **`layout.css`** — Top nav, sidebar layout, responsive breakpoints, ad sidebar positioning.
+- **`base.css`** — Design tokens split into `[data-theme="dark"]` (default) and `[data-theme="light"]` CSS variable blocks for full theme switching. Global resets, typography, button variants, input styles, messages, sticky footer (`position:sticky; bottom:0`), badge animations, theme toggle button styles, mobile overflow/CLS stability rules.
+- **`layout.css`** — Two-column grid layout (`200px sidebar + 1fr`). Ad sidebar is `position:sticky`, `flex-direction:column` always — ads stack downward, never reposition horizontally. Hidden via `display:none` on mobile (≤768px). `.page` and `.page--wide` use `margin:auto` to center within main column. Pagination (`justify-content:center`) supports both legacy `.current` and new `.pagination__num--active` class names.
 - **`forms.css`** — Form groups, labels, hints, actions row, reminder/rule rows.
 
 ### `project/static/manual/css/pages/`
@@ -299,7 +299,7 @@ Per-page stylesheets: `auth.css`, `billing.css`, `categories.css`, `dashboard.cs
 
 ### `project/static/manual/js/core/`
 
-- **`base.js`** — Timezone auto-detect, hamburger menu, global queue badge polling (5s). Exposes `window.neverdue.startQueuePolling`.
+- **`base.js`** — Dark/light theme toggle (reads/writes `localStorage('nd-theme')`, updates `data-theme` on `<html>`). Timezone auto-detect, hamburger menu, global queue badge polling. Polls `queue_status` and reads `active_count` / `attention_count` from response. Loaded for all users (not just authenticated).
 - **`forms.js`** — `toggleDependentGroup`, `addDynamicRow`, recurrence toggle, color label sync. `addReminder()` and `addRule()` exposed globally.
 
 ### `project/static/manual/js/pages/`
