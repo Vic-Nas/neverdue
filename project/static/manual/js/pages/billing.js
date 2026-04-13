@@ -35,7 +35,7 @@
       genBtn.disabled = true;
       genBtn.textContent = 'Generating…';
 
-      fetch(window.location.pathname + 'generate-code/', {
+      fetch('/billing/referral-code/generate/', {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrf(),
@@ -96,7 +96,12 @@
         .then(r => r.json())
         .then(data => {
           lookupResult.hidden = false;
-          lookupResult.textContent = data.message || (data.valid ? 'Code is valid.' : 'Code not found.');
+          if (data.error) {
+            lookupResult.textContent = data.error;
+          } else {
+            const partners = data.redeemer_count === 1 ? '1 active partner' : `${data.redeemer_count} active partners`;
+            lookupResult.textContent = `Valid code from ${data.head_label} — ${partners}.`;
+          }
         })
         .catch(() => {
           lookupResult.hidden = false;

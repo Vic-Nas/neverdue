@@ -20,11 +20,15 @@
     if (btnYes) btnYes.disabled = true;
     if (btnNo)  btnNo.disabled  = true;
 
-    const fd = new FormData();
-    fd.append('satisfied', satisfied ? 'true' : 'false');
-    fd.append('csrfmiddlewaretoken', csrf());
-
-    fetch(resolveUrl, { method: 'POST', body: fd })
+    fetch(resolveUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({ satisfied }),
+    })
       .then(r => r.json())
       .then(data => {
         if (msg) {

@@ -77,13 +77,20 @@
 
   // ── Fetch jobs ────────────────────────────────────────────────────────────
   function fetchJobs() {
-    fetch('/dashboard/queue/jobs/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch('/dashboard/queue/status/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
         // Preserve selection state
         const selected = new Set(allJobs.filter(j => j._selected).map(j => j.pk));
-        allJobs = data.jobs.map(j => ({ ...j, _selected: selected.has(j.pk) }));
+        allJobs = data.jobs.map(j => ({
+          ...j,
+          pk: j.id,
+          duration: j.duration_seconds,
+          started: j.created_at ? j.created_at.slice(0, 16).replace('T', ' ') : '—',
+          detail_url: `/dashboard/queue/${j.id}/`,
+          _selected: selected.has(j.id),
+        }));
         render();
 
         const hasActive = allJobs.some(j => j.status === 'queued' || j.status === 'processing');
