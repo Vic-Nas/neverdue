@@ -9,6 +9,36 @@ from django.shortcuts import get_object_or_404, redirect, render
 from dashboard.models import Category, Event
 from accounts.views import GCAL_COLOR_HEX
 
+# Maps gcal_color_id (str) → hex used for in-app UI coloring
+_GCAL_HEX = {
+    '1':  '#7986CB',  # Lavender
+    '2':  '#33B679',  # Sage
+    '3':  '#8E24AA',  # Grape
+    '4':  '#E67C73',  # Flamingo
+    '5':  '#F6BF26',  # Banana
+    '6':  '#F4511E',  # Tangerine
+    '7':  '#039BE5',  # Peacock
+    '8':  '#3F51B5',  # Blueberry
+    '9':  '#0B8043',  # Basil
+    '10': '#D50000',  # Tomato
+    '11': '#616161',  # Graphite
+}
+
+# Priority fallback colors (matches CSS tokens in categories.css)
+_PRIORITY_HEX = {
+    1: '#6366f1',  # Low    → indigo (accent)
+    2: '#f59e0b',  # Medium → amber
+    3: '#ef4444',  # High   → red
+    4: '#dc2626',  # Urgent → deep red
+}
+
+
+def _resolve_color(gcal_color_id, priority):
+    """Return the hex color to store on the category for UI use."""
+    if gcal_color_id and gcal_color_id in _GCAL_HEX:
+        return _GCAL_HEX[gcal_color_id]
+    return _PRIORITY_HEX.get(priority, '#6366f1')
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,12 +59,13 @@ def categories(request):
             cats = cats.order_by('name')
 
         from django.core.paginator import Paginator
-        paginator = Paginator(cats, 25)
+        paginator = Paginator(cats, 10)
         page = paginator.get_page(request.GET.get('page', '1'))
 
         return render(request, 'dashboard/categories.html', {
             'categories': page.object_list, 'page_obj': page,
             'q': q, 'sort': sort, 'total_count': paginator.count,
+            'gcal_hex': _GCAL_HEX,
         })
     except Exception:
         logger.exception("categories error for user=%s", request.user.pk)
@@ -46,8 +77,10 @@ def category_detail(request, pk):
     try:
         category = get_object_or_404(Category, pk=pk, user=request.user)
         events = Event.objects.filter(category=category, user=request.user, status='active').order_by('start')
+        # Resolve display color: stored hex → gcal swatch hex → None (template uses priority CSS class)
+        gcal_color_hex = _GCAL_HEX.get(category.gcal_color_id, '') if category.gcal_color_id else ''
         return render(request, 'dashboard/category_detail.html', {
-            'category': category, 'events': events, 'gcal_color_hex': GCAL_COLOR_HEX,
+            'category': category, 'events': events, 'gcal_color_hex': gcal_color_hex,
         })
     except Exception:
         logger.exception("category_detail error for user=%s pk=%s", request.user.pk, pk)
@@ -79,6 +112,7 @@ def category_edit(request, pk=None):
             category.priority = priority
             category.gcal_color_id = gcal_color_id
             category.reminders = reminders
+            category.color = _resolve_color(gcal_color_id, priority)
             category.save()
 
             if gcal_color_id != old_color:
