@@ -6,12 +6,49 @@ from django.db.models import F
 from django.utils import timezone
 from procrastinate.contrib.django import app
 from procrastinate import RetryStrategy
+from procrastinate.retry import BaseRetryStrategy, RetryDecision
 
 from emails.models import ScanJob
 
 logger = logging.getLogger(__name__)
 
-_transient_retry = RetryStrategy(max_attempts=5, linear_wait=60)
+# Waits (in seconds) for transient non-overload errors (network blips, 500s).
+# Attempts 1-5: 30s, 60s, 120s, 300s, 600s
+_TRANSIENT_WAITS = [30, 60, 120, 300, 600]
+
+# Waits (in seconds) for Anthropic overload (529 / rate-limit 429).
+# Anthropic can stay overloaded for many minutes — start slow, stay slow.
+# Attempts 1-5: 5min, 10min, 20min, 30min, 60min
+_OVERLOAD_WAITS = [300, 600, 1200, 1800, 3600]
+
+
+class _LLMRetryStrategy(BaseRetryStrategy):
+    """
+    Two-track retry strategy:
+    - LLMAPIError(retryable=True, overloaded=True)  → long waits (_OVERLOAD_WAITS)
+    - LLMAPIError(retryable=True, overloaded=False) → short waits (_TRANSIENT_WAITS)
+    - any other exception                           → short waits (_TRANSIENT_WAITS)
+    - LLMAPIError(retryable=False)                  → no retry
+    """
+
+    def get_retry_decision(self, *, exception, job):
+        from llm.extractor.client import LLMAPIError
+
+        # Permanent LLM errors (bad auth, malformed request) — don't retry.
+        if isinstance(exception, LLMAPIError) and not exception.retryable:
+            return None
+
+        attempt = job.attempts  # 0-indexed: 0 = first failure
+        is_overload = isinstance(exception, LLMAPIError) and getattr(exception, 'overloaded', False)
+        waits = _OVERLOAD_WAITS if is_overload else _TRANSIENT_WAITS
+
+        if attempt >= len(waits):
+            return None  # exhausted
+
+        return RetryDecision(retry_in={"seconds": waits[attempt]})
+
+
+_transient_retry = _LLMRetryStrategy()
 
 
 def _check_sender_rules(user, sender: str) -> tuple[bool, str]:

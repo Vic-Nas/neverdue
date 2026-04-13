@@ -37,7 +37,10 @@ def process_text(user, text: str, sender: str = '', source_email_id: str = '', s
         )
         logger.debug("process_text: extracted %d events | user=%s", len(events), user.pk)
     except LLMAPIError as exc:
-        logger.error("llm.process_text: API error | user=%s error=%s", user.pk, exc)
+        if exc.retryable:
+            logger.warning("llm.process_text: transient API error, will retry | user=%s error=%s", user.pk, exc)
+            raise
+        logger.error("llm.process_text: permanent API error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=str(exc))
     except ValueError as exc:
         logger.error("llm.process_text: extraction error | user=%s error=%s", user.pk, exc)
@@ -108,7 +111,10 @@ def process_email(user, body: str, attachments: list, sender: str = '', source_e
         )
         logger.debug("process_email: extracted %d events | user=%s", len(events), user.pk)
     except LLMAPIError as exc:
-        logger.error("llm.process_email: API error | user=%s error=%s", user.pk, exc)
+        if exc.retryable:
+            logger.warning("llm.process_email: transient API error, will retry | user=%s error=%s", user.pk, exc)
+            raise
+        logger.error("llm.process_email: permanent API error | user=%s error=%s", user.pk, exc)
         return ProcessingOutcome(status='failed', failure_reason='llm_error', notes=str(exc))
     except ValueError as exc:
         logger.error("llm.process_email: extraction error | user=%s error=%s", user.pk, exc)

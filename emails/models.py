@@ -32,6 +32,7 @@ class ScanJob(models.Model):
     # Failure reason codes — set on every failed job so admin can filter
     # and bulk-retry by root cause.
     REASON_LLM_ERROR = 'llm_error'
+    REASON_LLM_OVERLOADED = 'llm_overloaded'
     REASON_SCAN_LIMIT = 'scan_limit'
     REASON_PRO_REQUIRED = 'pro_required'
     REASON_INTERNAL_ERROR = 'internal_error'
@@ -40,6 +41,7 @@ class ScanJob(models.Model):
 
     FAILURE_REASON_CHOICES = [
         (REASON_LLM_ERROR, 'LLM error'),
+        (REASON_LLM_OVERLOADED, 'LLM overloaded (exhausted retries)'),
         (REASON_SCAN_LIMIT, 'Scan limit reached'),
         (REASON_PRO_REQUIRED, 'Pro plan required'),
         (REASON_INTERNAL_ERROR, 'Internal error'),
