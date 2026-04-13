@@ -2,30 +2,29 @@
 
 /* ── Two-column layout ── */
 .layout {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  flex: 1;                          /* grow to fill space between nav and footer */
-  min-height: calc(100vh - 52px - 52px); /* nav + footer */
-  max-width: 1400px;
-  margin: 0 auto;
-  align-items: start;
-  width: 100%;
+  margin-left: 200px;   /* leave room for fixed ad sidebar */
+  min-height: calc(100vh - 52px - 44px); /* nav + footer */
+  width: calc(100% - 200px);
 }
 
-/* ── Ad sidebar — always on the left, never moves ── */
+/* ── Ad sidebar — fixed to left, never scrolls with page ── */
 .ad-sidebar {
+  position: fixed;
+  top: 52px;                         /* directly below the fixed nav */
+  left: 0;
+  bottom: 44px;                      /* stop above fixed footer */
+  width: 200px;
   border-right: 1px solid var(--color-border);
   padding: 1rem .75rem;
   display: flex;
-  flex-direction: column;   /* ads stack downward, never horizontal */
+  flex-direction: column;
   gap: .75rem;
-  position: sticky;
-  top: 52px;
-  height: calc(100vh - 52px);
-  overflow-y: auto;         /* scroll internally if ads overflow down */
+  overflow-y: auto;
   overflow-x: hidden;
   align-items: stretch;
-  flex-wrap: nowrap;        /* never wrap to a horizontal row */
+  flex-wrap: nowrap;
+  z-index: 80;
+  background: var(--color-bg);
 }
 
 .ad-slot {
@@ -266,16 +265,16 @@
 .inbox-row__addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inbox-row__help { color: var(--color-text-3); margin-left: auto; white-space: nowrap; }
 
-/* ── Responsive — sidebar NEVER moves, only hides ── */
+/* ── Responsive — sidebar narrows then disappears ── */
 @media (max-width: 960px) {
-  .layout { grid-template-columns: 160px 1fr; }
+  .ad-sidebar { width: 160px; bottom: 44px; }
+  .layout { margin-left: 160px; width: calc(100% - 160px); }
   .main-content { padding: 1.25rem 1.5rem; }
 }
 
 @media (max-width: 768px) {
-  /* Sidebar simply hides — it never goes on top or becomes horizontal */
-  .layout { grid-template-columns: 1fr; }
   .ad-sidebar { display: none; }
+  .layout { margin-left: 0; width: 100%; }
   .main-content { padding: 1rem; }
   .page, .page--wide {
     margin-left: 0;

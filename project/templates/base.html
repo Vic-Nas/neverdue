@@ -38,15 +38,15 @@
     <a href="{% url 'dashboard:rules' %}" class="topnav__link {% if request.resolver_match.url_name == 'rules' %}topnav__link--active{% endif %}">Rules</a>
     <a href="https://calendar.google.com/calendar/u/0/r"
        target="_blank" rel="noopener"
-       class="topnav__link">Calendar ↗</a>
-    <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
+       class="topnav__link topnav__link--nav-calendar">Calendar ↗</a>
+    <a href="{% url 'dashboard:queue' %}" class="topnav__link topnav__link--nav-queue topnav__link--queue {% if request.resolver_match.url_name == 'queue' %}topnav__link--active{% endif %}">
       Queue<span class="queue-badge queue-badge--processing" id="queue-badge-processing" hidden></span><span class="queue-badge queue-badge--attention" id="queue-badge-attention" hidden></span>
     </a>
     {% if user.is_staff %}
-    <a href="{% url 'staff_dashboard' %}" class="topnav__link {% if 'staff' in request.resolver_match.url_name|default:'' %}topnav__link--active{% endif %}">Staff</a>
+    <a href="{% url 'staff_dashboard' %}" class="topnav__link topnav__link--nav-staff {% if 'staff' in request.resolver_match.url_name|default:'' %}topnav__link--active{% endif %}">Staff</a>
     {% endif %}
     {% endif %}
-    <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
+    <a href="{% url 'help' %}" class="topnav__link topnav__link--nav-help {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
 
     {# ── Mobile-only: auth actions move here so they appear in hamburger menu ── #}
     {% if user.is_authenticated %}
@@ -80,35 +80,35 @@
   </div>
 </nav>
 
+{# ── Ad sidebar — fixed to left edge, outside layout flow ── #}
+<aside class="ad-sidebar">
+
+  {% for slot_id in ADSENSE_SLOTS|slice:":3" %}
+  <div class="ad-slot">
+    {% if ADSENSE_CLIENT_ID and slot_id %}
+      <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
+           data-ad-client="{{ ADSENSE_CLIENT_ID }}"
+           data-ad-slot="{{ slot_id }}"
+           data-ad-format="auto"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    {% else %}
+      {% include 'partials/ad_railway.html' %}
+    {% endif %}
+  </div>
+  {% empty %}
+  {% for _ in "xxx" %}
+  <div class="ad-slot">{% include 'partials/ad_railway.html' %}</div>
+  {% endfor %}
+  {% endfor %}
+
+  {# Slot 4 — always Koho #}
+  <div class="ad-slot">
+    {% include 'partials/ad_koho.html' %}
+  </div>
+
+</aside>
+
 <div class="layout">
-
-  {# ── Ad sidebar ── #}
-  <aside class="ad-sidebar">
-
-    {% for slot_id in ADSENSE_SLOTS|slice:":3" %}
-    <div class="ad-slot">
-      {% if ADSENSE_CLIENT_ID and slot_id %}
-        <ins class="adsbygoogle" style="display:block;width:100%;height:100%"
-             data-ad-client="{{ ADSENSE_CLIENT_ID }}"
-             data-ad-slot="{{ slot_id }}"
-             data-ad-format="auto"></ins>
-        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-      {% else %}
-        {% include 'partials/ad_railway.html' %}
-      {% endif %}
-    </div>
-    {% empty %}
-    {% for _ in "xxx" %}
-    <div class="ad-slot">{% include 'partials/ad_railway.html' %}</div>
-    {% endfor %}
-    {% endfor %}
-
-    {# Slot 4 — always Koho #}
-    <div class="ad-slot">
-      {% include 'partials/ad_koho.html' %}
-    </div>
-
-  </aside>
 
   {# ── Main content ── #}
   <main class="main-content">
