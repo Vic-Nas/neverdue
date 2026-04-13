@@ -8,6 +8,13 @@
     return m ? m.content : '';
   }
 
+  function fmtDuration(s) {
+    if (s < 60) return s + 's';
+    if (s < 3600) { const m = Math.floor(s / 60), rem = s % 60; return rem > 0 ? `${m}m ${rem}s` : `${m}m`; }
+    const h = Math.floor(s / 3600), rem = Math.floor((s % 3600) / 60);
+    return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+  }
+
   const tbody       = document.getElementById('queue-tbody');
   const tableEl     = document.getElementById('queue-table');
   const emptyMsg    = document.getElementById('queue-empty-msg');
@@ -60,7 +67,7 @@
         <td style="color:#9ca3af;font-size:.8125rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.from_address || ''}">${j.from_address || '—'}</td>
         <td style="color:#9ca3af;font-size:.8125rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.notes || ''}">${j.notes || ''}</td>
         <td>${statusBadge(j.status)}</td>
-        <td style="color:#9ca3af;font-size:.8125rem">${j.duration != null ? j.duration + 's' : '—'}</td>
+        <td style="color:#9ca3af;font-size:.8125rem">${j.duration != null ? fmtDuration(j.duration) : '—'}</td>
         <td style="color:#9ca3af;font-size:.8125rem;white-space:nowrap">${j.started}</td>
       </tr>
     `).join('');
