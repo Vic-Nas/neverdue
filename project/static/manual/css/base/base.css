@@ -91,6 +91,8 @@ body {
   font-size: .9375rem;
   line-height: 1.6;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -277,6 +279,10 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
   transition: var(--transition);
 }
 
+/* Mobile-only nav items — hidden on desktop */
+.topnav__link--mobile-only { display: none; }
+.topnav__mobile-sep { display: none; }
+
 /* ── Queue badge ── */
 .queue-badge {
   display: inline-block;
@@ -293,11 +299,8 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
   50%      { opacity: .3; }
 }
 
-/* ── Footer — sticky at bottom ── */
+/* ── Footer — sits at natural bottom of page ── */
 .site-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 90;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   padding: .6rem 1.5rem;
@@ -347,6 +350,13 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .topnav__hamburger { display: flex; }
+
+  /* Hide desktop-only action links — they live in the hamburger menu */
+  .topnav__actions .topnav__link,
+  .topnav__actions .topnav__upgrade,
+  .topnav__actions .topnav__pro,
+  .topnav__actions .btn-ghost { display: none; }
+
   .topnav__links {
     display: none;
     position: absolute;
@@ -363,4 +373,12 @@ ins.adsbygoogle { display: block !important; max-width: 100%; }
   .topnav__links.is-open { display: flex; }
   .topnav__link { padding: .6em .75em; }
   .topnav__actions { gap: .35rem; }
+
+  /* Mobile-only items hidden on desktop, shown in dropdown */
+  .topnav__link--mobile-only { display: block; }
+  .topnav__mobile-sep {
+    height: 1px;
+    background: var(--color-border);
+    margin: .35rem 0;
+  }
 }

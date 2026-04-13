@@ -1,6 +1,7 @@
 {# project/templates/dashboard/categories.html #}
 {% extends 'base.html' %}
 {% load static %}
+{% load page_qs %}
 {% block title %}Categories — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
@@ -20,9 +21,9 @@
         <button type="button" class="btn-ghost btn" id="cat-select-toggle">Select</button>
       {% endif %}
       {% if not request.user.is_pro and total_count >= 3 %}
-        <a href="{% url 'billing:membership' %}" class="btn-primary">Upgrade for more →</a>
+        <a href="{% url 'billing:membership' %}" class="btn btn-primary">Upgrade for more →</a>
       {% else %}
-        <a href="{% url 'dashboard:category_create' %}" class="btn-primary">+ New category</a>
+        <a href="{% url 'dashboard:category_create' %}" class="btn btn-primary">+ New category</a>
       {% endif %}
     </div>
   </div>
@@ -56,7 +57,7 @@
       <div class="cat-card__header">
         <div class="cat-card__name">
           <input type="checkbox" class="cat-card__checkbox" value="{{ cat.pk }}">
-          <span class="cat-card__dot" {% if cat.color %}style="background:{{ cat.color }}"{% endif %}></span>
+          <span class="cat-card__dot" style="background:{{ cat|cat_display_color }}"></span>
           <a href="{% url 'dashboard:category_detail' pk=cat.pk %}" class="cat-card__name-link">{{ cat.name }}</a>
           <span class="priority-badge priority-badge--{{ cat.priority }}">{{ cat.get_priority_display }}</span>
         </div>
@@ -104,7 +105,7 @@
     <a href="{% url 'dashboard:categories' %}" class="btn-ghost btn">Clear search</a>
     {% else %}
     <p class="empty-state__text">No categories yet.</p>
-    <a href="{% url 'dashboard:category_create' %}" class="btn-primary">Create your first category</a>
+    <a href="{% url 'dashboard:category_create' %}" class="btn btn-primary">Create your first category</a>
     {% endif %}
   </div>
   {% endif %}

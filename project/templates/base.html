@@ -47,6 +47,19 @@
     {% endif %}
     {% endif %}
     <a href="{% url 'help' %}" class="topnav__link {% if request.resolver_match.url_name == 'help' %}topnav__link--active{% endif %}">Help</a>
+
+    {# ── Mobile-only: auth actions move here so they appear in hamburger menu ── #}
+    {% if user.is_authenticated %}
+    <div class="topnav__mobile-sep"></div>
+    {% if user.is_pro %}
+      <a href="{% url 'billing:portal' %}" class="topnav__link topnav__link--mobile-only">Pro ↗</a>
+    {% else %}
+      <a href="{% url 'billing:membership' %}" class="topnav__link topnav__link--mobile-only">Upgrade to Pro</a>
+    {% endif %}
+    <a href="{% url 'billing:membership' %}" class="topnav__link topnav__link--mobile-only">Referral</a>
+    <a href="{% url 'accounts:preferences' %}" class="topnav__link topnav__link--mobile-only">Preferences</a>
+    <a href="{% url 'accounts:logout' %}" class="topnav__link topnav__link--mobile-only">Sign out</a>
+    {% endif %}
   </div>
 
   <div class="topnav__actions">

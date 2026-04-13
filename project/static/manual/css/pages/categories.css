@@ -31,6 +31,11 @@
   background: var(--color-border-2);
   flex-shrink: 0;
 }
+/* Priority-based dot colors when no manual color is set */
+.cat-card__dot--priority-high   { background: #ef4444; }
+.cat-card__dot--priority-medium { background: #f59e0b; }
+.cat-card__dot--priority-low    { background: #6366f1; }
+.cat-card__dot--priority-none   { background: var(--color-border-2); }
 .cat-card__name-link {
   font-weight: 500;
   color: var(--color-text);
@@ -70,6 +75,20 @@
 
 /* Category detail */
 .cat-detail-events { margin-top: .75rem; }
+
+/* Large category badge for detail page header */
+.category-badge--lg {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  padding: .3em 1em;
+}
+
+/* Priority-based color defaults when no manual color is set */
+/* These map priority levels to the existing design token palette */
+.category-badge--priority-high   { --cat-color: 239 68 68; }
+.category-badge--priority-medium { --cat-color: 245 158 11; }
+.category-badge--priority-low    { --cat-color: 99 102 241; }
+.category-badge--priority-none   { --cat-color: 107 114 128; }
 
 /* Rule add / edit */
 .rule-add-form { max-width: 560px; }

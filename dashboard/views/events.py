@@ -34,7 +34,7 @@ def index(request):
 
         from django.core.paginator import Paginator
         page_num = request.GET.get('page', '1')
-        paginator = Paginator(qs, 25)
+        paginator = Paginator(qs, 10)
         page = paginator.get_page(page_num)
 
         return render(request, 'dashboard/index.html', {

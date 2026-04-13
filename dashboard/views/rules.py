@@ -28,7 +28,7 @@ def rules(request):
             rules_qs = rules_qs.order_by('rule_type', 'created_at')
 
         from django.core.paginator import Paginator
-        paginator = Paginator(rules_qs, 25)
+        paginator = Paginator(rules_qs, 10)
         page = paginator.get_page(request.GET.get('page', '1'))
 
         categories = Category.objects.filter(user=request.user).order_by('name')

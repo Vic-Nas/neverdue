@@ -49,7 +49,7 @@
     </div>
     {% if job.failure_reason != 'scan_limit' and job.failure_reason != 'pro_required' %}
     <div class="failure-box__actions">
-      <button type="button" class="btn-primary" id="retry-btn"
+      <button type="button" class="btn btn-primary" id="retry-btn"
         data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}">
         Retry job
@@ -69,7 +69,7 @@
       {% if job.notes %}<br><span class="failure-box__note">{{ job.notes }}</span>{% endif %}
     </div>
     <div class="failure-box__actions">
-      <button type="button" class="btn-primary" id="retry-btn"
+      <button type="button" class="btn btn-primary" id="retry-btn"
         data-retry-url="{% url 'dashboard:queue_job_retry' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}">
         Retry job
@@ -113,7 +113,7 @@
       <textarea id="reprocess-prompt" rows="3"
         placeholder="e.g. 'Weekly until April 25 2026' or 'These are one-time events, no recurrence'"></textarea>
       <div class="failure-box__actions">
-        <button type="button" class="btn-primary" id="reprocess-btn"
+        <button type="button" class="btn btn-primary" id="reprocess-btn"
         data-reprocess-url="{% url 'dashboard:queue_job_reprocess' pk=job.pk %}"
         data-queue-url="{% url 'dashboard:queue' %}"
         data-pending-ids="[{% for e in pending_events %}{{ e.pk }}{% if not forloop.last %},{% endif %}{% endfor %}]">Re-process</button>

@@ -4,10 +4,12 @@
 .layout {
   display: grid;
   grid-template-columns: 200px 1fr;
+  flex: 1;                          /* grow to fill space between nav and footer */
   min-height: calc(100vh - 52px - 52px); /* nav + footer */
   max-width: 1400px;
   margin: 0 auto;
   align-items: start;
+  width: 100%;
 }
 
 /* ── Ad sidebar — always on the left, never moves ── */

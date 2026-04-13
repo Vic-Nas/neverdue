@@ -1,6 +1,7 @@
 {# project/templates/dashboard/category_detail.html #}
 {% extends 'base.html' %}
 {% load static %}
+{% load page_qs %}
 {% block title %}{{ category.name }} — NeverDue{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/dashboard.css' %}">
@@ -9,12 +10,13 @@
 {% endblock %}
 
 {% block content %}
+{% with display_color=category|cat_display_color %}
 <div class="page page--wide">
 
   <div class="page__header--row">
     <div>
       <span class="category-badge category-badge--lg"
-        {% if category.color %}style="--cat-color:{{ category.color }}"{% endif %}>
+        style="--cat-color:{{ display_color }}">
         {{ category.name }}
       </span>
       <p class="page__sub">{{ events|length }} event{{ events|length|pluralize }}</p>
@@ -28,7 +30,7 @@
   {% if events %}
   <div class="event-list">
     {% for event in events %}
-    <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card {% if event.status == 'pending' %}event-card--pending{% endif %}">
+    <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="event-card event-card--colored{% if event.status == 'pending' %} event-card--muted{% endif %}" style="--event-color:{{ display_color }}">
 
       <div class="event-card__date">
         <span class="event-card__day">{{ event.start|date:"d" }}</span>
@@ -65,4 +67,5 @@
   {% endif %}
 
 </div>
+{% endwith %}
 {% endblock %}

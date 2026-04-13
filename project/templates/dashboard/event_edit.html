@@ -143,7 +143,7 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="btn-primary">{% if event %}Save changes{% else %}Create event{% endif %}</button>
+      <button type="submit" class="btn btn-primary">{% if event %}Save changes{% else %}Create event{% endif %}</button>
       {% if event %}
         <a href="{% url 'dashboard:event_detail' pk=event.pk %}" class="btn-ghost btn">Cancel</a>
       {% else %}
@@ -163,7 +163,7 @@
     <div class="prompt-edit-row">
       <textarea id="prompt-input" rows="2"
         placeholder="e.g. 'This repeats weekly until May 9 2026'&#10;e.g. 'The time is wrong, it starts at 14:00 not 09:00'&#10;e.g. 'Split into two separate events, one per day'"></textarea>
-      <button type="button" class="btn-primary" id="prompt-submit-btn"
+      <button type="button" class="btn btn-primary" id="prompt-submit-btn"
         data-prompt-url="{% url 'dashboard:event_prompt_edit' pk=event.pk %}"
         data-dashboard-url="{% url 'dashboard:index' %}">Apply</button>
     </div>

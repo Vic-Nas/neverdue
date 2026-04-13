@@ -16,15 +16,23 @@
 .priority-badge--none   { background: var(--color-surface-2); color: var(--color-text-3); }
 
 /* ── Category badge ── */
+/*
+ * --cat-color: hex value (e.g. #6366f1) — used for text and border
+ * Background uses a low-opacity overlay via a pseudo-element trick,
+ * since rgba() only works with space-separated RGB, not hex.
+ */
 .category-badge {
   display: inline-block;
   padding: .1em .55em;
   border-radius: 20px;
   font-size: .75rem;
   font-weight: 500;
-  background: rgba(var(--cat-color, 99 102 241) / .15);
+  position: relative;
   color: var(--cat-color, var(--color-accent-3));
-  border: 1px solid rgba(var(--cat-color, 99 102 241) / .25);
+  border: 1px solid var(--cat-color, var(--color-accent));
+  background: transparent;
+  /* Soft tinted background via box-shadow inset */
+  box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--cat-color, var(--color-accent)) 15%, transparent);
 }
 
 /* ── Failure / info boxes ── */

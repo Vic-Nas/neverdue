@@ -25,7 +25,7 @@
       {% if request.user.is_pro %}
         <a href="{% url 'dashboard:upload' %}" class="btn-ghost btn">↑ Import</a>
       {% endif %}
-      <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
+      <a href="{% url 'dashboard:event_create' %}" class="btn btn-primary">+ Add event</a>
     </div>
   </div>
 
@@ -61,7 +61,7 @@
         placeholder="Describe what to do with these events, e.g.&#10;'Weekly until April 25 2026'&#10;'These are one-time events, no recurrence'&#10;'Change category to University'"></textarea>
       <div class="reprocess-drawer__hint">Events will be deleted and re-extracted using your prompt. They'll appear as pending until done.</div>
       <div style="display:flex;gap:8px">
-        <button type="button" class="btn-primary btn--sm" id="reprocess-confirm-btn">Re-process</button>
+        <button type="button" class="btn btn-primary btn--sm" id="reprocess-confirm-btn">Re-process</button>
         <button type="button" class="btn-ghost btn btn--sm" id="reprocess-cancel-btn">Cancel</button>
       </div>
     </div>
@@ -127,7 +127,7 @@
     {% else %}
     <p class="empty-state__text">No upcoming events. Add one manually or set up email forwarding.</p>
     <div class="empty-state__actions">
-      <a href="{% url 'dashboard:event_create' %}" class="btn-primary">+ Add event</a>
+      <a href="{% url 'dashboard:event_create' %}" class="btn btn-primary">+ Add event</a>
     </div>
     {% endif %}
   </div>

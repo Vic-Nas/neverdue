@@ -20,7 +20,7 @@
       {% if total_count %}
         <button type="button" class="btn-ghost btn" id="rule-select-toggle">Select</button>
       {% endif %}
-      <a href="{% url 'dashboard:rule_add' %}" class="btn-primary">+ New rule</a>
+      <a href="{% url 'dashboard:rule_add' %}" class="btn btn-primary">+ New rule</a>
     </div>
   </div>
 
@@ -98,7 +98,7 @@
     <a href="{% url 'dashboard:rules' %}" class="btn-ghost btn">Clear search</a>
     {% else %}
     <p class="empty-state__text">No rules yet.</p>
-    <a href="{% url 'dashboard:rule_add' %}" class="btn-primary">Add your first rule</a>
+    <a href="{% url 'dashboard:rule_add' %}" class="btn btn-primary">Add your first rule</a>
     {% endif %}
   </div>
   {% endif %}
