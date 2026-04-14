@@ -11,3 +11,6 @@ INSTALLED_APPS = [a for a in INSTALLED_APPS if 'procrastinate' not in a]  # noqa
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Match the actual login URL so @login_required redirects agree with tests
+LOGIN_URL = '/'

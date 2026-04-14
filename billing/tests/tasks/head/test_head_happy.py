@@ -1,7 +1,8 @@
 # billing/tests/tasks/head/test_head_happy.py
 import math
+from unittest.mock import MagicMock, patch
 
-from django.test import tag
+from django.test import TestCase
 from django.utils import timezone
 
 from billing.models import RefundRecord
@@ -12,11 +13,15 @@ from billing.tests.helpers import (
 )
 
 
-@tag('stripe')
-class HeadHappyTest(BillingTestCase):
+def _fake_refund(charge, amount):
+    r = MagicMock()
+    r.id = f're_fake_{charge}'
+    return r
+
+
+class HeadHappyTest(TestCase):
 
     def setUp(self):
-        super().setUp()
         self.lm = last_month_start()
         self.now_ts = int(timezone.now().timestamp())
 
@@ -30,7 +35,8 @@ class HeadHappyTest(BillingTestCase):
         make_djstripe_invoice(head, 800, self.lm, charge_id='ch_hd_hh1')
         make_djstripe_invoice(rd, 800, self.lm, charge_id='ch_rd_hh1')
 
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
 
         rr = RefundRecord.objects.get(coupon_head=coupon)
         self.assertEqual(rr.amount, math.ceil(800 * 12.5 / 100))
@@ -46,7 +52,8 @@ class HeadHappyTest(BillingTestCase):
             make_djstripe_invoice(rd, 800, self.lm, charge_id=f'ch_rd_hh2_{i}')
         make_djstripe_invoice(head, 800, self.lm, charge_id='ch_hd_hh2')
 
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
 
         rr = RefundRecord.objects.get(coupon_head=coupon)
         self.assertEqual(rr.amount, math.ceil(800 * 37.5 / 100))
@@ -62,7 +69,8 @@ class HeadHappyTest(BillingTestCase):
             make_djstripe_invoice(rd, 800, self.lm, charge_id=f'ch_rd_hh3_{i}')
         make_djstripe_invoice(head, 800, self.lm, charge_id='ch_hd_hh3')
 
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
 
         rr = RefundRecord.objects.get(coupon_head=coupon)
         self.assertEqual(rr.amount, 800)  # 100% capped

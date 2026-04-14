@@ -1,4 +1,6 @@
 # billing/tests/tasks/head/test_head_idempotency.py
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -8,6 +10,12 @@ from billing.tests.helpers import (
     last_month_start, make_coupon, make_djstripe_invoice,
     make_redemption, make_subscription, make_user,
 )
+
+
+def _fake_refund(charge, amount):
+    r = MagicMock()
+    r.id = f're_fake_{charge}'
+    return r
 
 
 class HeadIdempotencyTest(TestCase):
@@ -35,7 +43,8 @@ class HeadIdempotencyTest(TestCase):
             stripe_refund_id='re_head_existing',
             amount=100,
         )
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
         self.assertEqual(RefundRecord.objects.filter(coupon_head=coupon).count(), 1)
 
     def test_running_twice_one_record_for_head(self):
@@ -46,6 +55,7 @@ class HeadIdempotencyTest(TestCase):
             stripe_refund_id='re_head_first',
             amount=100,
         )
-        process_monthly_refunds(timestamp=self.now_ts)
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
+            process_monthly_refunds(timestamp=self.now_ts)
         self.assertEqual(RefundRecord.objects.filter(coupon_head=coupon).count(), 1)

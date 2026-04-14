@@ -1,4 +1,7 @@
 # billing/tests/tasks/redeemer/test_redeemer_skips.py
+from unittest.mock import patch
+
+import stripe
 from django.test import TestCase
 from django.utils import timezone
 
@@ -55,18 +58,25 @@ class RedeemerSkipsTest(TestCase):
         self.assertEqual(RefundRecord.objects.count(), 0)
 
     def test_stripe_error_raises_runtime_error_other_runs_unaffected(self):
-        # Redemption with a bogus charge triggers RuntimeError via StripeError
+        # Redemption with a bogus charge triggers RuntimeError via StripeError.
+        # We simulate the StripeError via mock so we don't hit real Stripe.
         redeemer1 = make_user('rd_skip4a')
         make_subscription(redeemer1, status='active', stripe_customer_id='cus_rd_sk4a')
         coupon1 = make_coupon(head=None, code='SK004A')
         make_redemption(coupon1, redeemer1)
         inv = make_djstripe_invoice(redeemer1, 800, self.lm, charge_id='ch_bogus_zzz')
-        # Force the stored charge id to the bogus value
         inv.stripe_data = {**inv.stripe_data, 'charge': 'ch_bogus_zzz'}
         inv.save()
 
+        def _raise_stripe_error(charge, amount):
+            raise stripe.error.InvalidRequestError(
+                message=f'No such charge: {charge!r}',
+                param='charge',
+            )
+
         with self.assertRaises(RuntimeError):
-            process_monthly_refunds(timestamp=self.now_ts)
+            with patch('billing.tasks.stripe.Refund.create', side_effect=_raise_stripe_error):
+                process_monthly_refunds(timestamp=self.now_ts)
 
         # Second independent redemption has no invoice → cleanly skipped on fresh run
         redeemer2 = make_user('rd_skip4b')

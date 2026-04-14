@@ -1,20 +1,26 @@
 # billing/tests/tasks/redeemer/test_redeemer_happy.py
-from django.test import tag
+from unittest.mock import MagicMock, patch
+
+from django.test import TestCase
 from django.utils import timezone
 
 from billing.models import RefundRecord
 from billing.tasks import process_monthly_refunds
 from billing.tests.helpers import (
-    BillingTestCase, last_month_start, make_coupon, make_djstripe_invoice,
+    last_month_start, make_coupon, make_djstripe_invoice,
     make_redemption, make_subscription, make_user,
 )
 
 
-@tag('stripe')
-class RedeemerHappyTest(BillingTestCase):
+def _fake_refund(charge, amount):
+    r = MagicMock()
+    r.id = f're_fake_{charge}'
+    return r
+
+
+class RedeemerHappyTest(TestCase):
 
     def setUp(self):
-        super().setUp()
         self.lm = last_month_start()
         self.now_ts = int(timezone.now().timestamp())
 
@@ -28,7 +34,8 @@ class RedeemerHappyTest(BillingTestCase):
         make_djstripe_invoice(head, 800, self.lm, charge_id='ch_hd_h1')
         make_djstripe_invoice(redeemer, 800, self.lm, charge_id='ch_rd_h1')
 
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
 
         rr = RefundRecord.objects.get(redemption__user=redeemer)
         self.assertIsNotNone(rr.stripe_refund_id)
@@ -41,6 +48,7 @@ class RedeemerHappyTest(BillingTestCase):
         make_redemption(coupon, redeemer)
         make_djstripe_invoice(redeemer, 800, self.lm, charge_id='ch_rd_h2')
 
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
 
         self.assertEqual(RefundRecord.objects.filter(redemption__user=redeemer).count(), 1)

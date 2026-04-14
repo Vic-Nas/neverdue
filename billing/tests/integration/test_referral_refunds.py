@@ -1,4 +1,6 @@
 # billing/tests/integration/test_referral_refunds.py
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
 from django.utils import timezone
 
@@ -8,6 +10,12 @@ from billing.tasks import process_monthly_refunds
 from billing.tests.helpers import (
     last_month_start, make_djstripe_invoice, make_subscription, make_user,
 )
+
+
+def _fake_refund(charge, amount):
+    r = MagicMock()
+    r.id = f're_fake_{charge}'
+    return r
 
 
 class ReferralRefundsTest(TestCase):
@@ -34,14 +42,16 @@ class ReferralRefundsTest(TestCase):
         make_djstripe_invoice(self.redeemer, 800, self.lm, charge_id='ch_rf_rd1')
 
     def test_both_paid_creates_two_refund_records(self):
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
         redeemer_rr = RefundRecord.objects.filter(redemption__user=self.redeemer)
         head_rr = RefundRecord.objects.filter(coupon_head__head=self.head)
         self.assertEqual(redeemer_rr.count(), 1)
         self.assertEqual(head_rr.count(), 1)
 
     def test_running_twice_fully_idempotent(self):
-        process_monthly_refunds(timestamp=self.now_ts)
-        count_after_first = RefundRecord.objects.count()
-        process_monthly_refunds(timestamp=self.now_ts)
+        with patch('billing.tasks.stripe.Refund.create', side_effect=_fake_refund):
+            process_monthly_refunds(timestamp=self.now_ts)
+            count_after_first = RefundRecord.objects.count()
+            process_monthly_refunds(timestamp=self.now_ts)
         self.assertEqual(RefundRecord.objects.count(), count_after_first)
