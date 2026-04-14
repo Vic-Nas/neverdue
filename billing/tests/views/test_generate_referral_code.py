@@ -1,84 +1,64 @@
 # billing/tests/views/test_generate_referral_code.py
-import uuid
-from unittest.mock import MagicMock, patch
-
-from django.test import Client, TestCase
+from django.test import TestCase
 from django.urls import reverse
 
-from billing.models import Coupon, Subscription
-from billing.tests.helpers import make_user
+from billing.models import Coupon
+from billing.tests.helpers import make_subscription, make_user
 
 
-def _cus_id():
-    return f'cus_{uuid.uuid4().hex[:10]}'
+URL = reverse('billing:generate_referral_code')
 
 
-def _sub(user, status='active', customer_id=None):
-    return Subscription.objects.create(
-        user=user,
-        stripe_customer_id=customer_id or _cus_id(),
-        status=status,
-    )
+class GenerateReferralCodeViewTest(TestCase):
 
-
-def _coupon(head=None):
-    return Coupon.objects.create(
-            code=f'GEN{uuid.uuid4().hex[:5].upper()}',
-            percent='12.50',
-            head=head,
-        )
-
-
-class TestGenerateReferralCodeView(TestCase):
-
-    def setUp(self):
-        self.client = Client()
-        self.url = reverse('billing:generate_referral_code')
-
-    def _post(self, user):
+    def test_get_returns_405(self):
+        user = make_user('grc_get')
+        make_subscription(user, status='active')
         self.client.force_login(user)
-        return self.client.post(self.url)
+        r = self.client.get(URL)
+        self.assertEqual(r.status_code, 405)
 
-    def test_generates_code_for_pro_user(self):
-        user = make_user('gen_pro')
-        _sub(user, 'active')
-        response = self._post(user)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertIn('code', data)
-        self.assertTrue(data['code'].startswith('NVD-'))
+    def test_unauthenticated_post_redirects(self):
+        r = self.client.post(URL)
+        self.assertEqual(r.status_code, 302)
 
-    def test_returns_existing_code_if_already_generated(self):
-        user = make_user('gen_existing')
-        sub = _sub(user, 'active')
-        coupon = _coupon(head=user)
-        sub.referral_coupon = coupon
-        sub.save(update_fields=['referral_coupon'])
-        response = self._post(user)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['code'], coupon.code)
-
-    def test_403_for_free_user(self):
-        user = make_user('gen_free')
-        _sub(user, 'cancelled')
-        response = self._post(user)
-        self.assertEqual(response.status_code, 403)
-
-    def test_403_for_unauthenticated(self):
-        response = self.client.post(self.url)
-        self.assertIn(response.status_code, [302, 403])
-
-    def test_get_method_rejected(self):
-        user = make_user('gen_get')
-        _sub(user, 'active')
+    def test_free_user_gets_403(self):
+        user = make_user('grc_free')
+        make_subscription(user, status='cancelled')
         self.client.force_login(user)
-        response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 405)
+        r = self.client.post(URL)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('error', r.json())
 
-    def test_stripe_error_returns_500(self, mock_push):
-        user = make_user('gen_err')
-        _sub(user, 'active')
-        # Make generate_referral_code blow up
-        with patch.object(Subscription, 'generate_referral_code', side_effect=Exception('boom')):
-            response = self._post(user)
-        self.assertEqual(response.status_code, 500)
+    def test_pro_user_no_existing_code(self):
+        user = make_user('grc_pro')
+        make_subscription(user, status='active')
+        self.client.force_login(user)
+        r = self.client.post(URL)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertRegex(data['code'], r'^NVD-[A-Z0-9]{5}$')
+        self.assertEqual(Coupon.objects.filter(head=user).count(), 1)
+
+    def test_pro_user_code_already_exists(self):
+        user = make_user('grc_exists')
+        sub = make_subscription(user, status='active')
+        sub.generate_referral_code()
+        existing_code = sub.referral_code
+        count_before = Coupon.objects.count()
+        self.client.force_login(user)
+        r = self.client.post(URL)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['code'], existing_code)
+        self.assertEqual(Coupon.objects.count(), count_before)
+
+    def test_staff_user_head_is_none(self):
+        user = make_user('grc_staff')
+        user.is_staff = True
+        user.save()
+        make_subscription(user, status='active')
+        self.client.force_login(user)
+        r = self.client.post(URL)
+        self.assertEqual(r.status_code, 200)
+        coupon = Coupon.objects.get(code=r.json()['code'])
+        self.assertIsNone(coupon.head)

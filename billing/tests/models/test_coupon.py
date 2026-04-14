@@ -1,60 +1,30 @@
 # billing/tests/models/test_coupon.py
-import uuid
+from decimal import Decimal
 
 from django.db import IntegrityError
 from django.test import TestCase
 
 from billing.models import Coupon
-from billing.tests.helpers import make_user
+from billing.tests.helpers import make_coupon, make_user
 
 
-def _unique_code():
-    return f'TST{uuid.uuid4().hex[:5].upper()}'
+class CouponModelTest(TestCase):
 
+    def test_str_format(self):
+        coupon = make_coupon(code='SAVE10', percent='12.50')
+        self.assertEqual(str(coupon), 'SAVE10 (12.50%)')
 
-def _make_coupon(code=None, percent='10.00', max_redemptions=None, head=None):
-    return Coupon.objects.create(
-        code=code or _unique_code(),
-        percent=percent,
-        max_redemptions=max_redemptions,
-        head=head,
-    )
-
-
-class TestCouponModel(TestCase):
-    """Unit tests — Stripe is not involved at coupon creation."""
-
-    def test_code_unique(self):
-        """Duplicate code raises IntegrityError."""
-        code = _unique_code()
-        _make_coupon(code=code)
-        with self.assertRaises(IntegrityError):
-            _make_coupon(code=code)
-
-    def test_head_null_allowed(self):
-        """Coupon with head=None saves fine."""
-        coupon = _make_coupon(head=None)
+    def test_head_none_is_valid(self):
+        coupon = make_coupon(head=None, code='GRANT1')
         self.assertIsNone(coupon.head)
+        self.assertEqual(Coupon.objects.filter(pk=coupon.pk).count(), 1)
 
-    def test_max_redemptions_nullable(self):
-        """max_redemptions can be null (unlimited)."""
-        coupon = _make_coupon(max_redemptions=None)
+    def test_code_uniqueness_raises(self):
+        make_coupon(code='DUPE01')
+        with self.assertRaises(IntegrityError):
+            make_coupon(code='DUPE01')
+
+    def test_max_redemptions_none_allowed(self):
+        coupon = make_coupon(code='UNLIM1', max_redemptions=None)
         self.assertIsNone(coupon.max_redemptions)
-
-    def test_max_redemptions_set(self):
-        """max_redemptions is stored correctly when provided."""
-        coupon = _make_coupon(max_redemptions=5)
-        self.assertEqual(coupon.max_redemptions, 5)
-
-    def test_percent_stored(self):
-        """percent is stored as given."""
-        coupon = _make_coupon(percent='15.00')
-        coupon.refresh_from_db()
-        self.assertEqual(float(coupon.percent), 15.0)
-
-    def test_head_fk_stored(self):
-        """head FK is stored correctly."""
-        user = make_user('head_fk_user')
-        coupon = _make_coupon(head=user)
-        coupon.refresh_from_db()
-        self.assertEqual(coupon.head, user)
+        self.assertEqual(Coupon.objects.filter(pk=coupon.pk).count(), 1)

@@ -3,6 +3,7 @@ import logging
 import math
 import random
 import string
+from decimal import Decimal
 
 from django.db import models
 
@@ -102,6 +103,10 @@ class CouponRedemption(models.Model):
         return f'{self.user.username} → {self.coupon.code}'
 
 
+# Sentinel for generate_referral_code: distinguishes "not passed" from explicit None.
+_UNSET = object()
+
+
 class Subscription(models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -133,7 +138,7 @@ class Subscription(models.Model):
     def referral_code(self):
         return self.referral_coupon.code if self.referral_coupon else None
 
-    def generate_referral_code(self, head=None):
+    def generate_referral_code(self, head=_UNSET):
         """
         Lazily create this user's personal referral Coupon (head=self.user by
         default, percent=12.5, max_redemptions=12). Idempotent.
@@ -144,8 +149,8 @@ class Subscription(models.Model):
         if self.referral_coupon_id:
             return self.referral_coupon.code
 
-        # Default head to self.user; callers pass head=None for staff
-        coupon_head = head if head is not None else self.user
+        # Use self.user as default; callers may explicitly pass head=None for staff grants.
+        coupon_head = self.user if head is _UNSET else head
 
         chars = string.ascii_uppercase + string.digits
         for _ in range(10):
@@ -153,7 +158,7 @@ class Subscription(models.Model):
             if not Coupon.objects.filter(code=code).exists():
                 coupon = Coupon.objects.create(
                     code=code,
-                    percent='12.50',
+                    percent=Decimal('12.50'),
                     max_redemptions=12,
                     head=coupon_head,
                 )

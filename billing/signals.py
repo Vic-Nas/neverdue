@@ -55,7 +55,7 @@ def handle_checkout_session_completed(event, **kwargs):
     """
     from billing.models import Coupon, CouponRedemption
 
-    obj = event.data['object']
+    obj = event["data"]['object']
     customer_id = obj.get('customer', '')
     metadata = obj.get('metadata') or {}
     code = metadata.get('coupon_code', '').strip().upper()
@@ -100,8 +100,8 @@ def handle_subscription_updated(event, **kwargs):
     """Defers retry_jobs_after_plan_upgrade on any → active transition."""
     from billing.models import Subscription  # noqa: F401 — dj-stripe syncs status
 
-    obj = event.data['object']
-    previous = event.data.get('previous_attributes', {})
+    obj = event["data"]['object']
+    previous = event["data"].get('previous_attributes', {})
     customer_id = obj.get('customer', '')
     new_status = obj.get('status', '')
     old_status = previous.get('status', new_status)
@@ -124,7 +124,7 @@ def handle_subscription_cancelled(event, **kwargs):
     """
     from billing.models import CouponRedemption
 
-    obj = event.data['object']
+    obj = event["data"]['object']
     customer_id = obj.get('customer', '')
 
     sub = _sub_by_customer(customer_id, 'handle_subscription_cancelled')
